@@ -1,0 +1,123 @@
+{
+  "sourceBytes": 46485,
+  "pages": 13,
+  "initialFullMs": 8869,
+  "initialFullRuns": 1,
+  "finalFullRuns": 1,
+  "edits": [
+    {
+      "edit": "relevant → useful",
+      "busy": false,
+      "fullRuns": 1,
+      "lastCompile": "Full LuaLaTeX: 13 page(s), 8869 ms (2 passes).",
+      "pages": 13,
+      "reason": "",
+      "route": "Live 155 ms"
+    },
+    {
+      "edit": "proof I_d → I_n",
+      "busy": false,
+      "fullRuns": 1,
+      "lastCompile": "Full LuaLaTeX: 13 page(s), 8869 ms (2 passes).",
+      "pages": 13,
+      "reason": "",
+      "route": "Live 187 ms"
+    },
+    {
+      "edit": "surjective → injective",
+      "busy": false,
+      "fullRuns": 1,
+      "lastCompile": "Full LuaLaTeX: 13 page(s), 8869 ms (2 passes).",
+      "pages": 13,
+      "reason": "",
+      "route": "Live 43 ms"
+    },
+    {
+      "edit": "abstract d+2 → d+3",
+      "busy": false,
+      "fullRuns": 1,
+      "lastCompile": "Full LuaLaTeX: 13 page(s), 8869 ms (2 passes).",
+      "pages": 13,
+      "reason": "",
+      "route": "Live 105 ms"
+    },
+    {
+      "edit": "topology → geometry",
+      "busy": false,
+      "fullRuns": 1,
+      "lastCompile": "Full LuaLaTeX: 13 page(s), 8869 ms (2 passes).",
+      "pages": 13,
+      "reason": "",
+      "route": "Live 22 ms"
+    },
+    {
+      "edit": "align denominator 81 → 82",
+      "busy": false,
+      "fullRuns": 1,
+      "lastCompile": "Full LuaLaTeX: 13 page(s), 8869 ms (2 passes).",
+      "pages": 13,
+      "reason": "",
+      "route": "Live 23 ms"
+    }
+  ],
+  "extraFigurePageChecks": [
+    {
+      "edit": "only → sole",
+      "page": 2,
+      "route": "Live 14 ms",
+      "fullRunsBefore": 3,
+      "fullRunsAfter": 3
+    },
+    {
+      "edit": "convex set → convex cone",
+      "page": 8,
+      "route": "Live 24 ms",
+      "fullRunsBefore": 3,
+      "fullRunsAfter": 3
+    }
+  ],
+  "conservativeFallback": {
+    "edit": "finite sequence → short sequence",
+    "page": 2,
+    "reason": "Unit ink overlaps an image"
+  },
+  "zoom": {
+    "latestDenominator": 82,
+    "fullRunsUnchanged": true
+  },
+  "exportVerified": true,
+  "restored": true,
+  "sourceSHA256": "f5f81fae06a13691844c7560302ffe30d531e155ba10f1dfd9811b78ff01f070",
+  "figures": 2,
+  "exportFullMs": 2129,
+  "exportFullRuns": 2,
+  "exportPdfBytes": 373851,
+  "restoreFullMs": 2154,
+  "restoreFullRuns": 3,
+  "restoredPdfBytes": 373845,
+  "restoredPdfSHA256": "9d53b4ea7d7a1e1c0502c84182dd477ab18806f88c8839fdd6a10d7f8567aa56",
+  "tests": {
+    "unit": 122,
+    "incrementalEdits": 26,
+    "fullCompilesDuringIncrementalEdits": 1,
+    "engineRestarts": 0,
+    "exactFinalGlyphLayout": true,
+    "project": true,
+    "build": true
+  },
+  "figureFiles": [
+    {
+      "path": "figures/fig_area_centroid_pursuit.pdf",
+      "bytes": 14840,
+      "sha256": "45648b6188c70c4bfe74681b792619e64ee0a5759dfd2b15710a62135f996b02"
+    },
+    {
+      "path": "figures/fig_one_sided_executions.pdf",
+      "bytes": 14840,
+      "sha256": "7d019e15eb8cd37ccba43b2e11fa47b28cf49a7da9f75df94a58d1f6a4969eb2"
+    }
+  ],
+  "browser": "Codex in-app browser",
+  "url": "http://127.0.0.1:4188/",
+  "result": "PASS: all six paper edits use Live without full recompilation; export and original restoration verified"
+}

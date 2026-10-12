@@ -126,9 +126,11 @@ local function type1_descriptor(name)
     local path = kpse.find_file("pdftex.map", "map")
     if path then
       for line in io.lines(path) do
-        -- Only direct, un-reencoded mappings have the same character codes as the TFM.
         local tfm, ps, pfb = line:match("^(%S+)%s+(%S+)%s+<(%S+%.pfb)%s*$")
         if tfm then type1_map[tfm] = { psname = ps, pfb = pfb } end
+        local enc, encname
+        tfm, ps, encname, enc, pfb = line:match('^(%S+)%s+(%S+)%s+"%s*([%w_-]+)%s+ReEncodeFont%s*"%s+<(%S+%.enc)%s+<(%S+%.pfb)%s*$')
+        if tfm then type1_map[tfm] = { psname = ps, pfb = pfb, encoding_file = enc, encoding_name = encname } end
       end
     end
   end
@@ -136,6 +138,19 @@ local function type1_descriptor(name)
   -- Resolving the whole map downloads fonts unrelated to the current document.
   if descriptor and descriptor.filename == nil then
     descriptor.filename = kpse.find_file(descriptor.pfb, "type1 fonts") or false
+    if descriptor.filename and descriptor.encoding_file then
+      local path = kpse.find_file(descriptor.encoding_file, "enc files")
+      local file = path and io.open(path, "r")
+      local text = file and file:read("*a") or ""
+      if file then file:close() end
+      local encname, vector = text:gsub("%%[^\n]*", ""):match("^%s*/([%w_-]+)%s*%[(.-)%]%s*def%s*$")
+      vector = vector or ""
+      local names = {}
+      for name in vector:gmatch("/([%w_.+-]+)") do names[#names + 1] = name end
+      -- Dynamic PostScript encodings cannot be reproduced by the outline renderer.
+      if encname == descriptor.encoding_name and #names == 256 and vector:gsub("/[%w_.+-]+", ""):match("^%s*$") then descriptor.encoding = table.concat(names, " ")
+      else descriptor.filename = false end
+    end
   end
   return descriptor
 end
@@ -156,6 +171,7 @@ local function font_descriptor(f)
       local legacy = type1_descriptor(t.name)
       if legacy and legacy.filename then
         d.filename, d.psname, d.format = legacy.filename, legacy.psname, "type1"
+        d.encoding_file, d.encoding = legacy.encoding_file, legacy.encoding
       end
     end
   end
@@ -530,7 +546,7 @@ hlist_out = function(st, box, left, base_v)
         local sub = getsubtype(n)
         sync_out()
         if sub == ws_colorstack then
-          st:emit({ "c", getfield(n, "stack"), getfield(n, "cmd"), getfield(n, "data") })
+          st:emit({ "c", getfield(n, "stack"), getfield(n, "command"), getfield(n, "data") })
         elseif sub == ws_literal then
           st:emit({ "l", getfield(n, "mode"), getfield(n, "data") }); st:flag("literal")
         elseif sub == ws_special then
@@ -695,7 +711,7 @@ vlist_out = function(st, box, left, top)
     elseif id == whatsit_id then
       local sub = getsubtype(n)
       if sub == ws_colorstack then
-        st:emit({ "c", getfield(n, "stack"), getfield(n, "cmd"), getfield(n, "data") })
+        st:emit({ "c", getfield(n, "stack"), getfield(n, "command"), getfield(n, "data") })
       elseif sub == ws_literal then
         st:emit({ "l", getfield(n, "mode"), getfield(n, "data") }); st:flag("literal")
       elseif sub == ws_special then
@@ -837,6 +853,9 @@ function M.paragraph_binary(boxnode, initial_color)
     buf[#buf + 1] = pack("<Bs4", 0x02, pack("<I4i4BBI2i4i4i4i4", fd.id or id, floor((fd.size or 0) + 0.5), font_kind(fd), 0,
       fd.subfont or 0, floor((fd.slant or 0) + 0.5), floor((fd.extend or 0) + 0.5), floor((fd.squeeze or 0) + 0.5),
       floor((fd.designsize or 0) + 0.5)) .. bstr(fd.filename) .. bstr(fd.psname) .. bstr(fd.name) .. bstr(fd.fullname) .. bstr(fd.format))
+    if fd.encoding then
+      buf[#buf + 1] = pack("<Bs4", 0x04, pack("<I4", fd.id or id) .. bstr(fd.encoding_file) .. bstr(fd.encoding))
+    end
   end
   for k, v in pairs(st.flags) do
     buf[#buf + 1] = pack("<Bs4", 0x03, bstr(k) .. pack("<i4", type(v) == "number" and floor(v) or 1))

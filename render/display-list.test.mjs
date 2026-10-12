@@ -28,6 +28,13 @@ test('binary RTDL and documented LODL decode exact glyph/line diagnostics', () =
   }
 });
 test('typed array views respect byte offsets', () => { const b = sample(); const padded = Buffer.concat([Buffer.alloc(5), b, Buffer.alloc(8)]); assert.equal(decodeDisplayList(padded.subarray(5, 5 + b.length)).glyphs, 2); });
+test('Type1 encoding extension attaches to its declared font', () => {
+  const font=rec(2,u32(7),i32(655360),u8(0),u8(0),u16(0),ints(0,0,0,0),str('lmr10.pfb'),str('ec-lmr10'),str('LMRoman10-Regular'),str('LM'),str('type1'));
+  const encoding=rec(4,u32(7),str('lm-ec.enc'),str('grave acute'));
+  const dl=decodeDisplayList(binary([font,encoding]));
+  assert.equal(dl.fonts[7].encoding_file,'lm-ec.enc');assert.equal(dl.fonts[7].encoding,'grave acute');
+  assert.throws(()=>decodeDisplayList(binary([encoding])),/font/);
+});
 test('unknown tags skipped with diagnostics, including decoded-JSON normalization', () => {
   const dl = decodeDisplayList(binary([rec(0x7e, Buffer.from([1,2,3]))]));
   assert.equal(dl.binaryDiagnostics.unknownRecords[0].payloadLength, 3);
@@ -64,6 +71,7 @@ test('outline renderer addresses glyph ID, native curves, expansion/extend/slant
   let reads = 0; const renderer = createDisplayListRenderer({ resolveFont: async () => { reads++; return new Uint8Array([0]); }, parseFont: () => fixtureFont });
   const canvas = fakeCanvas(); const dl = jsonDL([['c',0,1,'1 0 0 rg'], ['g',1,999,3,100,500000,200,20000], ['c',0,2,''], ['r',0,0,100,200]]);
   const result = await renderer.render(canvas, dl, { devicePixelRatio: 1 });
+  assert.deepEqual(result.inkBounds,{x:0,y:0,w:400524.96,h:500000});
   assert.equal(result.status, 'display-list'); assert.equal(result.diagnostics.glyphs[0].charCode, 999);
   assert.ok(canvas.calls.some(c => c[0] === 'quadraticCurveTo')); assert.ok(canvas.calls.some(c => c[0] === 'bezierCurveTo'));
   assert.ok(!canvas.calls.some(c => c[0] === 'fillText'));
@@ -71,6 +79,13 @@ test('outline renderer addresses glyph ID, native curves, expansion/extend/slant
   assert.ok(Math.abs(transform[1] - 655.36 * 1.02 * 1.1) < 1e-8); assert.equal(transform[3], 65.536); assert.equal(transform[4], -655.36);
   assert.ok(canvas.calls.some(c => c[0] === 'set' && c[2] === 'rgb(255,0,0)'));
   await renderer.render(fakeCanvas(), dl); assert.equal(reads, 1);
+});
+test('font conversion cache separates reencodings of the same PFB', async () => {
+  const parsed=[],renderer=createDisplayListRenderer({resolveFont:async()=>new Uint8Array([0]),parseFont:(_,desc)=>{parsed.push(desc.encoding_file);return fixtureFont;}});
+  const dl=jsonDL([['g',1,65,3,0,500000,200,0]]);
+  dl.fonts[1].encoding_file='lm-ec.enc';await renderer.render(fakeCanvas(),dl);
+  dl.fonts[1].encoding_file='lm-rm.enc';await renderer.render(fakeCanvas(),dl);
+  await renderer.render(fakeCanvas(),dl);assert.deepEqual(parsed,['lm-ec.enc','lm-rm.enc']);
 });
 test('viewport crops the canvas to a region and a transparent background is left unpainted', async () => {
   const renderer = createDisplayListRenderer({ resolveFont: async () => new Uint8Array([0]), parseFont: () => fixtureFont });

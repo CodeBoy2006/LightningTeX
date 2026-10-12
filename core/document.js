@@ -11,11 +11,12 @@ export function splitPreamble(source) {
   }return null;
 }
 const mathEnvironments=new Set('equation equation* align align* gather gather* multline multline* displaymath aligned gathered split cases matrix pmatrix bmatrix Bmatrix vmatrix Vmatrix smallmatrix'.split(' '));
+const liveEnvironments=new Set([...mathEnvironments,'proof','abstract']);
 // A bounded vocabulary keeps state-changing TeX out of the persistent worker.
 export const liveCommands=new Set(('text textbf textit textrm textsf texttt emph mathrm mathit mathbf mathsf mathtt mathcal mathbb mathfrak mathnormal boldsymbol operatorname '+
  'frac dfrac tfrac cfrac binom dbinom tbinom sqrt sum prod coprod int iint iiint oint lim limsup liminf min max sup inf log ln exp sin cos tan cot sec csc arcsin arccos arctan sinh cosh tanh det dim ker deg arg Pr hom gcd colon '+
  'alpha beta gamma delta epsilon varepsilon zeta eta theta vartheta iota kappa lambda mu nu xi pi varpi rho varrho sigma varsigma tau upsilon phi varphi chi psi omega Gamma Delta Theta Lambda Xi Pi Sigma Upsilon Phi Psi Omega '+
- 'infty partial nabla ell hbar imath jmath Re Im aleph emptyset varnothing forall exists neg in notin ni subset supset subseteq supseteq cup cap setminus land lor '+
+ 'infty partial nabla ell hbar imath jmath Re Im aleph emptyset varnothing forall exists neg in notin ni subset supset subseteq supseteq cup cap setminus land lor perp '+
  'cdot cdots ldots vdots ddots dots times div pm mp ast star circ bullet le leq ge geq neq ne approx sim simeq equiv propto cong to mapsto rightarrow leftarrow leftrightarrow Rightarrow Leftarrow Leftrightarrow implies iff '+
  'left right middle big Big bigg Bigg bigl bigr Bigl Bigr biggl biggr Biggl Biggr langle rangle lbrace rbrace lvert rvert lVert rVert vert Vert floor lfloor rfloor lceil rceil '+
  'overline underline bar hat widehat tilde widetilde vec dot ddot overbrace underbrace overset underset stackrel limits nolimits displaystyle textstyle scriptstyle scriptscriptstyle quad qquad thinspace medspace thickspace negthinspace phantom hphantom vphantom smash nonumber notag').split(' '));
@@ -40,7 +41,7 @@ export function missingArgument(text,command,after,arity=liveArity[command]){
   for(let n=0;n<arity;n++){p=skipArgument(text,p);if(p<0)return true;}
   return false;
 }
-export function liveSourcePolicy(text){
+export function liveSourcePolicy(text,macros=new Map()){
   if(!text.trim())return {incomplete:true,reason:'Waiting for content'};
   if(/[\u0000-\u0008]/.test(text)||text.includes('^^'))return {reason:'Unsupported source characters'};
   const stack=[],signature=[];let braces=0;
@@ -51,14 +52,18 @@ export function liveSourcePolicy(text){
       const match=/^([A-Za-z]+|[^\n])/.exec(text.slice(i+1));
       if(!match)return {incomplete:true,reason:'Waiting for a command'};
       const command=match[0];i+=command.length;
-      if(missingArgument(text,command,i+1))return {incomplete:true,reason:'Waiting for an argument'};
-      if(['begin','end','label','ref','eqref','pageref','tag'].includes(command)){
-        const arg=/^\s*(\*)?\s*\{([^{}]*)\}/.exec(text.slice(i+1));
+      const macro=macros.get(command);
+      if(missingArgument(text,command,i+1,macro?.arity??liveArity[command]))return {incomplete:true,reason:'Waiting for an argument'};
+      if(['begin','end','label','ref','eqref','pageref','tag','cite','paragraph','subparagraph'].includes(command)){
+        const tail=text.slice(i+1),notes=command==='cite'?/^(?:\s*\[[^\[\]\\{}$]*\]){0,2}/.exec(tail)[0]:'';
+        if(command==='cite'&&tail.slice(notes.length).trimStart().startsWith('['))return {reason:'Complex citation needs full layout'};
+        const arg=/^\s*(\*)?\s*\{([^{}]*)\}/.exec(tail.slice(notes.length));
         if(!arg)return {incomplete:true,reason:'Waiting for a command argument'};
-        i+=arg[0].length;const name=arg[2];signature.push(command+(arg[1]||'')+':'+name);
+        i+=notes.length+arg[0].length;const name=arg[2];signature.push(command+(arg[1]||'')+notes+':'+name);
         if(['label','ref','eqref','pageref'].includes(command)&&!/^[A-Za-z0-9:_.-]+$/.test(name))return {reason:'Complex label needs full layout'};
+        if(command==='cite'&&!/^[A-Za-z0-9:_,. -]+$/.test(name))return {reason:'Complex citation needs full layout'};
         if(command==='tag'&&!/^[A-Za-z0-9 .()+*/=-]+$/.test(name))return {reason:'Complex tag needs full layout'};
-        if(command==='begin'){if(!mathEnvironments.has(name))return {reason:'Environment needs full layout'};stack.push(name);}
+        if(command==='begin'){if(!liveEnvironments.has(name))return {reason:'Environment needs full layout'};stack.push(name);}
         if(command==='end'&&stack.pop()!==name)return {incomplete:true,reason:'Unbalanced environment'};
       }else if(command==='\\'){
         // A star changes page-break penalties even when every row has the same size.
@@ -67,8 +72,8 @@ export function liveSourcePolicy(text){
       else if(command===']'||command===')'){if(stack.pop()!==(command===']'?'[':'('))return {incomplete:true,reason:'Unbalanced math delimiter'};}
       else if(command==='left')stack.push('left');
       else if(command==='right'){if(stack.pop()!=='left')return {incomplete:true,reason:'Unbalanced delimiters'};}
-      else if(!liveCommands.has(command)&&!['{','}','$','%','&','#','_',',',';',':','!',' ','/','|'].includes(command)){
-        if([...liveCommands].some(name=>name.startsWith(command)))return {incomplete:true,reason:'Waiting for a command'};
+      else if(!macro&&!liveCommands.has(command)&&!['{','}','$','%','&','#','_',',',';',':','!',' ','/','|'].includes(command)){
+        if([...liveCommands,...macros.keys()].some(name=>name.startsWith(command)))return {incomplete:true,reason:'Waiting for a command'};
         return {reason:'Command needs full layout: '+command};
       }
     }else if((c==='^'||c==='_')&&skipArgument(text,i+1)<0)return {incomplete:true,reason:'Waiting for a script'};
@@ -93,7 +98,7 @@ export function captureSpans(source,capture,root='main.tex'){
     return {unit,start,end:start+text.length,original:text};
   }).filter(span=>Number.isInteger(span.start)&&span.end>span.start&&(!span.unit.file||sameFile(span.unit.file,root)));
 }
-export function findLiveEdit(before,after,capture,spans=captureSpans(before,capture)){
+export function findLiveEdit(before,after,capture,spans=captureSpans(before,capture),macros=new Map()){
   if(before===after)return {unchanged:true,reason:'unchanged'};
   const a=splitPreamble(before),b=splitPreamble(after);
   if(!a||!b||a.preamble!==b.preamble)return {reason:'Preamble changed; rebuilding the engine'};
@@ -104,8 +109,9 @@ export function findLiveEdit(before,after,capture,spans=captureSpans(before,capt
   const delta=after.length-before.length,candidates=spans.filter(span=>start>=span.start&&oldEnd<=span.end);
   if(candidates.length!==1)return {reason:'This edit needs full-document layout'};
   const span=candidates[0],oldText=before.slice(span.start,span.end),source=after.slice(span.start,span.end+delta);
-  if(/\n\s*\n/.test(source))return {reason:'Paragraph boundaries changed'};
-  const oldPolicy=liveSourcePolicy(oldText),policy=liveSourcePolicy(source);
+  // Composite units already contain paragraph breaks; reject edits that touch a break.
+  if(/\n\s*\n/.test(before.slice(start-1,oldEnd+1))||/\n\s*\n/.test(after.slice(start-1,newEnd+1)))return {reason:'Paragraph boundaries changed'};
+  const oldPolicy=liveSourcePolicy(oldText,macros),policy=liveSourcePolicy(source,macros);
   if(!oldPolicy.ok)return {reason:oldPolicy.reason};
   if(!policy.ok)return policy;
   if(oldPolicy.signature!==policy.signature)return {reason:'Environment, label or reference changed'};

@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {splitPreamble,liveSourcePolicy,findLiveEdit,safeProjectPath} from '../core/document.js';
+import {parseMacros} from '../core/math-preview.js';
 test('commented document marker ignored',()=>assert.equal(splitPreamble('% \\begin{document}\n\\documentclass{article}\n\\begin{document}Hi').preamble,'% \\begin{document}\n\\documentclass{article}\n'));
 test('single captured paragraph mapping',()=>{let s='\\documentclass{article}\n\\begin{document}\nHello world.\n\nNext paragraph.\n\\end{document}\n';let c={units:[{kind:'par',file:'./main.tex',uid:1,begin_line:3,end_line:4}]};assert.equal(findLiveEdit(s,s.replace('world','reader'),c).source,'Hello reader.');assert.ok(findLiveEdit(s,s.replace('article','report'),c).reason);assert.ok(findLiveEdit(s,s.replace('world','world\n\nMore'),c).reason)});
 test('unchanged preamble definitions allow local edits; body definitions still require a full pass',()=>{
@@ -59,4 +60,26 @@ test('spans follow the named root file, with or without a leading ./',async()=>{
  const capture={units:[{uid:1,kind:'par',file:'./paper.tex',begin_line:3,end_line:4},{uid:2,kind:'par',file:'./chapters/one.tex',begin_line:1,end_line:2},{uid:3,kind:'par',file:'paper.tex',begin_line:5,end_line:6}]};
  assert.deepEqual(captureSpans(source,capture,'paper.tex').map(span=>span.original),['First.','Second.']);
  assert.deepEqual(captureSpans(source,capture).map(span=>span.unit.uid),[],'units of other files never map onto the root source');
+});
+test('existing paragraph breaks in captured proof units survive prose and math edits',()=>{
+ const source=String.raw`\documentclass{article}
+\newcommand{\R}{\mathbb R}
+\begin{document}
+\begin{proof}
+For $x\in\R$, $x^2=1$.
+
+The claim follows from~\cite[Lemma~2]{known}.
+\end{proof}
+\end{document}`;
+ const capture={units:[{uid:1,kind:'env',name:'proof',begin_line:4,end_line:9}]},macros=parseMacros(splitPreamble(source).preamble);
+ for(const [a,b] of [['x^2','x^3'],['claim','result']])assert.equal(findLiveEdit(source,source.replace(a,b),capture,undefined,macros).unit?.uid,1);
+ for(const [a,b] of [['\n\nThe','\nThe'],['claim','claim\n\nThen'],['known','other']])assert.ok(findLiveEdit(source,source.replace(a,b),capture,undefined,macros).reason);
+});
+test('run-in heading titles and preamble macro safety stay structural',()=>{
+ const source=String.raw`\paragraph{Approach.} We use $\R$ here.`;
+ const macros=parseMacros(String.raw`\newcommand{\R}{\mathbb R}\newcommand{\bad}{\input{secret}}`);
+ assert.ok(liveSourcePolicy(source,macros).ok);
+ assert.notEqual(liveSourcePolicy(source,macros).signature,liveSourcePolicy(source.replace('Approach.','Result.'),macros).signature);
+ assert.ok(!liveSourcePolicy(source.replace('\\R','\\bad'),macros).ok);
+ assert.ok(!liveSourcePolicy(String.raw`\cite[\directlua{x}]{known}`,macros).ok);
 });

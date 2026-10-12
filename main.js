@@ -5,7 +5,7 @@ import {finalizeCapture,unitContext,liveUnitEligibility,compareUnitBaseline} fro
 import {previewSource,parseMacros,inkBounds} from './core/math-preview.js';
 import {parseTexLog} from './core/tex-log.js';
 import {decodeDisplayList,createDisplayListRenderer} from './render/index.mjs';
-import {replaceUnitRows} from './core/live-layout.js';
+import {replaceUnitRows,unitInkRegion} from './core/live-layout.js';
 import {parseEngineFont} from './render/type1-font.mjs';
 import {CSS_PX_PER_SP} from './render/canvas-renderer.mjs';
 import * as pdfjs from 'pdfjs-dist';
@@ -17,6 +17,7 @@ let background,live,snapshot,pdfRenderWorker,generation=0,liveStart,fullReason,c
 
 // Page widths here and in the UI's zoom layout must agree: natural width is CSS px at 100%.
 async function renderPdf({bytes,container,signal,zoom,viewport}){
+ const state=snapshot;
  const task=pdfjs.getDocument({data:bytes,worker:pdfRenderWorker??=new pdfjs.PDFWorker(),isEvalSupported:false,useSystemFonts:false});
  const abort=()=>task.destroy();signal.addEventListener('abort',abort,{once:true});
  try{const pdf=await task.promise,fit=Math.max(240,viewport.clientWidth-48);for(let i=1;i<=pdf.numPages;i++){
@@ -26,6 +27,7 @@ async function renderPdf({bytes,container,signal,zoom,viewport}){
    const ratio=Math.min(pixelRatio(),Math.sqrt(24e6/(width*width*raw.height/raw.width))),view=page.getViewport({scale:width/raw.width*ratio});
    const canvas=document.createElement('canvas');canvas.dataset.page=String(i);canvas.dataset.base=String(natural);canvas.width=Math.ceil(view.width);canvas.height=Math.ceil(view.height);canvas.style.width=`${width}px`;canvas.setAttribute('aria-label',`PDF page ${i}`);container.append(canvas);
    await page.render({canvasContext:canvas.getContext('2d'),viewport:view}).promise;page.cleanup();
+   if(state===snapshot)state?.baseCanvases.set(i,canvas);
  }return {pages:pdf.numPages}}finally{signal.removeEventListener('abort',abort);await task.destroy()}
 }
 const renderer=createDisplayListRenderer({
@@ -67,7 +69,7 @@ const ui=mountEditor({renderPdf,typesetMath,
    }
    if(ui.getState().revision===revision){
      const capture=finalizeCapture(result.capture),preamble=splitPreamble(source)?.preamble??'',support=supportFiles(preamble,files);
-     snapshot={source,root,filesRev,revision,capture,pages:result.pages,drawnPages:result.pages,aux:result.aux,proofs:new Map(),spans:captureSpans(source,capture,root),
+     snapshot={source,root,filesRev,revision,capture,pages:result.pages,drawnPages:result.pages,pdf:result.pdf,baseCanvases:new Map(),inkBounds:new Map(),liveUnits:new Set(),aux:result.aux,proofs:new Map(),spans:captureSpans(source,capture,root),
        support,packageMisses:result.packageMisses,macros:parseMacros([preamble,...support.map(file=>file.data)].join('\n')),context:previewContext(capture)};
      for(const[k,v]of Object.entries(result.fonts))fonts.set(k,v);
      prepareLive(snapshot);syncMarker(false);
@@ -84,21 +86,46 @@ function prepareLive(state){
  liveStart=live.start(splitPreamble(state.source).preamble+'\n\\RequirePackage{luatexbase}\n',state.aux,state.support,state.packageMisses);
  void liveStart.then(()=>{if(gen===generation)ui.refreshMath();},error=>{if(gen===generation)ui.setLiveStatus({state:'off',reason:error.message});});
 }
-async function drawLivePages(pages){
- const canvases=new Map();
- for(const [number,page] of pages){
+async function drawLivePages(pages,units=snapshot.liveUnits){
+ const state=snapshot,canvases=new Map();let pdfTask,pdf;
+ try{for(const [number,page] of pages){
    const target=document.querySelector(`[data-id="preview-viewport"] canvas[data-page="${number}"]`);
    if(!target)throw Error('Full page is not ready');
-   const canvas=document.createElement('canvas'),width=parseFloat(target.style.width);
-   await renderer.render(canvas,page,{zoom:width/(page.page_width*CSS_PX_PER_SP),devicePixelRatio:pixelRatio(),padding:0});
+   const width=parseFloat(target.style.width),ratio=Math.min(pixelRatio(),Math.sqrt(24e6/(width*width*page.page_height/page.page_width)));
+   let base=state.baseCanvases.get(number);
+   if(!base||base.width!==Math.ceil(width*ratio)){
+     // A zoom changes raster resolution, not the document; reuse its verified PDF.
+     pdfTask??=pdfjs.getDocument({data:state.pdf.slice(),worker:pdfRenderWorker??=new pdfjs.PDFWorker(),isEvalSupported:false,useSystemFonts:false});
+     pdf??=await pdfTask.promise;
+     const sheet=await pdf.getPage(number),view=sheet.getViewport({scale:width/sheet.getViewport({scale:1}).width*ratio});
+     base=document.createElement('canvas');base.width=Math.ceil(view.width);base.height=Math.ceil(view.height);
+     await sheet.render({canvasContext:base.getContext('2d'),viewport:view}).promise;sheet.cleanup();state.baseCanvases.set(number,base);
+   }
+   const canvas=document.createElement('canvas');canvas.width=base.width;canvas.height=base.height;canvas.style.width=width+'px';
+   const ctx=canvas.getContext('2d'),scale=width/page.page_width,options={zoom:scale/CSS_PX_PER_SP,devicePixelRatio:ratio,padding:0,background:'transparent'},layers=[];
+   for(const uid of units){
+     const rows=page.lines.filter(line=>line.unit===uid);if(!rows.length)continue;
+     const layer=document.createElement('canvas'),local={...page,flags:{},other:[],lines:rows};
+     const painted=await renderer.render(layer,local,options),key=number+':'+uid;
+     let before=state.inkBounds.get(key);
+     if(!before){
+       const original=state.pages.find(page=>page.page===number),scratch=document.createElement('canvas');
+       before=(await renderer.render(scratch,{...original,flags:{},other:[],lines:original.lines.filter(line=>line.unit===uid)},options)).inkBounds;
+       state.inkBounds.set(key,before);
+     }
+     const region=unitInkRegion(page,uid,before,painted.inkBounds,2/(scale*ratio));
+     layers.push({layer,region});
+   }
+   ctx.drawImage(base,0,0);ctx.fillStyle='#fff';
+   for(const {region}of layers)ctx.fillRect(region.x*scale*ratio,region.y*scale*ratio,region.w*scale*ratio,region.h*scale*ratio);
+   for(const {layer}of layers)ctx.drawImage(layer,0,0);
    canvases.set(number,canvas);
- }
- return canvases;
+ }return canvases;}finally{await pdfTask?.destroy();}
 }
 async function updateLive(source,revision){
  const state=snapshot,gen=generation;
  if(!state||!liveStart)return false;
- const edit=findLiveEdit(state.source,source,state.capture,state.spans);
+ const edit=findLiveEdit(state.source,source,state.capture,state.spans,state.macros);
  if(edit.unchanged){ui.setLivePages({canvases:new Map(),revision,durationMs:0});return true;}
  if(edit.incomplete){ui.setLiveStatus({state:'waiting',reason:edit.reason,revision});return true;}
  if(!edit.unit){fullReason=edit.reason;return false;}
@@ -119,10 +146,11 @@ async function updateLive(source,revision){
    }
    const result=await live.compile(ctx,edit.source,expected);
    if(!current())return true;
-   const list=decodeDisplayList(result.binary),pages=replaceUnitRows(state.drawnPages,edit.unit,proof,list),canvases=await drawLivePages(pages);
+   const list=decodeDisplayList(result.binary),pages=replaceUnitRows(state.drawnPages,edit.unit,proof,list),units=new Set([...state.liveUnits,edit.unit.uid]),canvases=await drawLivePages(pages,units);
    if(!current())return true;
    if(!ui.setLivePages({canvases,revision,durationMs:performance.now()-began}))return false;
    state.drawnPages=state.drawnPages.map(page=>pages.get(page.page)||page);
+   state.liveUnits=units;
    acceptLiveEdit(state,edit,source);
    return true;
  }catch(error){

@@ -48,6 +48,10 @@ export function decodeDisplayList(input) {
         dl.fonts[id] = { id, size, subfont, slant, extend, squeeze, designsize, filename, psname, name, fullname, format, type: kind === 5 ? 'virtual' : 'real', encodingbytes: null, embedding: null }; break;
       }
       case 3: { const key = p.str(); Object.defineProperty(dl.flags, key, { value: p.i32(), enumerable: true, configurable: true }); break; }
+      case 4: {
+        const id = p.u32(); if (!dl.fonts[id]) throw new DisplayListError('Encoding without font', offset);
+        dl.fonts[id].encoding_file = p.str(); dl.fonts[id].encoding = p.str(); break;
+      }
       case 0x10:
         if (line) throw new DisplayListError('Nested LINE', offset);
         line = { par: p.i32(), i: p.i32(), x: p.i32(), y: p.i32(), w: p.i32(), h: p.i32(), d: p.i32(), gs: p.f64(), gsign: p.u8(), gorder: p.u8(), items: [] }; break;

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {replaceUnitRows} from '../core/live-layout.js';
+import {replaceUnitRows,unitInkRegion} from '../core/live-layout.js';
 const font={filename:'text.otf',size:655360};
 const unit={uid:1,placements:[{page:1,row:1,x:100,y:200}]};
 const baseline={lines:[{x:0,y:20,h:20,d:2}]};
@@ -23,4 +23,16 @@ test('changed row count or height requires full pagination',()=>{
 test('local drawing outside rows and degraded output require full layout',()=>{
  assert.throws(()=>replaceUnitRows(pages(),unit,baseline,{...live,other:[['g',1,50,null,0,0,10,0]]}),/outside unit rows/);
  assert.throws(()=>replaceUnitRows(pages(),unit,baseline,{...live,flags:{unsupported:1}}),/Unsupported/);
+});
+test('patch bounds include old and new ink while protecting adjacent rows and page drawing',()=>{
+ const page={...pages()[0],other:[],page_width:1000,page_height:1000,lines:[{unit:1,x:100,y:200,w:400,h:20,d:2},{unit:2,x:100,y:300,w:400,h:20,d:2}]};
+ const before={x:100,y:180,w:150,h:22},after={x:98,y:180,w:180,h:22};
+ assert.deepEqual(unitInkRegion(page,1,before,after,1),{x:97,y:179,w:182,h:24});
+ assert.throws(()=>unitInkRegion(page,1,before,{...after,h:150},1),/another row/);
+ assert.throws(()=>unitInkRegion(page,1,before,{...after,x:-5},1),/leaves the page/);
+ page.other=[['r',120,185,3,4]];assert.throws(()=>unitInkRegion(page,1,before,after,1),/page drawing/);
+ page.other=[['l',0,'unbounded graphics']];assert.throws(()=>unitInkRegion(page,1,before,after,1),/Unbounded/);
+ page.other=[];page.lines[1].items=[['i',1,120,180,10,20]];
+ assert.throws(()=>unitInkRegion(page,1,before,after,1),/image/);
+ assert.throws(()=>unitInkRegion(page,1,before,{...after,w:NaN},1),/Invalid/);
 });

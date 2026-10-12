@@ -9,7 +9,7 @@ const innerEnvironments=new Set('aligned alignedat gathered split cases matrix p
 
 // Symbols and operators of the kernel, amsmath and amssymb beyond the page-update vocabulary.
 // None assigns globally; an undefined one is an ordinary, recoverable TeX error.
-const extraCommands=('mathscr bm pmb not dagger ddagger top bot perp parallel nparallel angle measuredangle sphericalangle triangle square Box Diamond blacksquare lozenge '+
+const extraCommands=('mathscr bm pmb not dagger ddagger top bot parallel nparallel angle measuredangle sphericalangle triangle square Box Diamond blacksquare lozenge '+
  'oplus ominus otimes oslash odot wedge vee uplus sqcup sqcap amalg wr diamond bigtriangleup bigtriangledown triangleleft triangleright lhd rhd unlhd unrhd '+
  'gets uparrow downarrow updownarrow Uparrow Downarrow Updownarrow nearrow searrow swarrow nwarrow hookrightarrow hookleftarrow longrightarrow longleftarrow longleftrightarrow '+
  'Longrightarrow Longleftarrow Longleftrightarrow longmapsto leftharpoonup leftharpoondown rightharpoonup rightharpoondown rightleftharpoons leadsto rightsquigarrow twoheadrightarrow '+

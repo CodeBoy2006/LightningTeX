@@ -72,6 +72,7 @@ function M.encode(dl)
     rec(buf, 0x02, pack("<I4i4BBI2i4i4i4i4", d.id or tonumber(id) or 0, math.floor((d.size or 0) + 0.5), font_kind(d), 0,
       d.subfont or 0, math.floor((d.slant or 0) + 0.5), math.floor((d.extend or 0) + 0.5), math.floor((d.squeeze or 0) + 0.5),
       math.floor((d.designsize or 0) + 0.5)) .. str(d.filename) .. str(d.psname) .. str(d.name) .. str(d.fullname) .. str(d.format))
+    if d.encoding then rec(buf, 0x04, pack("<I4", d.id or tonumber(id) or 0) .. str(d.encoding_file) .. str(d.encoding)) end
   end
   if dl.flags then
     for k, v in pairs(dl.flags) do

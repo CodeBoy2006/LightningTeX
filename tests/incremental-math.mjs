@@ -11,6 +11,7 @@ import {finalizeCapture,unitContext,liveUnitEligibility,compareUnitBaseline,font
 import {replaceUnitRows} from '../core/live-layout.js';
 import {decodeDisplayList,createDisplayListRenderer} from '../render/index.mjs';
 import {parseEngineFont} from '../render/type1-font.mjs';
+import {parseMacros} from '../core/math-preview.js';
 const root=new URL('../',import.meta.url),base=new URL('public/',root),files={};
 for(const name of ['rtex-json.lua','rtex-dl.lua','rtex-dl-bin.lua','rtex-capture.lua','rtex-serve.lua','rtex-pic.lua','latex/rtex-capture.sty','latex/rtex-pic.tex','latex/rtex-serve-patches.tex'])
  files[name]=await fs.readFile(new URL('rtex/'+name,base),'utf8');
@@ -21,8 +22,16 @@ globalThis.Worker=class {
 const fonts=new Map(),bg=new BackgroundEngine({base,files}),live=new LiveEngine({base,files,onFonts:items=>Object.entries(items).forEach(([key,value])=>fonts.set(key,value))});
 const renderer=createDisplayListRenderer({resolveFont:async name=>fonts.get(name),parseFont:(buffer,desc)=>parseEngineFont(buffer,desc,pdfjs)});
 const initial=String.raw`\documentclass{article}
-\usepackage{amsmath}
+\usepackage{amsmath,amssymb}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern,microtype,hyperref,amsthm}
+\newcommand{\R}{\mathbb R}
 \begin{document}
+\begin{abstract}
+A first statement has $s=10$.
+
+A second statement lives in $\R$.
+\end{abstract}
 Text with $x^2=81$ here.
 
 \[\sum_{k=1}^n k=\frac{n(n+1)}{2}.\]
@@ -37,17 +46,26 @@ a&=20,\\
 \end{align}
 
 Last paragraph stays here.
+
+\begin{proof}
+A bound holds for $v^2=44$.
+
+Therefore the proof ends here.
+\end{proof}
+
+\paragraph{Approach.}
+A method yields $w=21$.
 \end{document}`;
 const ink=page=>[...(page.other||[]),...page.lines.flatMap(line=>line.items)].filter(item=>['g','r'].includes(item[0])).map(item=>item[0]==='g'?['g',fontKey(page.fonts[item[1]]),...item.slice(2)]:item);
 try {
- const full=await bg.compile(initial),capture=finalizeCapture(full.capture),state={source:initial,spans:captureSpans(initial,capture)},proofs=new Map();
+ const full=await bg.compile(initial),capture=finalizeCapture(full.capture),state={source:initial,spans:captureSpans(initial,capture),macros:parseMacros(splitPreamble(initial).preamble)},proofs=new Map();
  let pages=full.pages;Object.entries(full.fonts).forEach(([key,value])=>fonts.set(key,value));
  await live.start(splitPreamble(initial).preamble+'\n\\RequirePackage{luatexbase}\n',full.aux,[],full.packageMisses);
  const generation=live.generation,times=[];
- const edits=[['x^2','x^3'],['n(n+1)','n(n+2)'],['y=10','y=11'],['R&=30','R&=31'],['Last paragraph','Final paragraph'],['x^3','\\alpha^3']];
+ const edits=[['x^2','x^3'],['n(n+1)','n(n+2)'],['y=10','y=11'],['R&=30','R&=31'],['Last paragraph','Final paragraph'],['x^3','\\alpha^3'],['s=10','s=11'],['v^2','v^3'],['w=21','w=22']];
  for(let i=0;i<26;i++){
-   const [before,after]=i<edits.length?edits[i]:i%2?['=82','=81']:['=81','=82'];
-   const source=state.source.replace(before,after),edit=findLiveEdit(state.source,source,capture,state.spans);
+   const [before,after]=i<edits.length?edits[i]:(i-edits.length)%2?['=82','=81']:['=81','=82'];
+   const source=state.source.replace(before,after),edit=findLiveEdit(state.source,source,capture,state.spans,state.macros);
    assert.ok(edit.unit,`${before}: ${edit.reason}`);assert.ok(liveUnitEligibility(capture,edit.unit).ok,JSON.stringify(liveUnitEligibility(capture,edit.unit)));
    const context=unitContext(capture,edit.unit),expected=edit.unit.advanced||{};
    if(!proofs.has(edit.unit.uid)){

@@ -1,5 +1,29 @@
 import {fontKey,globalDrawingReason} from './capture.js';
 
+// shortcut: erasure assumes white paper; colored page backgrounds need verified compositing.
+export function unitInkRegion(page,uid,before,after,pad){
+  if(!before||!after)throw Error('Missing unit ink bounds');
+  if(![...Object.values(before),...Object.values(after),pad].every(Number.isFinite)||pad<0||before.w<0||before.h<0||after.w<0||after.h<0)throw Error('Invalid unit ink bounds');
+  const x=Math.min(before.x,after.x)-pad,y=Math.min(before.y,after.y)-pad;
+  const right=Math.max(before.x+before.w,after.x+after.w)+pad,bottom=Math.max(before.y+before.h,after.y+after.h)+pad;
+  const overlaps=(x0,y0,x1,y1)=>x<x1&&right>x0&&y<y1&&bottom>y0;
+  if(x<0||y<0||right>page.page_width||bottom>page.page_height)throw Error('Unit ink leaves the page');
+  for(const line of page.lines)if(line.unit!==uid){
+    if(overlaps(line.x,line.y-line.h,line.x+line.w,line.y+line.d))throw Error('Unit ink overlaps another row');
+    for(const item of line.items||[])if(item[0]==='i'&&overlaps(item[2],item[3],item[2]+item[4],item[3]+item[5]))throw Error('Unit ink overlaps an image');
+  }
+  for(const item of page.other||[]){
+    if(item[0]==='c'||item[0]==='m')continue;
+    if(item[0]==='r'){
+      if(overlaps(item[1],item[2],item[1]+item[3],item[2]+item[4]))throw Error('Unit ink overlaps page drawing');
+    }else if(item[0]==='g'){
+      const size=page.fonts[item[1]]?.size;
+      if(!Number.isFinite(size)||overlaps(item[4]-size,item[5]-size,item[4]+item[6]+size,item[5]+size))throw Error('Unit ink overlaps page drawing');
+    }else throw Error('Unbounded page drawing requires full layout');
+  }
+  return {x,y,w:right-x,h:bottom-y};
+}
+
 // shortcut: reuse fixed row slots; changed geometry needs a full pagination pass.
 export function replaceUnitRows(pages,unit,baseline,live){
   const reason=globalDrawingReason(live,true);if(reason)throw Error(reason);

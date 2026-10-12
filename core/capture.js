@@ -41,7 +41,8 @@ export function unitContext(capture, unitOrId) {
   const start = unit.kind==='par' && first?.begin != null ? first.begin : unit;
   return clone({kind:unit.kind,name:unit.name??null,
     ints:map(params.ints),dims:map(params.dims),glues:map(params.glues),parshape:params.parshape??null,
-    everypar:unit.everypar??'',nobreak:unit.nobreak??false,afterindent:unit.afterindent??false,noskipsec:unit.noskipsec??false,
+    // A captured heading includes its own command, which installs its own everypar.
+    everypar:unit.kind==='heading'?'':unit.everypar??'',nobreak:unit.nobreak??false,afterindent:unit.afterindent??false,noskipsec:unit.noskipsec??false,
     counters:unit.abs_counters,thefmt:unit.abs_thefmt,macros:unit.abs_macros,
     begin:{nfss:map(start.nfss),color:start.color??null}});
 }
@@ -50,20 +51,24 @@ export function unitContext(capture, unitOrId) {
 export function liveUnitEligibility(capture, unitOrId) {
   let unit; try {unit=resolveUnit(capture,unitOrId);} catch(e) {return fail(e.message);}
   const math=unit.kind==='env'&&/^(equation|align|gather|multline|displaymath)\*?$/.test(unit.name);
-  if (!math&&(unit.kind!=='par' || unit.nest!==1)) return fail('Only top-level text and math units are live');
-  if (!math&&unit.seqs?.length!==1) return fail('Composite or nested paragraphs require full layout');
+  const composite=unit.kind==='env'&&['proof','abstract'].includes(unit.name)
+    ||unit.kind==='heading'&&['paragraph','subparagraph'].includes(unit.name);
+  if (!math&&!composite&&(unit.kind!=='par' || unit.nest!==1)) return fail('Only top-level text and math units are live');
+  if (!math&&!composite&&unit.seqs?.length!==1) return fail('Composite or nested paragraphs require full layout');
   const p=firstParagraph(capture,unit);
-  if (!math&&(!p?.begin || p.nest!==1)) return fail('No unambiguous paragraph context');
+  if (!math&&!composite&&(!p?.begin || p.nest!==1)) return fail('No unambiguous paragraph context');
   if (!unit.placements?.length) return fail('No captured row placements');
   // The server validates/replays kernel everypar (including paragraphs after headings).
   if (unit.noskipsec) return fail('Run-in headings require full layout');
-  if (Object.keys(map(unit.advanced)).some(key=>key!=='equation')) return fail('Counter changes require full layout');
+  if (Object.keys(map(unit.advanced)).some(key=>key!=='equation'&&!(unit.kind==='heading'&&['bookmark@seq@number','section@level'].includes(key)))) return fail('Counter changes require full layout');
   // capture.lua::scan_flags reports node COUNTS, not only degradation flags.
   // Ordinary prose has glyphs and an indentation hlist. Accept structural counts;
   // inserts, marks, adjustments, direction changes and whatsits still fall back.
-  const structural = new Set(['glyphs','hlist','vlist','rule','math']);
-  if (Object.entries(map(p?.flags)).some(([key,value]) =>
-    !Number.isSafeInteger(value) || value < 0 || (value !== 0 && !structural.has(key))))
+  const structural = new Set(['glyphs','hlist','vlist','rule','math','whatsit_pdf_start_link','whatsit_pdf_end_link','whatsit_write']);
+  if (unit.kind==='env'&&unit.name==='abstract')structural.add('adjust');
+  const members=(capture.paragraphs||[]).filter(paragraph=>unit.seqs?.includes(paragraph.seq));
+  if (members.some(paragraph=>Object.entries(map(paragraph.flags)).some(([key,value]) =>
+    !Number.isSafeInteger(value) || value < 0 || (value !== 0 && !structural.has(key)))))
     return fail('Paragraph has unsupported engine flags');
   // The capture records these standard kernel meanings even in a blank article.
   // Permit only their exact idle defaults, not arbitrary body redefinitions.
@@ -80,16 +85,25 @@ function pageEntries(pages) {
   return Object.entries(pages || {}).map(([n,dl])=>[Number(n),dl]);
 }
 const black = data => /^(?:0\s+g(?:\s+0\s+G)?|0\s+G|0\s+0\s+0\s+rg(?:\s+0\s+0\s+0\s+RG)?)$/.test(String(data).trim());
+const blackColor = item => item[0]==='c'&&([0,1].includes(item[2])?black(item[3]):[2,3].includes(item[2])&&item[3]==='');
 export function globalDrawingReason(dl, live=false) {
   if (!dl || !Array.isArray(dl.lines)) return 'Missing display-list rows';
   if (nonempty(dl.flags) || dl.inserts || dl.binaryDiagnostics?.unknownRecords?.length) return 'Unsupported or degraded display list';
   // Page other glyphs/rules belong to headers etc.; cannot compare them to unit output.
   // Black color assignments are harmless; any other state might affect selected rows.
   for (const item of dl.other || []) {
-    if (item[0]==='c' && item[2]!==2 && item[2]!==3 && black(item[3])) continue;
+    if (blackColor(item)) continue;
     if (!live && ['g','r'].includes(item[0])) continue;
     return 'Drawing outside unit rows requires full layout';
   }
+  const stacks=new Map();
+  for(const item of [...dl.other||[],...dl.lines.flatMap(line=>line.items||[])])if(item[0]==='c'){
+    if(!blackColor(item))return 'Unsupported color state requires full layout';
+    const depth=stacks.get(item[1])??1;
+    if(item[2]===2&&depth===1)return 'Color stack underflow requires full layout';
+    stacks.set(item[1],depth+(item[2]===1?1:item[2]===2?-1:0));
+  }
+  if([...stacks.values()].some(depth=>depth!==1))return 'Unclosed color stack requires full layout';
   return null;
 }
 export function extractUnitRows(pages, unit) {
@@ -98,8 +112,11 @@ export function extractUnitRows(pages, unit) {
   for (const page of needed) {
     const dl=entries.find(([n])=>n===page)?.[1];
     if (!dl) return fail(`Missing page ${page} display list`);
-    const reason=globalDrawingReason(dl); if(reason)return fail(reason);
-    for(const line of dl.lines.filter(l=>l.unit===unit.uid)) rows.push({page,line,fonts:dl.fonts||{}});
+    // Unedited PDF graphics are retained as the page backdrop; prove selected rows only.
+    if(Object.keys(map(dl.flags)).some(key=>key!=='literal'))return fail('Unsupported or degraded display list');
+    const selected=dl.lines.filter(l=>l.unit===unit.uid);
+    const reason=globalDrawingReason({...dl,binaryDiagnostics:dl.binaryDiagnostics,flags:{},other:[],lines:selected}); if(reason)return fail(reason);
+    for(const line of selected) rows.push({page,line,fonts:dl.fonts||{}});
   }
   rows.sort((a,b)=>a.line.row-b.line.row);
   if (!rows.length || rows.length!==unit.placements.length) return fail('Captured rows do not match placements');
@@ -117,7 +134,7 @@ export function fontKey(desc) {
   const name=desc?.filename??desc?.psname??desc?.name;
   if (!name || !Number.isFinite(desc?.size)) return null;
   // Rust f64::round rounds halves away from zero (sizes are positive).
-  return `${name}#${desc.subfont??0}@${Math.round(desc.size)}/${desc.slant??0}/${desc.extend??0}/${desc.squeeze??0}`;
+  return `${name}#${desc.encoding_file??''}#${desc.subfont??0}@${Math.round(desc.size)}/${desc.slant??0}/${desc.extend??0}/${desc.squeeze??0}`;
 }
 function normalizeRow(line, fonts) {
   for(const key of ['x','y','w','h','d']) if(!Number.isSafeInteger(line[key])) return fail(`Invalid row ${key}`);
@@ -136,7 +153,7 @@ function normalizeRow(line, fonts) {
       items.push(['r',item[1]-line.x,item[2]-line.y,item[3],item[4]]);
     } else if(item[0]==='m'&&['on','off'].includes(item[1])&&Number.isSafeInteger(item[2])) {
       // Math boundaries have no ink; the surrounding glyph positions carry the layout.
-    } else if(item[0]==='c' && item[2]!==2 && item[2]!==3 && black(item[3])) {
+    } else if(blackColor(item)) {
       // Canonical black assignments can differ between page and paragraph setup.
     } else return fail(`Unsupported drawing item ${item[0]} requires full layout`);
   }

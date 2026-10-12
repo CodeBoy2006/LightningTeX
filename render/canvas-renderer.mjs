@@ -21,7 +21,7 @@ export function parsePDFColor(data, previous = '#000000') {
 export function createDisplayListRenderer({ resolveFont, pdfFallback, parseFont } = {}) {
   const cache = new Map();
   async function fontFor(desc) {
-    const key = `${desc.filename}#${desc.subfont || 0}`;
+    const key = `${desc.filename}#${desc.encoding_file || ''}#${desc.subfont || 0}`;
     if (!cache.has(key)) cache.set(key, (async () => {
       if (!resolveFont) throw Error('No font resolver supplied');
       const bytes = asBytes(await resolveFont(desc.filename, desc));
@@ -40,6 +40,8 @@ export function createDisplayListRenderer({ resolveFont, pdfFallback, parseFont 
   }
   async function render(canvas, input, options = {}) {
     const dl = decodeDisplayList(input), diagnostics = displayListDiagnostics(dl), reasons = [], operations = [];
+    let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity,boundsSafe=true;
+    const bound=(x,y)=>{x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y);};
     const reason = (code, message) => reasons.push({ code, message });
     for (const [key, value] of Object.entries(dl.flags || {})) reason('flag', `${key}: ${value}`);
     for (const record of dl.binaryDiagnostics?.unknownRecords || []) reason('unknown-record', `Unknown record 0x${record.tag.toString(16)} at ${record.offset}`);
@@ -66,9 +68,14 @@ export function createDisplayListRenderer({ resolveFont, pdfFallback, parseFont 
               for (const [key, value] of Object.entries(c)) if (key !== 'type' && !Number.isFinite(value)) throw Error(`Non-finite outline coordinate ${key}`);
             }
             const unit = desc.size / font.unitsPerEm, horizontal = (1 + expansion / 1000000) * (desc.extend ? desc.extend / 1000 : 1), slant = (desc.slant || 0) / 1000;
+            // Control points conservatively bound curves, including italic overhangs.
+            for(const c of path.commands)for(const suffix of ['', '1', '2'])if(c['x'+suffix]!=null)
+              bound(x+c['x'+suffix]*unit*horizontal+c['y'+suffix]*unit*slant,y-c['y'+suffix]*unit);
             operations.push({ type: 'glyph', path, x, y, unit, horizontal, slant, fill }); break;
           }
-          case 'r': operations.push({ type: 'rule', x: item[1], y: item[2], w: item[3], h: item[4], fill }); break;
+          case 'r':
+            if(item[3]>0&&item[4]>0){bound(item[1],item[2]);bound(item[1]+item[3],item[2]+item[4]);}
+            operations.push({ type: 'rule', x: item[1], y: item[2], w: item[3], h: item[4], fill }); break;
           case 'c': {
             const [, id, cmd, data] = item; if (!stacks.has(id)) stacks.set(id, ['#000000']); const stack = stacks.get(id);
             if (cmd === 0) { fill = parsePDFColor(data, fill); stack[stack.length - 1] = fill; }
@@ -78,6 +85,7 @@ export function createDisplayListRenderer({ resolveFont, pdfFallback, parseFont 
             else throw Error(`Unknown color command ${cmd}`); break;
           }
           case 'M': {
+            boundsSafe=false;
             const [, op, x, y, data] = item;
             if (op === 'save') { matrices.push(fill); operations.push({ type: 'save' }); }
             else if (op === 'restore') { if (!matrices.length) throw Error('Matrix stack underflow'); fill = matrices.pop(); operations.push({ type: 'restore' }); }
@@ -139,7 +147,8 @@ export function createDisplayListRenderer({ resolveFont, pdfFallback, parseFont 
       ctx.fill('nonzero'); ctx.restore();
     }
     ctx.restore();
-    return { status: 'display-list', exact: true, reasons: [], diagnostics, cssWidth, cssHeight, glyphCount: diagnostics.glyphs.length };
+    return { status: 'display-list', exact: true, reasons: [], diagnostics, cssWidth, cssHeight, glyphCount: diagnostics.glyphs.length,
+      inkBounds:boundsSafe&&Number.isFinite(x0)?{x:x0,y:y0,w:x1-x0,h:y1-y0}:null };
   }
   return { render, clearFontCache() { cache.clear(); } };
 }

@@ -1,7 +1,10 @@
 // PDF.js already converts Type 1 charstrings to OpenType. A font-only PDF lets us
 // reuse that conversion once per font, including glyphs absent from the initial PDF.
-export function type1FontPdf(bytes,psname) {
+export function type1FontPdf(bytes,psname,encoding) {
   if(!/^[A-Za-z0-9_.+-]+$/.test(psname))throw Error('Invalid Type 1 PostScript name');
+  const names=encoding?.split(' ');
+  if(names&&(names.length!==256||names.some(name=>!/^[-A-Za-z0-9_.+]+$/.test(name))))throw Error('Invalid Type 1 encoding');
+  const vector=names?` /Encoding << /Type /Encoding /Differences [0 ${names.map(name=>'/'+name).join(' ')}] >>`:'';
   const parts=[],lengths=[0,0,0];let offset=0,phase=0;
   while(offset<bytes.length){
     if(bytes[offset++]!==128)throw Error('Invalid PFB segment');
@@ -22,7 +25,7 @@ export function type1FontPdf(bytes,psname) {
     encode('<< /Type /Catalog /Pages 2 0 R >>'),
     encode('<< /Type /Pages /Kids [3 0 R] /Count 1 >>'),
     encode('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources << /Font << /F1 4 0 R >> >> /Contents 7 0 R >>'),
-    encode(`<< /Type /Font /Subtype /Type1 /BaseFont /${psname} /FirstChar 0 /LastChar 255 /Widths [${Array(256).fill(0).join(' ')}] /FontDescriptor 5 0 R >>`),
+    encode(`<< /Type /Font /Subtype /Type1 /BaseFont /${psname}${vector} /FirstChar 0 /LastChar 255 /Widths [${Array(256).fill(0).join(' ')}] /FontDescriptor 5 0 R >>`),
     encode(`<< /Type /FontDescriptor /FontName /${psname} /Flags 4 /FontBBox [-1000 -1000 3000 3000] /ItalicAngle 0 /Ascent 1000 /Descent -1000 /CapHeight 700 /StemV 80 /FontFile 6 0 R >>`),
     join([encode(`<< /Length ${font.length} /Length1 ${lengths[0]} /Length2 ${lengths[1]} /Length3 ${lengths[2]} >>\nstream\n`),font,encode('\nendstream')]),
     join([encode(`<< /Length ${stream.length} >>\nstream\n`),stream,encode('\nendstream')]),
@@ -36,7 +39,7 @@ export function type1FontPdf(bytes,psname) {
 export async function parseEngineFont(buffer,descriptor,pdfjs,worker) {
   const module=await import('opentype.js'),parse=module.parse||module.default?.parse;
   if(descriptor.format!=='type1')return parse(buffer);
-  const task=pdfjs.getDocument({data:type1FontPdf(new Uint8Array(buffer),descriptor.psname),worker,
+  const task=pdfjs.getDocument({data:type1FontPdf(new Uint8Array(buffer),descriptor.psname,descriptor.encoding),worker,
     isEvalSupported:false,useSystemFonts:false,disableFontFace:true,fontExtraProperties:true});
   try {
     const pdf=await task.promise,page=await pdf.getPage(1),ops=await page.getOperatorList();

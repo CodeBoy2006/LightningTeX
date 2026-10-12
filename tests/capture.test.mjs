@@ -47,6 +47,13 @@ test('baseline compares relative origins with stable font identity and rules',()
  const baseline=extractUnitRows(new Map([[1,page]]),unit);page.lines[0].x=900;assert.equal(baseline.rows[0].line.x,100);
  assert.equal(compareBaseline(baseline,live).ok,true);
 });
+test('selected-row proof retains unedited graphics and rejects hidden binary degradation',()=>{
+ const {unit,page,live}=drawing();page.flags={literal:1};page.other=[['l',0,'untouched PDF graphics']];
+ page.lines.push({unit:9,row:1,items:[['i',1,0,0,1,1]]});
+ assert.equal(compareUnitBaseline(unit,[page],live).ok,true);
+ Object.defineProperty(page,'binaryDiagnostics',{value:{unknownRecords:[{tag:123}]}});
+ assert.equal(compareUnitBaseline(unit,[page],live).ok,false);
+});
 test('glyph identity, font, expansion, positions, dimensions and rule changes fail',()=>{
  for(const alter of [l=>l.lines[0].items[0][2]++,l=>l.lines[0].items[0][3]++,l=>l.lines[0].items[0][4]++,
   l=>l.lines[0].items[0][7]++,l=>l.fonts[99].filename+='other',l=>l.lines[0].w++,l=>l.lines[0].items[1][3]++]){
@@ -116,4 +123,23 @@ test('normal structural counts pass, side-effect flags and nondefault macros fai
    c.paragraphs[0].flags[flag]=1;assert.equal(liveUnitEligibility(c,1).ok,false);delete c.paragraphs[0].flags[flag];
  }
  c.units[0].macros.baselinestretch='->1.5';assert.equal(liveUnitEligibility(c,1).ok,false);
+});
+test('known composite units retain side-effect checks and heading context replays its own command',()=>{
+ const c=capture();c.units[0].kind='heading';c.units[0].name='paragraph';c.units[0].everypar='previous run-in heading';
+ c.paragraphs[0].flags={glyphs:10,whatsit_pdf_start_link:1,whatsit_pdf_end_link:1,whatsit_write:1};
+ assert.equal(liveUnitEligibility(c,1).ok,true);assert.equal(unitContext(c,1).everypar,'');
+ c.units[0].seqs.push(21);assert.equal(liveUnitEligibility(c,1).ok,true);
+ c.paragraphs[2].flags={ins:1};assert.equal(liveUnitEligibility(c,1).ok,false);
+ delete c.paragraphs[2].flags;c.units[0].kind='env';c.units[0].name='proof';assert.equal(liveUnitEligibility(c,1).ok,true);
+ c.paragraphs[0].flags.adjust=1;assert.equal(liveUnitEligibility(c,1).ok,false);
+ c.units[0].name='abstract';assert.equal(liveUnitEligibility(c,1).ok,true);
+ c.units[0].name='itemize';assert.equal(liveUnitEligibility(c,1).ok,false);
+});
+test('balanced black stacks are harmless but underflow and colored assignments fail',()=>{
+ const {unit,page,live}=drawing();
+ for(const dl of [page,live])dl.lines[0].items.unshift(['c',0,1,'0 g 0 G']);
+ for(const dl of [page,live])dl.lines[0].items.push(['c',0,2,'']);
+ assert.equal(compareUnitBaseline(unit,[page],live).ok,true);
+ live.other.push(['c',0,2,'']);assert.equal(compareUnitBaseline(unit,[page],live).ok,false);live.other=[];
+ live.lines[0].items[0][3]='1 0 0 rg';assert.equal(compareUnitBaseline(unit,[page],live).ok,false);
 });
