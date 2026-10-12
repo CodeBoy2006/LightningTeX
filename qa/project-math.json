@@ -1,0 +1,24 @@
+{
+  "runtime": "actual browser Worker scripts and LuaHBTeX WASM in Node worker_threads (not browser UI)",
+  "multiFile": {
+    "pages": 1,
+    "passes": 2,
+    "units": 8,
+    "ms": 1926
+  },
+  "errorAttribution": [
+    {
+      "severity": "error",
+      "message": "Undefined control sequence \\nosuchmacro",
+      "file": "sections/method.tex",
+      "line": 3
+    }
+  ],
+  "formulaPreview": {
+    "typeset": 6,
+    "engineRestarts": 0,
+    "firstMs": 170.96,
+    "medianMs": 1.07,
+    "maxMs": 170.96
+  }
+}

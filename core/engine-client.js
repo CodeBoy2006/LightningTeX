@@ -1,9 +1,9 @@
-import {splitPreamble} from './document.js';
+import {splitPreamble,safeProjectPath} from './document.js';
 const encoder=new TextEncoder(),decoder=new TextDecoder();
 const TEX_FILES=['rtex-json.lua','rtex-dl.lua','rtex-dl-bin.lua','rtex-capture.lua','rtex-serve.lua','rtex-pic.lua','latex/rtex-capture.sty','latex/rtex-pic.tex','latex/rtex-serve-patches.tex'];
 export async function loadSupport(base){return Object.fromEntries(await Promise.all(TEX_FILES.map(async p=>{const r=await fetch(new URL('rtex/'+p,base));if(!r.ok)throw Error(`Missing rtex support: ${p}`);return [p,await r.text()]})))}
 export class BackgroundEngine {
- constructor({base,files,onLog=()=>{}}){Object.assign(this,{base,files,onLog});this.next=0;this.pending=new Map();this.generation=0;this.ready=null;this.worker=null}
+ constructor({base,files,onLog=()=>{}}){Object.assign(this,{base,files,onLog});this.next=0;this.pending=new Map();this.generation=0;this.ready=null;this.worker=null;this.synced=new Map();this.root=null}
  start(){
   if(this.ready)return this.ready;
   const generation=++this.generation;
@@ -19,7 +19,7 @@ export class BackgroundEngine {
     else if(data.type==='log')this.onLog(data.text);
     else if(data.type==='result'||data.type==='error'){
      const task=this.pending.get(data.id);
-     if(task){clearTimeout(task.timer);this.pending.delete(data.id);data.type==='result'?task.resolve(data):task.reject(Error(data.message))}
+     if(task){clearTimeout(task.timer);this.pending.delete(data.id);data.type==='result'?task.resolve(data):task.reject(Object.assign(Error(data.message),{log:data.log,empty:data.empty}))}
      else if(data.type==='error'&&this.rejectReady)this.stop(Error(data.message));
     }
    };
@@ -29,29 +29,44 @@ export class BackgroundEngine {
   });
   return this.ready;
  }
- async compile(source){
+ // The worker keeps /project between jobs; only files whose revision changed are sent again.
+ delta(root,files){
+  // Validate every path before touching the record of what the worker holds.
+  const paths=files.map(file=>safeProjectPath(file.path)),reset=root!==this.root,write=[],seen=new Set(paths);
+  if(reset){this.synced.clear();this.root=root}
+  for(const [index,file] of files.entries()){
+   const path=paths[index];
+   if(path===root||this.synced.get(path)===file.rev)continue;
+   this.synced.set(path,file.rev);write.push({path,data:file.data});
+  }
+  const remove=[...this.synced.keys()].filter(path=>!seen.has(path));
+  for(const path of remove)this.synced.delete(path);
+  return {reset,write,remove};
+ }
+ async compile(source,{root='main.tex',files=[]}={}){
   const start=this.start(),generation=this.generation;
   await start;
   if(generation!==this.generation||!this.worker)throw Error('Compilation cancelled');
-  const id=++this.next,worker=this.worker;
+  const id=++this.next,worker=this.worker,project=this.delta(safeProjectPath(root),files);
   return new Promise((resolve,reject)=>{
    const timer=setTimeout(()=>{if(generation===this.generation)this.stop(Error('Compilation exceeded 30 seconds; worker stopped'))},30000);
    this.pending.set(id,{resolve,reject,timer});
-   try{worker.postMessage({type:'compile',id,source,preamble:splitPreamble(source)?.preamble??null})}catch(error){this.stop(error)}
+   try{worker.postMessage({type:'compile',id,source,root:this.root,project,preamble:splitPreamble(source)?.preamble??null})}catch(error){this.stop(error)}
   });
  }
  stop(error=Error('Compilation cancelled')){
   ++this.generation;this.worker?.terminate();this.worker=null;clearTimeout(this.timer);
   const reject=this.rejectReady;this.rejectReady=null;reject?.(error);
   for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(error)}
-  this.pending.clear();this.ready=null;
+  this.pending.clear();this.ready=null;this.synced.clear();this.root=null;
  }
 }
 export class LiveEngine {
  constructor({base,files,onLog=()=>{},onFonts=()=>{}}){Object.assign(this,{base,files,onLog,onFonts});this.queue=Promise.resolve();this.req=0;this.frames=[];this.readers=[];this.buffer=new Uint8Array();this.generation=0;this.worker=null;this.failure=Error('Live engine not started')}
  current(generation){if(generation!==this.generation||!this.worker)throw this.failure||Error('Live engine restarted')}
- async start(preamble,aux){
-  const key=JSON.stringify([preamble,decoder.decode(aux??new Uint8Array())]);
+ // files: preamble dependencies ({path,data,rev}) placed beside the serve document.
+ async start(preamble,aux,files=[]){
+  const key=JSON.stringify([preamble,decoder.decode(aux??new Uint8Array()),files.map(file=>[safeProjectPath(file.path),file.rev])]);
   if(this.worker&&key===this.startKey)return this.ready;
   this.stop();this.startKey=key;const generation=this.generation;
   try{
@@ -59,7 +74,7 @@ export class LiveEngine {
    const worker=this.worker=new Worker(new URL('runtime/live-worker.js',this.base));this.failure=null;
    worker.onmessage=({data})=>{if(generation!==this.generation||worker!==this.worker)return;try{if(data.log)this.onLog(data.log);if(data.fonts)this.onFonts(data.fonts);if(data.bytes)this.feed(data.bytes,generation);if(data.error)this.fail(Error(data.error),generation);if(data.done)this.fail(Error('Live engine ended'),generation)}catch(error){this.fail(error,generation)}};
    worker.onerror=e=>this.fail(Error(e.message||'Live worker failed'),generation);
-   worker.postMessage({base:new URL('busytex/',this.base).href,files:this.files,preamble,aux,mailbox:this.mailbox});
+   worker.postMessage({base:new URL('busytex/',this.base).href,files:this.files,preamble,aux,mailbox:this.mailbox,project:files.map(({path,data})=>({path,data}))});
    this.ready=this.read(120000,generation).then(ready=>{
     this.current(generation);
     if(ready.header.op!=='ready')throw Error('Live engine did not become ready');return ready.header;
@@ -120,16 +135,14 @@ export class LiveEngine {
   return frame;
  }
  transact(object){return this.enqueue(generation=>this.exchange(object,generation))}
- compile(ctx,source,expectedCounters={}){
+ unit(ctx,source,polluted){
   return this.enqueue(async generation=>{
    const context=await this.exchange({op:'context',id:1,ctx},generation);
    if(context.header.op!=='ok'||context.header.id!==1){const error=Error('Unexpected live context response');this.fail(error,generation);throw error}
    const req=++this.req,frame=await this.exchange({op:'compile',req,ctx:1,source},generation);
    if(frame.header.op!=='result'||frame.header.req!==req||frame.header.ctx!==1){const error=Error('Mismatched live result');this.fail(error,generation);throw error}
    const nonempty=value=>value!=null&&typeof value==='object'&&Object.keys(value).length>0;
-   const counters=frame.header.counters||{};
-   const counterMismatch=Object.keys(counters).length!==Object.keys(expectedCounters).length||Object.entries(counters).some(([key,value])=>value!==expectedCounters[key]);
-   if(nonempty(frame.header.leaks)||counterMismatch||frame.header.internal){
+   if(nonempty(frame.header.leaks)||frame.header.internal||polluted(frame.header)){
     const error=Error(frame.header.errors?.map(x=>x.message).join('\n')||'Live engine state changed; worker discarded');
     this.fail(error,generation);throw error;
    }
@@ -137,6 +150,14 @@ export class LiveEngine {
    return frame;
   });
  }
+ compile(ctx,source,expectedCounters={}){
+  return this.unit(ctx,source,header=>{
+   const counters=header.counters||{};
+   return Object.keys(counters).length!==Object.keys(expectedCounters).length||Object.entries(counters).some(([key,value])=>value!==expectedCounters[key]);
+  });
+ }
+ // A standalone preview never reaches a page; the server restores counters after every unit.
+ typeset(ctx,source){return this.unit(ctx,source,()=>false)}
  fail(error,generation=this.generation){
   if(generation!==this.generation)return;
   ++this.generation;this.failure=error;this.ready=null;this.startKey=null;

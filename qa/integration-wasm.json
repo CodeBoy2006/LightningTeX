@@ -2,10 +2,10 @@
   "runtime": "actual browser Worker scripts and WASM in Node worker_threads (not browser UI)",
   "results": [
     {
-      "sample": 0,
+      "sample": "article",
       "pages": 1,
-      "bytes": 46188,
-      "durationMs": 1351.6594170000003
+      "bytes": 54842,
+      "durationMs": 2398.6539169999996
     },
     {
       "live": {
@@ -13,25 +13,29 @@
         "baseline": {
           "ok": true,
           "rows": 2,
-          "glyphs": 153
+          "glyphs": 106
         },
-        "medianMs": 1.3080830000003516,
-        "minMs": 1.0579999999999927,
-        "maxMs": 1.983541999999943,
+        "medianMs": 1.277165999999852,
+        "minMs": 1.1229999999995925,
+        "maxMs": 2.2773340000003373,
         "errorRecovery": true
       }
     },
     {
-      "sample": 1,
+      "sample": "notes",
       "pages": 1,
-      "bytes": 48309,
-      "durationMs": 1440.3244169999998
+      "bytes": 71228,
+      "durationMs": 1720.7004580000003
     },
     {
-      "sample": 2,
+      "sample": "report",
       "pages": 1,
-      "bytes": 9237,
-      "durationMs": 885.4354169999997
+      "bytes": 74094,
+      "durationMs": 1641.6146669999998
+    },
+    {
+      "sample": "blank",
+      "empty": true
     }
   ]
 }

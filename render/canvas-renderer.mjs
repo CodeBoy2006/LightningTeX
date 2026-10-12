@@ -103,17 +103,20 @@ export function createDisplayListRenderer({ resolveFont, pdfFallback, parseFont 
     }
     const zoom = options.zoom ?? 1, dpr = options.devicePixelRatio ?? globalThis.devicePixelRatio ?? 1, padding = options.padding ?? 16;
     if (![zoom, dpr].every(v => Number.isFinite(v) && v > 0) || !Number.isFinite(padding) || padding < 0) throw Error('Invalid rendering scale or padding');
-    const scale = CSS_PX_PER_SP * zoom;
-    const widthSP = dl.kind === 'page' ? dl.page_width : Math.max(dl.width || 0, ...dl.lines.map(l => l.x + l.w));
-    const heightSP = dl.kind === 'page' ? dl.page_height : Math.max((dl.height || 0) + (dl.depth || 0), ...dl.lines.map(l => l.y + l.d));
+    const scale = CSS_PX_PER_SP * zoom, view = options.viewport;
+    if (view && ![view.x, view.y, view.w, view.h].every(Number.isFinite)) throw Error('Invalid viewport');
+    // viewport {x,y,w,h} in sp crops the canvas to one region of the list (a formula inside its paragraph box).
+    const widthSP = view ? view.w : dl.kind === 'page' ? dl.page_width : Math.max(dl.width || 0, ...dl.lines.map(l => l.x + l.w));
+    const heightSP = view ? view.h : dl.kind === 'page' ? dl.page_height : Math.max((dl.height || 0) + (dl.depth || 0), ...dl.lines.map(l => l.y + l.d));
     const cssWidth = Math.max(1, widthSP * scale + 2 * padding), cssHeight = Math.max(1, heightSP * scale + 2 * padding);
     const width = Math.ceil(cssWidth * dpr), height = Math.ceil(cssHeight * dpr);
     if (!Number.isFinite(width * height) || width > 32767 || height > 32767 || width * height > 64000000) throw Error('Display-list canvas exceeds safe allocation limit');
     const ctx = canvas.getContext('2d'); if (!ctx) throw Error('Canvas 2D context unavailable');
     canvas.width = width; canvas.height = height;
     if (canvas.style) { canvas.style.width = `${cssWidth}px`; canvas.style.height = `${cssHeight}px`; }
-    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = options.background || '#ffffff'; ctx.fillRect(0, 0, width, height);
-    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, padding * dpr, padding * dpr);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (options.background !== 'transparent') { ctx.fillStyle = options.background || '#ffffff'; ctx.fillRect(0, 0, width, height); }
+    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, (padding - (view?.x || 0) * scale) * dpr, (padding - (view?.y || 0) * scale) * dpr);
     ctx.save();
     for (const op of operations) {
       if (op.type === 'save') { ctx.save(); continue; }

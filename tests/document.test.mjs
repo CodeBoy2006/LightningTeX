@@ -36,3 +36,17 @@ Last paragraph.
  assert.equal(state.spans[0].original,'First $x^2$.');
  assert.equal(state.spans[1].original,'Last paragraph.');
 });
+
+test('commands and scripts wait for their arguments; complete forms pass',()=>{
+ for(const text of [String.raw`$\frac$`,String.raw`$\frac{a}$`,String.raw`$\frac{a}{$`,String.raw`$\sqrt$`,String.raw`$\sqrt[3$`,String.raw`$x^$`,String.raw`$x_ $`,String.raw`$\left$`,String.raw`$\left( x \right$`,String.raw`\textbf`,String.raw`$\hat}$`])
+   assert.ok(liveSourcePolicy(text).incomplete,text);
+ for(const text of [String.raw`$\frac{a}{b}$`,String.raw`$\frac12$`,String.raw`$\frac\alpha\beta$`,String.raw`$\sqrt[3]{x}$`,String.raw`$\sqrt x$`,String.raw`$x^*$`,String.raw`$x^\ast_k$`,String.raw`$a^+ + b_-$`,String.raw`$\left\{ x \right.$`,String.raw`$\left( x \right)$`,String.raw`$\bigl[ x \bigr]$`,String.raw`\textbf{bold} and \emph x`,"$\\frac{a}% note\n{b}$",String.raw`$\operatorname*{argmax}_x$`,String.raw`$\overbrace{x}^{n}$`])
+   assert.ok(liveSourcePolicy(text).ok,text+' '+JSON.stringify(liveSourcePolicy(text)));
+});
+test('spans follow the named root file, with or without a leading ./',async()=>{
+ const {captureSpans}=await import('../core/document.js');
+ const source='\\documentclass{article}\n\\begin{document}\nFirst.\n\nSecond.\n\\end{document}';
+ const capture={units:[{uid:1,kind:'par',file:'./paper.tex',begin_line:3,end_line:4},{uid:2,kind:'par',file:'./chapters/one.tex',begin_line:1,end_line:2},{uid:3,kind:'par',file:'paper.tex',begin_line:5,end_line:6}]};
+ assert.deepEqual(captureSpans(source,capture,'paper.tex').map(span=>span.original),['First.','Second.']);
+ assert.deepEqual(captureSpans(source,capture).map(span=>span.unit.uid),[],'units of other files never map onto the root source');
+});

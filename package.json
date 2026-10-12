@@ -13,6 +13,7 @@
     "test:integration": "node tests/integration-wasm.mjs",
     "test:preview": "node tests/full-preview.mjs",
     "test:incremental": "node tests/incremental-math.mjs",
+    "test:project": "node tests/project-math.mjs",
     "prebuild": "node scripts/prepare-build-assets.mjs"
   },
   "dependencies": {

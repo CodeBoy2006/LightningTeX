@@ -72,6 +72,17 @@ test('outline renderer addresses glyph ID, native curves, expansion/extend/slant
   assert.ok(canvas.calls.some(c => c[0] === 'set' && c[2] === 'rgb(255,0,0)'));
   await renderer.render(fakeCanvas(), dl); assert.equal(reads, 1);
 });
+test('viewport crops the canvas to a region and a transparent background is left unpainted', async () => {
+  const renderer = createDisplayListRenderer({ resolveFont: async () => new Uint8Array([0]), parseFont: () => fixtureFont });
+  const canvas = fakeCanvas(), dl = jsonDL([['g',1,65,3,2000000,500000,200000,0]]);
+  const result = await renderer.render(canvas, dl, { devicePixelRatio: 2, zoom: 2, padding: 0, background: 'transparent', viewport: { x: 1900000, y: 0, w: 655360, h: 655360 } });
+  const css = 655360 * 2 * 96 / (72.27 * 65536);
+  assert.ok(Math.abs(result.cssWidth - css) < 1e-9); assert.ok(Math.abs(result.cssHeight - css) < 1e-9); assert.equal(canvas.width, Math.ceil(css * 2));
+  assert.ok(!canvas.calls.some(c => c[0] === 'fillRect'), 'nothing is painted behind the glyphs');
+  const placed = canvas.calls.filter(c => c[0] === 'setTransform').at(-1), scale = 2 * 2 * 96 / (72.27 * 65536);
+  assert.ok(Math.abs(placed[5] + 1900000 * scale) < 1e-6); assert.equal(placed[6], 0);
+  await assert.rejects(renderer.render(fakeCanvas(), dl, { viewport: { x: 0, y: 0, w: NaN, h: 1 } }), /viewport/);
+});
 test('degraded lists never partially paint and invoke explicit PDF fallback', async () => {
   for (const item of [['l',0,'q'], ['u','cached_picture','1'], ['i',1,0,0,10,10], ['g',1,65,null,0,0,10,0]]) {
     const canvas = fakeCanvas(); await assert.rejects(createDisplayListRenderer().render(canvas, jsonDL([item])), UnsupportedDisplayListError); assert.equal(canvas.calls.length, 0);

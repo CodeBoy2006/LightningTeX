@@ -7,6 +7,7 @@ onmessage=async ({data})=>{try{
  if(data.aux)fs.writeFile('/live/serve.aux',data.aux);
  fs.chdir('/live');
  for(const [name,contents] of Object.entries(data.files||{})){const path='/rtex/'+name;fs.mkdirTree(path.slice(0,path.lastIndexOf('/')));fs.writeFile(path,contents)}
+ for(const file of data.project||[]){const path='/live/'+file.path;fs.mkdirTree(path.slice(0,path.lastIndexOf('/')));fs.writeFile(path,file.data)}
  Object.assign(m.ENV,{TEXINPUTS:'/rtex/latex//:',LUAINPUTS:'/rtex//:',openout_any:'a',max_print_line:'100000',RTEX_REQ:'/dev/rtex-req',RTEX_RESP:'/dev/rtex-resp'});
  const ctl=new Int32Array(data.mailbox,0,4),bytes=new Uint8Array(data.mailbox,16);let offset=0;
  let responseBuffer=new Uint8Array(0);

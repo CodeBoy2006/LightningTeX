@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lightningtex-dev",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--port", "5183", "--strictPort"],
+      "port": 5183
+    },
+    {
+      "name": "lightningtex-dist",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "PORT=4188 node server.mjs"],
+      "port": 4188
+    }
+  ]
+}

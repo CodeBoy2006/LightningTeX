@@ -91,3 +91,40 @@ test('known equation counter advancement is accepted; changed numbering discards
  counters={equation:4};await assert.rejects(live.compile({},'changed equation',{equation:3}),/state changed/);
  assert.equal(worker.terminated,true);
 }));
+
+test('background sends only changed project files, removes dropped ones and resets when the root or worker changes',()=>withWorkers(async()=>{
+ const engine=new BackgroundEngine(options),ready=engine.start(),worker=MockWorker.all.at(-1);worker.emit({type:'ready'});await ready;
+ const jobs=()=>worker.sent.filter(message=>message.type==='compile'),finish=async job=>{await tick();const sent=jobs().at(-1);worker.emit({type:'result',id:sent.id,pdf:new Uint8Array([1])});await job;return sent;};
+ const a={path:'a.tex',data:'A',rev:1},fig={path:'img/fig.png',data:new Uint8Array([1]),rev:2};
+ let sent=await finish(engine.compile('main',{root:'paper.tex',files:[a,fig]}));
+ assert.equal(sent.root,'paper.tex');assert.equal(sent.project.reset,true);assert.deepEqual(sent.project.write.map(file=>file.path),['a.tex','img/fig.png']);assert.deepEqual(sent.project.remove,[]);
+ sent=await finish(engine.compile('main',{root:'paper.tex',files:[{...a,data:'A2',rev:3},fig]}));
+ assert.equal(sent.project.reset,false);assert.deepEqual(sent.project.write,[{path:'a.tex',data:'A2'}]);
+ sent=await finish(engine.compile('main',{root:'paper.tex',files:[fig]}));
+ assert.deepEqual(sent.project.write,[]);assert.deepEqual(sent.project.remove,['a.tex']);
+ sent=await finish(engine.compile('main',{root:'other.tex',files:[fig]}));
+ assert.equal(sent.project.reset,true);assert.deepEqual(sent.project.write.map(file=>file.path),['img/fig.png']);
+ await assert.rejects(engine.compile('main',{files:[{path:'../texlive/x',data:'',rev:1}]}),/Unsafe/);
+ await assert.rejects(engine.compile('main',{root:'/etc/x.tex'}),/Unsafe/);
+ sent=await finish(engine.compile('legacy'));assert.equal(sent.root,'main.tex');assert.equal(sent.project.reset,true);
+ engine.stop();const again=engine.start(),next=MockWorker.all.at(-1);next.emit({type:'ready'});await again;
+ const job=engine.compile('main',{files:[fig]});await tick();const first=next.sent.find(message=>message.type==='compile');
+ assert.equal(first.project.reset,true);assert.deepEqual(first.project.write.map(file=>file.path),['img/fig.png'],'a new worker starts with an empty project');
+ next.emit({type:'error',id:first.id,message:'! Undefined control sequence.',log:'full log'});
+ await assert.rejects(job,error=>error.log==='full log'&&/Undefined/.test(error.message));engine.stop();
+}));
+test('live start passes preamble files and restarts only when they change',()=>withWorkers(async()=>{
+ const live=new LiveEngine(options),file={path:'macros.tex',data:'\\newcommand{\\R}{}',rev:1};
+ const starting=live.start('preamble',undefined,[file]),worker=MockWorker.all.at(-1);worker.emit({bytes:frame({op:'ready'})});await starting;
+ assert.deepEqual(worker.sent[0].project,[{path:'macros.tex',data:file.data}]);
+ await live.start('preamble',undefined,[{...file}]);assert.equal(MockWorker.all.at(-1),worker,'same revisions reuse the engine');
+ const restarted=live.start('preamble',undefined,[{...file,rev:2}]),next=MockWorker.all.at(-1);assert.notEqual(next,worker);assert.equal(worker.terminated,true);next.emit({bytes:frame({op:'ready'})});await restarted;
+ await assert.rejects(live.start('preamble',undefined,[{path:'../x',data:'',rev:1}]),/Unsafe/);assert.equal(live.worker,next,'a refused start leaves the running engine alone');live.stop();
+}));
+test('preview typesetting tolerates counters but still discards a polluted worker',()=>withWorkers(async()=>{
+ const {live,worker}=await liveStarted();let last,state={counters:{equation:4}};
+ live.send=async object=>{last=object};live.read=async()=>({header:last.op==='context'?{op:'ok',id:1}:{op:'result',req:last.req,ctx:1,status:'ok',...state}});
+ assert.equal((await live.typeset({},'$x$')).header.counters.equation,4);assert.equal(live.worker,worker);
+ state={status:'error',errors:[{message:'Undefined control sequence'}]};await assert.rejects(live.typeset({},'$\\x$'),/Undefined control sequence/);assert.equal(live.worker,worker,'an ordinary TeX error keeps the engine');
+ state={leaks:['R']};await assert.rejects(live.typeset({},'$\\R$'));assert.equal(live.worker,null);assert.equal(worker.terminated,true);
+}));
