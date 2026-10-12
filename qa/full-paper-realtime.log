@@ -1,0 +1,107 @@
+Full LuaLaTeX: 1 page(s), 4744 ms (2 passes).
+WARNING · Package epstopdf Warning: Shell escape feature is not enabled.
+WARNING · LaTeX Warning: Citation `TOPP60' on page 1 undefined on input line 72.
+WARNING · LaTeX Warning: Reference `eq:move' on page 1 undefined on input line 97.
+WARNING · LaTeX Warning: Reference `fig:area' on page 2 undefined on input line 116.
+WARNING · LaTeX Warning: Reference `sec:one-sided' on page 2 undefined on input line 155.
+WARNING · LaTeX Warning: Reference `sec:response' on page 3 undefined on input line 175.
+WARNING · LaTeX Warning: Reference `sec:covariance' on page 3 undefined on input line 177.
+WARNING · LaTeX Warning: Reference `sec:one-sided' on page 3 undefined on input line 179.
+WARNING · LaTeX Warning: Reference `sec:topology' on page 3 undefined on input line 180.
+WARNING · LaTeX Warning: Reference `thm:configurations' on page 3 undefined on input line 181.
+WARNING · LaTeX Warning: Reference `sec:counts' on page 3 undefined on input line 184.
+WARNING · LaTeX Warning: Reference `app:words' on page 3 undefined on input line 185.
+WARNING · LaTeX Warning: Citation `Hawley2014' on page 3 undefined on input line 188.
+WARNING · LaTeX Warning: Citation `Cairns1944' on page 3 undefined on input line 192.
+WARNING · LaTeX Warning: Citation `Thomassen1983' on page 3 undefined on input line 192.
+WARNING · LaTeX Warning: Citation `AlamdariEtAl2017' on page 3 undefined on input line 192.
+WARNING · LaTeX Warning: Citation `AbregoEtAl2012' on page 3 undefined on input line 193.
+WARNING · LaTeX Warning: Citation `ChenEtAl2017' on page 3 undefined on input line 194.
+WARNING · LaTeX Warning: Citation `MeyerSchuettWerner2015' on page 3 undefined on input line 196.
+WARNING · LaTeX Warning: Citation `Izmestiev2023' on page 3 undefined on input line 199.
+WARNING · LaTeX Warning: Citation `Sussmann1973' on page 3 undefined on input line 201.
+WARNING · LaTeX Warning: Citation `Krener1974' on page 3 undefined on input line 201.
+WARNING · LaTeX Warning: Reference `eq:equivariance' on page 3 undefined on input line 226.
+WARNING · LaTeX Warning: Reference `eq:response-affine' on page 3 undefined on input line 246.
+WARNING · LaTeX Warning: Reference `eq:conormal' on page 4 undefined on input line 265.
+WARNING · LaTeX Warning: Reference `eq:normalization' on page 4 undefined on input line 276.
+WARNING · LaTeX Warning: Reference `eq:pointwise-H' on page 4 undefined on input line 311.
+WARNING · LaTeX Warning: Reference `eq:normalization' on page 4 undefined on input line 316.
+WARNING · LaTeX Warning: Citation `Sussmann1973' on page 4 undefined on input line 320.
+WARNING · LaTeX Warning: Reference `app:examples' on page 4 undefined on input line 332.
+WARNING · LaTeX Warning: Reference `eq:response' on page 5 undefined on input line 339.
+WARNING · LaTeX Warning: Reference `eq:move' on page 5 undefined on input line 356.
+WARNING · LaTeX Warning: Reference `eq:volume-response' on page 6 undefined on input line 406.
+WARNING · LaTeX Warning: Citation `Izmestiev2023' on page 6 undefined on input line 412.
+WARNING · LaTeX Warning: Reference `eq:projective-response' on page 6 undefined on input line 413.
+WARNING · LaTeX Warning: Reference `thm:response' on page 6 undefined on input line 419.
+WARNING · LaTeX Warning: Citation `BeauchardEtAl2026' on page 6 undefined on input line 444.
+WARNING · LaTeX Warning: Citation `Krener1974' on page 6 undefined on input line 448.
+WARNING · LaTeX Warning: Reference `thm:response' on page 7 undefined on input line 490.
+WARNING · LaTeX Warning: Reference `lem:zero-sum' on page 7 undefined on input line 496.
+WARNING · LaTeX Warning: Reference `eq:projected' on page 7 undefined on input line 507.
+WARNING · LaTeX Warning: Reference `eq:lift' on page 7 undefined on input line 507.
+WARNING · LaTeX Warning: Reference `eq:lift' on page 7 undefined on input line 509.
+WARNING · LaTeX Warning: Reference `fig:one-sided' on page 7 undefined on input line 525.
+WARNING · LaTeX Warning: Reference `app:examples' on page 7 undefined on input line 527.
+WARNING · LaTeX Warning: Reference `thm:response' on page 8 undefined on input line 577.
+WARNING · LaTeX Warning: Reference `eq:discrete-covariance' on page 8 undefined on input line 578.
+WARNING · LaTeX Warning: Reference `eq:arithmetic-flow' on page 8 undefined on input line 578.
+WARNING · LaTeX Warning: Reference `lem:configuration-components' on page 8 undefined on input line 579.
+WARNING · LaTeX Warning: Reference `app:words' on page 8 undefined on input line 581.
+WARNING · LaTeX Warning: Reference `thm:one-sided' on page 8 undefined on input line 583.
+WARNING · LaTeX Warning: Citation `Meisters1975' on page 9 undefined on input line 610.
+WARNING · LaTeX Warning: Reference `thm:polygons' on page 9 undefined on input line 626.
+WARNING · LaTeX Warning: Reference `eq:discrete-covariance' on page 9 undefined on input line 627.
+WARNING · LaTeX Warning: Reference `prop:volume-response' on page 9 undefined on input line 628.
+WARNING · LaTeX Warning: Reference `thm:response' on page 9 undefined on input line 630.
+WARNING · LaTeX Warning: Reference `thm:one-sided' on page 9 undefined on input line 630.
+WARNING · LaTeX Warning: Reference `eq:arithmetic-flow' on page 9 undefined on input line 631.
+WARNING · LaTeX Warning: Reference `cor:topp' on page 9 undefined on input line 637.
+WARNING · LaTeX Warning: Reference `thm:configurations' on page 9 undefined on input line 638.
+WARNING · LaTeX Warning: Reference `cor:topp' on page 9 undefined on input line 652.
+WARNING · LaTeX Warning: Reference `thm:response' on page 9 undefined on input line 656.
+WARNING · LaTeX Warning: Reference `thm:one-sided' on page 9 undefined on input line 656.
+WARNING · LaTeX Warning: Reference `sec:covariance' on page 9 undefined on input line 657.
+WARNING · LaTeX Warning: Reference `app:words' on page 9 undefined on input line 673.
+WARNING · LaTeX Warning: Reference `thm:groups' on page 9 undefined on input line 677.
+WARNING · LaTeX Warning: Reference `eq:balance' on page 10 undefined on input line 712.
+WARNING · LaTeX Warning: Citation `Hawley2014' on page 10 undefined on input line 717.
+WARNING · LaTeX Warning: Reference `eq:move' on page 12 undefined on input line 839.
+WARNING · LaTeX Warning: Reference `prop:local-length' on page 12 undefined on input line 880.
+WARNING · LaTeX Warning: Reference `lem:three-factor' on page 12 undefined on input line 886.
+WARNING · LaTeX Warning: Reference `eq:matrices' on page 12 undefined on input line 896.
+WARNING · LaTeX Warning: Reference `lem:three-factor' on page 12 undefined on input line 899.
+WARNING · LaTeX Warning: Citation `Poole1995' on page 12 undefined on input line 922.
+WARNING · LaTeX Warning: Reference `lem:three-factor' on page 12 undefined on input line 922.
+WARNING · LaTeX Warning: Reference `thm:response' on page 13 undefined on input line 938.
+WARNING · LaTeX Warning: Reference `fig:one-sided' on page 13 undefined on input line 968.
+WARNING · LaTeX Warning: There were undefined references.
+WARNING · LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
+WARNING · Package rerunfilecheck Warning: File `main.out' has changed.
+WARNING · Package epstopdf Warning: Shell escape feature is not enabled.
+Full LuaLaTeX: 13 page(s), 9306 ms (2 passes).
+WARNING · Package epstopdf Warning: Shell escape feature is not enabled.
+WARNING · Package rerunfilecheck Warning: File `main.out' has changed.
+WARNING · Package epstopdf Warning: Shell escape feature is not enabled.
+Full LuaLaTeX: 13 page(s), 11026 ms (2 passes).
+WARNING · Package epstopdf Warning: Shell escape feature is not enabled.
+WARNING · Package rerunfilecheck Warning: File `main.out' has changed.
+WARNING · Package epstopdf Warning: Shell escape feature is not enabled.
+Full LuaLaTeX: 13 page(s), 11497 ms (2 passes).
+WARNING · Package epstopdf Warning: Shell escape feature is not enabled.
+WARNING · Package rerunfilecheck Warning: File `main.out' has changed.
+WARNING · Package epstopdf Warning: Shell escape feature is not enabled.
+Full LuaLaTeX: 13 page(s), 12579 ms (2 passes).
+WARNING · Package epstopdf Warning: Shell escape feature is not enabled.
+WARNING · Package rerunfilecheck Warning: File `main.out' has changed.
+WARNING · Package epstopdf Warning: Shell escape feature is not enabled.
+Full LuaLaTeX: 13 page(s), 13291 ms (2 passes).
+WARNING · Package epstopdf Warning: Shell escape feature is not enabled.
+WARNING · Package rerunfilecheck Warning: File `main.out' has changed.
+WARNING · Package epstopdf Warning: Shell escape feature is not enabled.
+Full LuaLaTeX: 13 page(s), 12830 ms (2 passes).
+WARNING · Package epstopdf Warning: Shell escape feature is not enabled.
+WARNING · Package rerunfilecheck Warning: File `main.out' has changed.
+WARNING · Package epstopdf Warning: Shell escape feature is not enabled.
+Full LuaLaTeX: 13 page(s), 8329 ms (2 passes).

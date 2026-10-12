@@ -56,3 +56,22 @@
 - Preamble definitions no longer trigger the blanket body-setup rejection. Common linear algebra operators now share the live/preview vocabulary. Resizing or switching preview panes redraws current display lists instead of compiling a stale PDF solely to refresh the image.
 - Actual production UI: full compilation of the example took 3.32–4.74 seconds after reload; warm prose edits took 8.8 ms and warm align edits 8.5 ms. First align proof/font conversion took 0.71–1.17 seconds. The log retained exactly one full compilation while editing and switching panes. The paper with both figures compiled to the identical 373,845-byte, 13-page PDF in 9.81 seconds with packages already cached. Individual local measurements exclude the UI's 60 ms input scheduling delay and are not performance guarantees.
 - `npm test`: 114 passed. Updated real WASM incremental coverage includes `\det` in align, 26 edits without full recompilation or engine restart, and exact final glyph/layout agreement with a fresh full compile. Production build passed with its existing chunk-size advisory. Browser check: Codex in-app browser; Safari/Firefox not checked. Complex macros, unsupported fonts/graphics, and pagination changes retain full-layout fallback.
+
+## Full paper live acceptance — failed
+
+- Tested production commit `e46e314` in the actual Codex in-app browser at `http://127.0.0.1:4188/`. Imported the exact 46,485-byte attached paper, **Exact Reachability under Vertex- and Area-Centroid Control**, with both supplied PDF figures. Packages, macros, headings, bibliography, formulas and figures were retained. Initial compilation produced 13 pages in 9,306 ms (two passes); the epstopdf warning was nonfatal.
+- Kept Auto compile enabled and made six consecutive, alternating prose/math edits in the same imported project. These were temporary changes to the browser copy for testing. Every edit added exactly one `Full LuaLaTeX:` log entry and ended with `Full pass`; **zero edits used Live**. No blank lines, labels, references or preamble definitions were changed.
+
+| Edit | Full compile time | Reported fallback reason |
+| --- | ---: | --- |
+| Reachability prose: relevant → useful | 11,026 ms | Baseline verification: Drawing outside unit rows requires full layout |
+| Normalization equation: subscript d → n | 11,497 ms | Paragraph boundaries changed |
+| Proof prose: surjective → injective | 12,579 ms | Paragraph boundaries changed |
+| Abstract inline math: d+2 → d+3 | 13,291 ms | Paragraph boundaries changed |
+| Introduction prose: topology → geometry | 12,830 ms | Command needs full layout: paragraph |
+| Appendix align: denominator 81 → 82 | 8,329 ms | Command needs full layout: paragraph |
+
+- Downloaded the resulting PDF and used `pdftotext` assertions to confirm all six edits reached the exported document. Restored the exact original source, recompiled and downloaded again; assertions confirmed all six original values. The restored PDF is 373,845 bytes and 13 pages. Both figures were visually checked in the production preview. The research directory and attached source were not modified.
+- This fails full-paper realtime acceptance. The earlier minimal-example and synthetic incremental checks do not establish live support for this paper. The observed failures involve page drawing outside captured rows and source-unit policy/boundaries; the latter rejects edits even when blank lines were unchanged. No renderer or engine code was changed in this testing pass, and these limitations remain unresolved.
+- Timings are individual worker full-compilation measurements, excluding UI scheduling/rendering, with package caches already populated. Safari/Firefox and broader performance profiling were not tested; no new unit suite or build was run for this evidence-only change.
+- Evidence: `qa/full-paper-realtime.json` (source/figure hashes and per-edit compile counts), `qa/full-paper-realtime.log`, `qa/full-paper-realtime.png` (temporary test values), and `qa/full-paper-restored.png` (original paper restored). The earlier minimal example is run 1 in the retained UI log, paper import is run 2, edits are runs 3–8, and restoration is run 9.

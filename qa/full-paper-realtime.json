@@ -1,0 +1,107 @@
+{
+  "browser": "Codex in-app browser",
+  "url": "http://127.0.0.1:4188/",
+  "paper": "Exact Reachability under Vertex- and Area-Centroid Control",
+  "sourceBytes": 46485,
+  "figures": 2,
+  "initialCompile": {
+    "pages": 13,
+    "durationMs": 9306,
+    "passes": 2
+  },
+  "edits": [
+    {
+      "sequence": 1,
+      "edit": "正文：relevant → useful",
+      "route": "Full pass",
+      "reason": "Baseline verification: Drawing outside unit rows requires full layout",
+      "pages": 13,
+      "fullRunsBefore": 2,
+      "fullRunsAfter": 3,
+      "durationMs": 11026
+    },
+    {
+      "sequence": 2,
+      "edit": "公式：normalization 下标 d → n",
+      "route": "Full pass",
+      "reason": "Paragraph boundaries changed",
+      "pages": 13,
+      "fullRunsBefore": 3,
+      "fullRunsAfter": 4,
+      "durationMs": 11497
+    },
+    {
+      "sequence": 3,
+      "edit": "正文：证明中的 surjective → injective",
+      "route": "Full pass",
+      "reason": "Paragraph boundaries changed",
+      "pages": 13,
+      "fullRunsBefore": 4,
+      "fullRunsAfter": 5,
+      "durationMs": 12579
+    },
+    {
+      "sequence": 4,
+      "edit": "公式：摘要中的 d+2 → d+3",
+      "route": "Full pass",
+      "reason": "Paragraph boundaries changed",
+      "pages": 13,
+      "fullRunsBefore": 5,
+      "fullRunsAfter": 6,
+      "durationMs": 13291
+    },
+    {
+      "sequence": 5,
+      "edit": "正文：引言 topology → geometry",
+      "route": "Full pass",
+      "reason": "Command needs full layout: paragraph",
+      "pages": 13,
+      "fullRunsBefore": 6,
+      "fullRunsAfter": 7,
+      "durationMs": 12830
+    },
+    {
+      "sequence": 6,
+      "edit": "公式：附录 align 分母 81 → 82",
+      "route": "Full pass",
+      "reason": "Command needs full layout: paragraph",
+      "pages": 13,
+      "fullRunsBefore": 7,
+      "fullRunsAfter": 8,
+      "durationMs": 8329
+    }
+  ],
+  "liveUpdates": 0,
+  "fullUpdates": 6,
+  "screenshot": "qa/full-paper-realtime.png",
+  "testedCommit": "e46e314",
+  "recordedAt": "2026-10-12T04:36:38.840Z",
+  "sourceSHA256": "f5f81fae06a13691844c7560302ffe30d531e155ba10f1dfd9811b78ff01f070",
+  "figureFiles": [
+    {
+      "path": "figures/fig_area_centroid_pursuit.pdf",
+      "bytes": 14840,
+      "sha256": "45648b6188c70c4bfe74681b792619e64ee0a5759dfd2b15710a62135f996b02"
+    },
+    {
+      "path": "figures/fig_one_sided_executions.pdf",
+      "bytes": 14840,
+      "sha256": "7d019e15eb8cd37ccba43b2e11fa47b28cf49a7da9f75df94a58d1f6a4969eb2"
+    }
+  ],
+  "verification": {
+    "exactlySixSourceEdits": true,
+    "exportContainsAllSixEdits": true,
+    "originalSourceRestored": true,
+    "originalPdfContainsAllSixOriginalValues": true,
+    "originalPdfBytes": 373845,
+    "figuresVisuallyChecked": true
+  },
+  "fullCompileCountNote": "The UI log already contained one earlier minimal-example compilation. Paper import was full run 2; the six edits were runs 3–8. Restoration was run 9 and is excluded from edit timings.",
+  "restoration": {
+    "pages": 13,
+    "durationMs": 2256,
+    "passes": 2
+  },
+  "result": "FAIL: all six paper edits used full-document compilation; no Live page update."
+}
