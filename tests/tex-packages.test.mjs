@@ -16,15 +16,15 @@ function runtime(entries=new Map(),failure){
 }
 
 test('remote files persist across workers, while misses and unsafe cache entries do not',async()=>{
- const entries=new Map([[root+'26_cached.sty',new Response(bytes)],['https://other.test/26_bad.sty',new Response(bytes)],[root+'.misses.json',new Response('[]')],[root+'51_empty.lua',new Response('')]]);
+ const entries=new Map([[root+'26_cached.sty',new Response(bytes)],[root+'51_microtype',new Response(bytes)],['https://other.test/26_bad.sty',new Response(bytes)],[root+'.misses.json',new Response('[]')],[root+'51_empty.lua',new Response('')]]);
  const first=runtime(entries);await first.restore();
- assert.deepEqual([...first.files.keys()],['/tmp/texlive_remote/26_cached.sty']);
+ assert.deepEqual([...first.files.keys()],['/tmp/texlive_remote/26_cached.sty','/tmp/texlive_remote/51_microtype']);
  first.files.set('/tmp/texlive_remote/26_new.sty',bytes);
  first.files.set('/tmp/texlive_remote/.misses.json',new TextEncoder().encode('["26/missing.sty"]'));
  await first.engine.saveTexPackages();await first.engine.saveTexPackages();
  assert.deepEqual(first.writes,[root+'26_new.sty']);
  const next=runtime(entries);next.context.location.href='https://app.test/runtime/live-worker.js';await next.restore();
- assert.deepEqual([...next.files.keys()],['/tmp/texlive_remote/26_cached.sty','/tmp/texlive_remote/26_new.sty']);
+ assert.deepEqual([...next.files.keys()],['/tmp/texlive_remote/26_cached.sty','/tmp/texlive_remote/51_microtype','/tmp/texlive_remote/26_new.sty']);
  assert.match(next.context.cacheName,/2026-assets-v1\.4\.0:https:\/\/packages.test\/2026$/);
  assert.deepEqual(next.warnings,[]);
 });

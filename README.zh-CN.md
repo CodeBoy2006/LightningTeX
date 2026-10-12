@@ -14,7 +14,7 @@ node server.mjs
 
 不能直接双击 index.html：Web Worker、WASM 资源加载和增量通道需要 HTTP 安全上下文。附带的服务器只监听本机，并设置 COOP / COEP。远程自托管时需要 HTTPS 和相同响应头；其他服务器配置见 docs/DEPLOYMENT.md。
 
-首次加载约 168 MiB 压缩引擎数据，解压后约 223 MiB，另外还有网页与加载脚本。包含 TeX Live recommended 集合（已涵盖 basic），可直接使用 microtype、booktabs、TikZ 等常用包。建议在桌面浏览器使用；本次未验收手机浏览器。
+首次加载约 76 MiB 压缩引擎数据，解压后约 119.5 MiB，另外还有网页与加载脚本。只预装 TeX Live basic；microtype、booktabs 等额外宏包及其依赖在文档实际使用时下载，并复用浏览器缓存，不再整包加载 recommended。建议在桌面浏览器使用；本次未验收手机浏览器。
 
 ## 怎么试
 
@@ -70,6 +70,8 @@ npm run test:incremental
 ```
 
 npm run preview 使用本机静态服务器提供 dist。Worker 位于 public/runtime，原项目 Lua/TeX 文件在 public/rtex，压缩 WASM/数据在 public/busytex。Vite 只负责前端构建，不运行原生 TeX。
+
+Node 回归测试使用 `tests/fixtures/tex-packages.json.gz` 中的少量已下载宏包运行离线检查；这些测试夹具不会打包到网页。浏览器运行时仍按需获取缺失文件，包含 microtype 的 Lua 模块和字体配置。
 
 包服务地址在 `public/runtime/raw-loader.js` 的 `TEXLIVE_REMOTE_ENDPOINT` 中设置；设为空字符串可关闭远程查找及远程文件缓存恢复。自托管服务必须实现 BusyTeX 的 `GET /<format_id>/<filename>` 接口并使用配套的 TeX Live 2026 文件树，不能直接填写 CTAN 地址。完整编译（包括下载）最多 120 秒，可随时取消。浏览器清理网站数据会删除宏包缓存；只缓存成功下载的文件，不持久化缺失结果。随应用打包的字体不查询不存在的可选替代格式；完整编译遇到的 404 结果在当前会话内传给实时引擎，避免局部编辑重复等待网络。首次完整编译、引擎预热与后续局部更新的耗时不同；修改前言、分页或不支持的内容仍会触发全文排版。
 

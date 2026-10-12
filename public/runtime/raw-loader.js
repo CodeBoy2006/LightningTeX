@@ -34,7 +34,7 @@ self.loadRtexEngine = async function ({base = './busytex/', print = console.log,
   }
   // Sequential assembly bounds peak memory to decoded assets plus one 16MiB part.
   let wasmBytes=manifest?await unpack('busytex.wasm'):null;
-  let dataBytes=manifest?await unpack('texlive-recommended.data'):null;
+  let dataBytes=manifest?await unpack('texlive-basic.data'):null;
   importScripts(base + 'busytex.js');
   const cfg = { noInitialRun: true, thisProgram: '/bin/busytex', print, printErr,
     locateFile: p => base.startsWith('file:') ? decodeURIComponent(new URL(p, base).pathname) : base + p,
@@ -48,13 +48,13 @@ self.loadRtexEngine = async function ({base = './busytex/', print = console.log,
   if(manifest){
     cfg.wasmBinary=wasmBytes;wasmBytes=null;
     cfg.getPreloadedPackage=(name,size)=>{
-      if(!name.endsWith('texlive-recommended.data')||!dataBytes||dataBytes.byteLength!==size)throw Error('Unexpected data package '+name);
+      if(!name.endsWith('texlive-basic.data')||!dataBytes||dataBytes.byteLength!==size)throw Error('Unexpected data package '+name);
       const bytes=dataBytes;dataBytes=null;return bytes;
     };
   }
   // The official data loader captures this object and installs a preRun hook.
   self.BusytexPipeline = cfg;
-  importScripts(base + 'texlive-recommended.js');
+  importScripts(base + 'texlive-basic.js');
   const m = await busytex(cfg);
   delete m.wasmBinary;delete m.getPreloadedPackage;
   print('Runtime loaded in '+Math.round(performance.now()-started)+' ms');
