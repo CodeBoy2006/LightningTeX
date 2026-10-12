@@ -8,7 +8,7 @@ const results=[];for(const [id,source]of [[1,String.raw`\documentclass{article}\
 Hello actual WebAssembly.
 
 Second paragraph.
-\end{document}`],[2,String.raw`\documentclass{article}\usepackage{amsmath}\begin{document}
+\end{document}`],[2,String.raw`\documentclass{article}\usepackage{amsmath,microtype,booktabs}\begin{document}
 Changed document with $x^2+1$ and an equation:
 \[\sum_{k=1}^{n}k=\frac{n(n+1)}{2}.\]
 \end{document}`],[3,String.raw`\documentclass{article}\begin{document}\undefinedcommand\end{document}`],[4,String.raw`\documentclass{article}\begin{document}Recovery works.\end{document}`]]){p=next();w.postMessage({type:'compile',id,source,preamble:splitPreamble(source)?.preamble??null});const r=await p;results.push({id,type:r.type,pdf:r.pdf?.length,pages:r.pages?.length,durationMs:r.durationMs,error:r.message?.slice(-1500)});if(id===3)assert.equal(r.type,'error');else{assert.equal(r.type,'result',r.message);assert.ok(r.pdf.length>1000);await fs.mkdir(root+'/qa',{recursive:true});await fs.writeFile(root+`/qa/smoke-${id}.pdf`,r.pdf);if(id===1){await fs.writeFile(root+'/qa/baseline.json',JSON.stringify(r,(k,v)=>ArrayBuffer.isView(v)?Array.from(v):v));}}}

@@ -49,7 +49,7 @@ export class BackgroundEngine {
   if(generation!==this.generation||!this.worker)throw Error('Compilation cancelled');
   const id=++this.next,worker=this.worker,project=this.delta(safeProjectPath(root),files);
   return new Promise((resolve,reject)=>{
-   const timer=setTimeout(()=>{if(generation===this.generation)this.stop(Error('Compilation exceeded 30 seconds; worker stopped'))},30000);
+   const timer=setTimeout(()=>{if(generation===this.generation)this.stop(Error('Compilation and package downloads exceeded 120 seconds; worker stopped'))},120000);
    this.pending.set(id,{resolve,reject,timer});
    try{worker.postMessage({type:'compile',id,source,root:this.root,project,preamble:splitPreamble(source)?.preamble??null})}catch(error){this.stop(error)}
   });

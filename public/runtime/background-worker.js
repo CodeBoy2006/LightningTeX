@@ -1,4 +1,4 @@
-/* Browser-only TeX job worker; native shell execution and remote package fetching disabled. */
+/* Browser-only TeX job worker; native shell execution disabled. */
 importScripts('./raw-loader.js');
 let engine,snapshot,files,lastPreamble,lastAux;const decoder=new TextDecoder();
 function removeTree(fs,path){if(!fs.analyzePath(path).exists)return;for(const name of fs.readdir(path)){if(name==='.'||name==='..')continue;const p=path+'/'+name;fs.isDir(fs.stat(p).mode)?removeTree(fs,p):fs.unlink(p)}if(path!=='/project'&&path!=='/out')fs.rmdir(path)}
@@ -51,6 +51,13 @@ function run(source,id,preamble,root='main.tex',project){
   for(const font of Object.values(page.fonts||{}))if(font.filename&&!fonts[font.filename]&&fs.analyzePath(font.filename).exists)fonts[font.filename]=fs.readFile(font.filename);
  }
  const pdf=fs.readFile('/out/main.pdf');lastPreamble=preamble;lastAux=aux;
- postMessage({type:'result',id,pdf,capture,pages,fonts,aux,passes,log:logs.at(-1)||'',durationMs:performance.now()-began});
+ return {type:'result',id,pdf,capture,pages,fonts,aux,passes,log:logs.at(-1)||'',durationMs:performance.now()-began};
 }
-onmessage=async({data})=>{try{if(data.type==='init')await init(data);else if(data.type==='compile'){if(!engine)throw Error('Engine is not ready');run(data.source,data.id,data.preamble,data.root,data.project)}}catch(e){postMessage({type:'error',id:data.id,message:String(e),log:e.log,empty:e.empty,stack:e.stack})}};
+onmessage=async({data})=>{try{if(data.type==='init')await init(data);else if(data.type==='compile'){
+ if(!engine)throw Error('Engine is not ready');
+ let result;
+ try{result=run(data.source,data.id,data.preamble,data.root,data.project)}
+ finally{await engine.saveTexPackages()}
+ // Finish caching before the host starts the live worker with the same packages.
+ postMessage(result);
+}}catch(e){postMessage({type:'error',id:data.id,message:String(e),log:e.log,empty:e.empty,stack:e.stack})}};

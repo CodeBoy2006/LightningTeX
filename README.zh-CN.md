@@ -14,7 +14,7 @@ node server.mjs
 
 不能直接双击 index.html：Web Worker、WASM 资源加载和增量通道需要 HTTP 安全上下文。附带的服务器只监听本机，并设置 COOP / COEP。远程自托管时需要 HTTPS 和相同响应头；其他服务器配置见 docs/DEPLOYMENT.md。
 
-首次加载约 76 MiB 压缩引擎数据，解压后约 119.5 MiB，另外还有网页与加载脚本。建议在桌面浏览器使用；本次未验收手机浏览器。
+首次加载约 168 MiB 压缩引擎数据，解压后约 223 MiB，另外还有网页与加载脚本。包含 TeX Live recommended 集合（已涵盖 basic），可直接使用 microtype、booktabs、TikZ 等常用包。建议在桌面浏览器使用；本次未验收手机浏览器。
 
 ## 怎么试
 
@@ -35,8 +35,9 @@ Ctrl / Command + Enter 完整编译。可以取消正在进行的编译。草稿
 - 绘制使用真实字体与整数 scaled-point 坐标。OpenType/TrueType 使用引擎 glyph index；直接映射的 Type 1 数学字体使用已安装的 PDF.js 转换原 PFB 轮廓并缓存精确字符编码映射，没有新增依赖或另一套公式排版器
 - 字体重编码、字体集合、图片、特殊图形/色彩等不能可靠局部绘制时，使用完整 PDF。预览与 PDF 文件分别记录版本，导出不会悄悄返回旧 PDF
 - 不含原项目所有 Rust Session 功能；没有承诺与原生版所有包和环境完全等价
-- 单文件 .tex 导入/导出；本版 UI 尚不支持多文件项目、上传图片、BibTeX/Biber 和任意 TeX 包安装
-- 外部 shell 命令与自动远程包下载关闭。编译发生在客户端，不把文档提交给排版服务器
+- 单文件 .tex 导入/导出；本版 UI 尚不支持多文件项目、上传图片、BibTeX/Biber
+- 缺失的宏包、文档类和字体由 BusyTeX 自动向 TeX Live 2026 文件服务获取。完整编译后将下载文件保存在浏览器 Cache Storage 中，后续完整编译和增量引擎共用；缓存不可用时仍可联网编译。首次使用未缓存文件需要网络，仍不保证所有宏包兼容
+- 外部 shell 命令关闭。编译发生在客户端，不提交文档内容；默认文件服务 texlive2026.texlyre.org 会收到所查询的文件名。需要 Python、图形转换器等外部程序的功能仍需单独支持
 - 对需要三遍以上才能收敛的特殊引用，日志会提示；不声称完整文档已经通用收敛
 
 ## 验证结果
@@ -68,6 +69,8 @@ npm run test:incremental
 ```
 
 npm run preview 使用本机静态服务器提供 dist。Worker 位于 public/runtime，原项目 Lua/TeX 文件在 public/rtex，压缩 WASM/数据在 public/busytex。Vite 只负责前端构建，不运行原生 TeX。
+
+包服务地址在 `public/runtime/raw-loader.js` 的 `TEXLIVE_REMOTE_ENDPOINT` 中设置；设为空字符串可关闭远程查找及远程文件缓存恢复。自托管服务必须实现 BusyTeX 的 `GET /<format_id>/<filename>` 接口并使用配套的 TeX Live 2026 文件树，不能直接填写 CTAN 地址。完整编译（包括下载）最多 120 秒，可随时取消。浏览器清理网站数据会删除宏包缓存；只缓存成功下载的文件，不持久化缺失结果。
 
 ## 来源与许可证
 

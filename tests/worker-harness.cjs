@@ -3,4 +3,8 @@
 const {parentPort,workerData}=require('node:worker_threads');const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');const {fileURLToPath,pathToFileURL}=require('node:url');
 const entry=workerData.script;global.require=require;global.__dirname=path.dirname(entry);global.self=global;global.location={href:pathToFileURL(entry).href};
 global.importScripts=(...urls)=>{for(let u of urls){const p=u.startsWith('file:')?fileURLToPath(u):path.resolve(path.dirname(entry),u);vm.runInThisContext(fs.readFileSync(p,'utf8'),{filename:p})}};
-global.postMessage=v=>parentPort.postMessage(v);importScripts(entry);parentPort.on('message',data=>global.onmessage({data}));
+global.postMessage=v=>parentPort.postMessage(v);importScripts(entry);
+// Node regression tests stay offline; browser tests exercise the synchronous remote lookup.
+const loadEngine=global.loadRtexEngine;
+global.loadRtexEngine=options=>loadEngine({...options,env:{...options.env,TEXLIVE_REMOTE_ENDPOINT:''}});
+parentPort.on('message',data=>global.onmessage({data}));

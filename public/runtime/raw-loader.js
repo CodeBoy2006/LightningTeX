@@ -1,4 +1,5 @@
 /* Raw persistent BusyTeX runtime. Classic Worker script, no pipeline resets. */
+importScripts('./tex-packages.js');
 self.loadRtexEngine = async function ({base = './busytex/', print = console.log, printErr = console.error, env = {}} = {}) {
   base = new URL(base, self.location.href).href;
   const started=performance.now();
@@ -33,7 +34,7 @@ self.loadRtexEngine = async function ({base = './busytex/', print = console.log,
   }
   // Sequential assembly bounds peak memory to decoded assets plus one 16MiB part.
   let wasmBytes=manifest?await unpack('busytex.wasm'):null;
-  let dataBytes=manifest?await unpack('texlive-basic.data'):null;
+  let dataBytes=manifest?await unpack('texlive-recommended.data'):null;
   importScripts(base + 'busytex.js');
   const cfg = { noInitialRun: true, thisProgram: '/bin/busytex', print, printErr,
     locateFile: p => base.startsWith('file:') ? decodeURIComponent(new URL(p, base).pathname) : base + p,
@@ -41,23 +42,24 @@ self.loadRtexEngine = async function ({base = './busytex/', print = console.log,
       TEXMFDIST:'/texlive/texmf-dist', TEXMFVAR:'/texlive/texmf-dist/texmf-var',
       TEXMFCACHE:'/texlive/texmf-dist/texmf-var', TEXMFCNF:'/texlive/texmf-dist/web2c',
       FONTCONFIG_PATH:'/texlive', FONTCONFIG_FILE:'/texlive/fonts.conf', ICU_DATA:'/texlive/',
-      TEXLIVE_REMOTE_ENDPOINT:'', ...env
+      TEXLIVE_REMOTE_ENDPOINT:'https://texlive2026.texlyre.org', ...env
     }); }]
   };
   if(manifest){
     cfg.wasmBinary=wasmBytes;wasmBytes=null;
     cfg.getPreloadedPackage=(name,size)=>{
-      if(!name.endsWith('texlive-basic.data')||!dataBytes||dataBytes.byteLength!==size)throw Error('Unexpected data package '+name);
+      if(!name.endsWith('texlive-recommended.data')||!dataBytes||dataBytes.byteLength!==size)throw Error('Unexpected data package '+name);
       const bytes=dataBytes;dataBytes=null;return bytes;
     };
   }
   // The official data loader captures this object and installs a preRun hook.
   self.BusytexPipeline = cfg;
-  importScripts(base + 'texlive-basic.js');
+  importScripts(base + 'texlive-recommended.js');
   const m = await busytex(cfg);
   delete m.wasmBinary;delete m.getPreloadedPackage;
   print('Runtime loaded in '+Math.round(performance.now()-started)+' ms');
   m.FS.mkdirTree('/project'); m.FS.chdir('/project');
+  await restoreTexPackages(m,printErr);
   return m;
 };
 self.rtexLuaArgs = file => ['luahblatex', '--no-shell-escape', '--interaction=nonstopmode', '--halt-on-error', '--fmt', '/texlive/texmf-dist/texmf-var/web2c/luahbtex/luahblatex.fmt', '--nosocket', file];
