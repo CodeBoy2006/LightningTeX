@@ -1,4 +1,28 @@
 /* shortcut: only full jobs persist downloads; add a fetch hook if live-only files need persistence. */
+self.registerBundledFontMisses = function (engine) {
+  const fs = engine.FS, names = new Set(), misses = [];
+  function visit(path) {
+    for (const name of fs.readdir(path)) {
+      if (name === '.' || name === '..') continue;
+      const file = path + '/' + name;
+      if (fs.isDir(fs.stat(file).mode)) visit(file);
+      else names.add(name);
+    }
+  }
+  visit('/texlive/texmf-dist/fonts');
+  // Skip optional companion probes for the fonts supplied by bundled packages.
+  // Kpathsea formats: TFM 3, OFM 20, OVF 23, VF 33, other text 39.
+  for (const name of names) {
+    const stem = name.replace(/\.(tfm|otf|ttf)$/i, '');
+    const formats = /\.tfm$/i.test(name) ? [[20,'.ofm'],[23,'.ovf'],[33,'.vf']]
+      : /\.(otf|ttf)$/i.test(name) ? [[3,'.tfm'],[20,'.ofm'],[39,'']] : [];
+    for (const [format,suffix] of formats) if (!names.has(stem + suffix)) {
+      misses.push(format + '/' + stem);
+      if (suffix) misses.push(format + '/' + stem + suffix);
+    }
+  }
+  engine.kpse_remote_register_misses(misses);
+};
 self.restoreTexPackages = async function (engine, warn) {
   engine.saveTexPackages = async () => {};
   if (!self.caches || !/^https?:/.test(self.location.href)) return;

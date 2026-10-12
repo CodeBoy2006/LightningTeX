@@ -128,3 +128,11 @@ test('preview typesetting tolerates counters but still discards a polluted worke
  state={status:'error',errors:[{message:'Undefined control sequence'}]};await assert.rejects(live.typeset({},'$\\x$'),/Undefined control sequence/);assert.equal(live.worker,worker,'an ordinary TeX error keeps the engine');
  state={leaks:['R']};await assert.rejects(live.typeset({},'$\\R$'));assert.equal(live.worker,null);assert.equal(worker.terminated,true);
 }));
+test('live startup shares full-job file misses without restarting an unchanged warmed engine',()=>withWorkers(async()=>{
+ const live=new LiveEngine(options),misses=['26/geometry.cfg','26/main.aux'];
+ const starting=live.start('preamble',undefined,[],misses),worker=MockWorker.all.at(-1);
+ assert.deepEqual(worker.sent[0].packageMisses,misses);
+ worker.emit({bytes:frame({op:'ready'})});await starting;
+ await live.start('preamble',undefined,[],[...misses,'26/optional.cfg']);
+ assert.equal(live.worker,worker);assert.equal(MockWorker.all.length,1);live.stop();
+}));

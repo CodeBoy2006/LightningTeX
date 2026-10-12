@@ -6992,7 +6992,7 @@ changes have the same license
               try { xhr.send(); } catch (e) { return null; }
               if (xhr.status === 200 && xhr.response && xhr.response.byteLength > 0)
                   return KPSE_REMOTE.register(name, format, new Uint8Array(xhr.response));
-              if (xhr.status === 404) KPSE_REMOTE.misses[format + '/' + name] = 1;
+              if (xhr.status === 404) KPSE_REMOTE.registerMisses([format + '/' + name]);
               return null;
           },
   parseArgv:function (cmd) {

@@ -4,6 +4,7 @@ importScripts('./raw-loader.js');
 onmessage=async ({data})=>{try{
  const m=await loadRtexEngine({base:data.base||'./busytex/',env:{TEXINPUTS:'/rtex/latex//:',LUAINPUTS:'/rtex//:',openout_any:'a',max_print_line:'100000',RTEX_REQ:'/dev/rtex-req',RTEX_RESP:'/dev/rtex-resp'},print:text=>postMessage({log:text}),printErr:text=>postMessage({log:text})});
  const fs=m.FS;fs.mkdirTree('/rtex/latex');fs.mkdirTree('/live');
+ m.kpse_remote_register_misses(data.packageMisses||[]);
  if(data.aux)fs.writeFile('/live/serve.aux',data.aux);
  fs.chdir('/live');
  for(const [name,contents] of Object.entries(data.files||{})){const path='/rtex/'+name;fs.mkdirTree(path.slice(0,path.lastIndexOf('/')));fs.writeFile(path,contents)}

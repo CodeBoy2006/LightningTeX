@@ -427,7 +427,7 @@ export function mountEditor(options={}){
   }
   function refreshPages(){
     if(!state.pdf||state.compiling||state.destroyed)return;
-    // Local edits are ahead of the stored PDF: only a fresh PDF can redraw them.
+    // The host redraws current live display lists, or compiles if those cannot render.
     if(state.previewRevision===state.pdfRevision)void setPdf(state.pdf,{...state.meta,revision:state.pdfRevision});else void compile('zoom');
   }
   function setZoom(zoom){

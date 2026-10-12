@@ -60,6 +60,7 @@ self.loadRtexEngine = async function ({base = './busytex/', print = console.log,
   print('Runtime loaded in '+Math.round(performance.now()-started)+' ms');
   m.FS.mkdirTree('/project'); m.FS.chdir('/project');
   await restoreTexPackages(m,printErr);
+  registerBundledFontMisses(m);
   return m;
 };
 self.rtexLuaArgs = file => ['luahblatex', '--no-shell-escape', '--interaction=nonstopmode', '--halt-on-error', '--fmt', '/texlive/texmf-dist/texmf-var/web2c/luahbtex/luahblatex.fmt', '--nosocket', file];

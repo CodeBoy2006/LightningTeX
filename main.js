@@ -51,6 +51,10 @@ const ui=mountEditor({renderPdf,typesetMath,
  onCompile:async({source,root,files,filesRev,revision,reason})=>{
    if(source.length>500000)throw Error('This browser edition supports source files up to 500,000 characters.');
    fullReason=null;
+   if(reason==='zoom'&&snapshot?.root===root&&snapshot.filesRev===filesRev&&snapshot.source===source){
+     try{if(ui.setLivePages({canvases:await drawLivePages(snapshot.drawnPages.map(page=>[page.page,page])),revision}))return;}
+     catch(error){fullReason=error.message;}
+   }
    if(reason==='auto'&&snapshot?.root===root&&snapshot.filesRev===filesRev&&await updateLive(source,revision))return;
    let result;
    try{result=await background.compile(source,{root,files});}
@@ -64,7 +68,7 @@ const ui=mountEditor({renderPdf,typesetMath,
    if(ui.getState().revision===revision){
      const capture=finalizeCapture(result.capture),preamble=splitPreamble(source)?.preamble??'',support=supportFiles(preamble,files);
      snapshot={source,root,filesRev,revision,capture,pages:result.pages,drawnPages:result.pages,aux:result.aux,proofs:new Map(),spans:captureSpans(source,capture,root),
-       support,macros:parseMacros([preamble,...support.map(file=>file.data)].join('\n')),context:previewContext(capture)};
+       support,packageMisses:result.packageMisses,macros:parseMacros([preamble,...support.map(file=>file.data)].join('\n')),context:previewContext(capture)};
      for(const[k,v]of Object.entries(result.fonts))fonts.set(k,v);
      prepareLive(snapshot);syncMarker(false);
    }
@@ -77,8 +81,19 @@ const ui=mountEditor({renderPdf,typesetMath,
 function prepareLive(state){
  const gen=++generation;
  if(!crossOriginIsolated||typeof SharedArrayBuffer==='undefined'){liveStart=null;ui.setLiveStatus({state:'off',reason:'Incremental mode requires COOP/COEP headers.'});return;}
- liveStart=live.start(splitPreamble(state.source).preamble+'\n\\RequirePackage{luatexbase}\n',state.aux,state.support);
+ liveStart=live.start(splitPreamble(state.source).preamble+'\n\\RequirePackage{luatexbase}\n',state.aux,state.support,state.packageMisses);
  void liveStart.then(()=>{if(gen===generation)ui.refreshMath();},error=>{if(gen===generation)ui.setLiveStatus({state:'off',reason:error.message});});
+}
+async function drawLivePages(pages){
+ const canvases=new Map();
+ for(const [number,page] of pages){
+   const target=document.querySelector(`[data-id="preview-viewport"] canvas[data-page="${number}"]`);
+   if(!target)throw Error('Full page is not ready');
+   const canvas=document.createElement('canvas'),width=parseFloat(target.style.width);
+   await renderer.render(canvas,page,{zoom:width/(page.page_width*CSS_PX_PER_SP),devicePixelRatio:pixelRatio(),padding:0});
+   canvases.set(number,canvas);
+ }
+ return canvases;
 }
 async function updateLive(source,revision){
  const state=snapshot,gen=generation;
@@ -104,14 +119,7 @@ async function updateLive(source,revision){
    }
    const result=await live.compile(ctx,edit.source,expected);
    if(!current())return true;
-   const list=decodeDisplayList(result.binary),pages=replaceUnitRows(state.drawnPages,edit.unit,proof,list),canvases=new Map();
-   for(const [number,page] of pages){
-     const target=document.querySelector(`[data-id="preview-viewport"] canvas[data-page="${number}"]`);
-     if(!target)throw Error('Full page is not ready');
-     const canvas=document.createElement('canvas'),width=parseFloat(target.style.width);
-     await renderer.render(canvas,page,{zoom:width/(page.page_width*CSS_PX_PER_SP),devicePixelRatio:pixelRatio(),padding:0});
-     canvases.set(number,canvas);
-   }
+   const list=decodeDisplayList(result.binary),pages=replaceUnitRows(state.drawnPages,edit.unit,proof,list),canvases=await drawLivePages(pages);
    if(!current())return true;
    if(!ui.setLivePages({canvases,revision,durationMs:performance.now()-began}))return false;
    state.drawnPages=state.drawnPages.map(page=>pages.get(page.page)||page);

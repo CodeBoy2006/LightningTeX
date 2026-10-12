@@ -51,7 +51,8 @@ function run(source,id,preamble,root='main.tex',project){
   for(const font of Object.values(page.fonts||{}))if(font.filename&&!fonts[font.filename]&&fs.analyzePath(font.filename).exists)fonts[font.filename]=fs.readFile(font.filename);
  }
  const pdf=fs.readFile('/out/main.pdf');lastPreamble=preamble;lastAux=aux;
- return {type:'result',id,pdf,capture,pages,fonts,aux,passes,log:logs.at(-1)||'',durationMs:performance.now()-began};
+ const packageMisses=JSON.parse(decoder.decode(fs.readFile('/tmp/texlive_remote/.misses.json')));
+ return {type:'result',id,pdf,capture,pages,fonts,aux,passes,packageMisses,log:logs.at(-1)||'',durationMs:performance.now()-began};
 }
 onmessage=async({data})=>{try{if(data.type==='init')await init(data);else if(data.type==='compile'){
  if(!engine)throw Error('Engine is not ready');

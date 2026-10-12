@@ -33,7 +33,7 @@ y=10
 
 \begin{align}
 a&=20,\\
-b&=30.
+\det R&=30.
 \end{align}
 
 Last paragraph stays here.
@@ -42,9 +42,9 @@ const ink=page=>[...(page.other||[]),...page.lines.flatMap(line=>line.items)].fi
 try {
  const full=await bg.compile(initial),capture=finalizeCapture(full.capture),state={source:initial,spans:captureSpans(initial,capture)},proofs=new Map();
  let pages=full.pages;Object.entries(full.fonts).forEach(([key,value])=>fonts.set(key,value));
- await live.start(splitPreamble(initial).preamble+'\n\\RequirePackage{luatexbase}\n',full.aux);
+ await live.start(splitPreamble(initial).preamble+'\n\\RequirePackage{luatexbase}\n',full.aux,[],full.packageMisses);
  const generation=live.generation,times=[];
- const edits=[['x^2','x^3'],['n(n+1)','n(n+2)'],['y=10','y=11'],['b&=30','b&=31'],['Last paragraph','Final paragraph'],['x^3','\\alpha^3']];
+ const edits=[['x^2','x^3'],['n(n+1)','n(n+2)'],['y=10','y=11'],['R&=30','R&=31'],['Last paragraph','Final paragraph'],['x^3','\\alpha^3']];
  for(let i=0;i<26;i++){
    const [before,after]=i<edits.length?edits[i]:i%2?['=82','=81']:['=81','=82'];
    const source=state.source.replace(before,after),edit=findLiveEdit(state.source,source,capture,state.spans);

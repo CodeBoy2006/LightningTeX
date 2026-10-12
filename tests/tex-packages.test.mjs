@@ -41,3 +41,17 @@ test('disabled remote lookup does not restore files from a previous online sessi
  run.engine.ENV.TEXLIVE_REMOTE_ENDPOINT='';await run.restore();await run.engine.saveTexPackages();
  assert.equal(run.files.size,0);assert.equal(run.context.cacheName,undefined);
 });
+test('bundled fonts skip absent companion formats without suppressing existing or unbundled fonts',()=>{
+ const run=runtime(),directory='/texlive/texmf-dist/fonts',tree=new Map([
+  [directory,['.','..','tfm','opentype','vf']],
+  [directory+'/tfm',['cmr10.tfm','virtual.tfm','virtual.ofm','virtual.ovf']],
+  [directory+'/opentype',['lmroman10-regular.otf']],
+  [directory+'/vf',['virtual.vf']]
+ ]);
+ let misses;
+ Object.assign(run.engine.FS,{readdir:path=>tree.get(path),stat:path=>({mode:tree.has(path)?1:0}),isDir:mode=>mode===1});
+ run.engine.kpse_remote_register_misses=keys=>{misses=Array.from(keys)};
+ run.context.registerBundledFontMisses(run.engine);
+ assert.deepEqual(misses.sort(),['20/cmr10','20/cmr10.ofm','23/cmr10','23/cmr10.ovf','33/cmr10','33/cmr10.vf','3/lmroman10-regular','3/lmroman10-regular.tfm','20/lmroman10-regular','20/lmroman10-regular.ofm','39/lmroman10-regular'].sort());
+ assert.ok(!misses.some(key=>key.includes('virtual')||key.includes('unbundled')));
+});

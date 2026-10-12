@@ -65,7 +65,7 @@ export class LiveEngine {
  constructor({base,files,onLog=()=>{},onFonts=()=>{}}){Object.assign(this,{base,files,onLog,onFonts});this.queue=Promise.resolve();this.req=0;this.frames=[];this.readers=[];this.buffer=new Uint8Array();this.generation=0;this.worker=null;this.failure=Error('Live engine not started')}
  current(generation){if(generation!==this.generation||!this.worker)throw this.failure||Error('Live engine restarted')}
  // files: preamble dependencies ({path,data,rev}) placed beside the serve document.
- async start(preamble,aux,files=[]){
+ async start(preamble,aux,files=[],packageMisses=[]){
   const key=JSON.stringify([preamble,decoder.decode(aux??new Uint8Array()),files.map(file=>[safeProjectPath(file.path),file.rev])]);
   if(this.worker&&key===this.startKey)return this.ready;
   this.stop();this.startKey=key;const generation=this.generation;
@@ -74,7 +74,7 @@ export class LiveEngine {
    const worker=this.worker=new Worker(new URL('runtime/live-worker.js',this.base));this.failure=null;
    worker.onmessage=({data})=>{if(generation!==this.generation||worker!==this.worker)return;try{if(data.log)this.onLog(data.log);if(data.fonts)this.onFonts(data.fonts);if(data.bytes)this.feed(data.bytes,generation);if(data.error)this.fail(Error(data.error),generation);if(data.done)this.fail(Error('Live engine ended'),generation)}catch(error){this.fail(error,generation)}};
    worker.onerror=e=>this.fail(Error(e.message||'Live worker failed'),generation);
-   worker.postMessage({base:new URL('busytex/',this.base).href,files:this.files,preamble,aux,mailbox:this.mailbox,project:files.map(({path,data})=>({path,data}))});
+   worker.postMessage({base:new URL('busytex/',this.base).href,files:this.files,preamble,aux,mailbox:this.mailbox,packageMisses,project:files.map(({path,data})=>({path,data}))});
    this.ready=this.read(120000,generation).then(ready=>{
     this.current(generation);
     if(ready.header.op!=='ready')throw Error('Live engine did not become ready');return ready.header;

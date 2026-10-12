@@ -2,6 +2,12 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import {splitPreamble,liveSourcePolicy,findLiveEdit,safeProjectPath} from '../core/document.js';
 test('commented document marker ignored',()=>assert.equal(splitPreamble('% \\begin{document}\n\\documentclass{article}\n\\begin{document}Hi').preamble,'% \\begin{document}\n\\documentclass{article}\n'));
 test('single captured paragraph mapping',()=>{let s='\\documentclass{article}\n\\begin{document}\nHello world.\n\nNext paragraph.\n\\end{document}\n';let c={units:[{kind:'par',file:'./main.tex',uid:1,begin_line:3,end_line:4}]};assert.equal(findLiveEdit(s,s.replace('world','reader'),c).source,'Hello reader.');assert.ok(findLiveEdit(s,s.replace('article','report'),c).reason);assert.ok(findLiveEdit(s,s.replace('world','world\n\nMore'),c).reason)});
+test('unchanged preamble definitions allow local edits; body definitions still require a full pass',()=>{
+ const source='\\documentclass{article}\n\\newcommand{\\R}{\\mathbb{R}}\n\\begin{document}\nHello world.\n\\end{document}',capture={units:[{kind:'par',uid:1,begin_line:4,end_line:5}]};
+ assert.equal(findLiveEdit(source,source.replace('world','reader'),capture).source,'Hello reader.');
+ const body=source.replace('Hello','\\def\\x{1} Hello');
+ assert.match(findLiveEdit(body,body.replace('world','reader'),capture).reason,/Custom setup/);
+});
 test('path traversal denied',()=>{assert.equal(safeProjectPath('chapters/a.tex'),'chapters/a.tex');for(const p of ['../a','/a','x/../a','C:\\x','x//y'])assert.throws(()=>safeProjectPath(p))});
 
 test('math source policy distinguishes unfinished input from structural changes',async()=>{
@@ -9,6 +15,10 @@ test('math source policy distinguishes unfinished input from structural changes'
  for(const text of [String.raw`$x^2+\frac{1}{2}$`,String.raw`\[\sqrt{x}+\alpha\]`,String.raw`\begin{align}x&=2\\y&=3\end{align}`])assert.ok(liveSourcePolicy(text).ok,text);
  for(const text of [String.raw`$x^{`,String.raw`\[x`,String.raw`\left(x`,String.raw`\begin{align}x&=2`,String.raw`$\fra$`])assert.ok(liveSourcePolicy(text).incomplete,text);
  for(const text of [String.raw`\input{file}`,String.raw`\def\x{1}`,String.raw`\begin{itemize}\item x\end{itemize}`,String.raw`^^5cinput{x}`,String.raw`\label{a\input{x}}`,String.raw`\tag{\input{x}}`])assert.ok(!liveSourcePolicy(text).ok,text);
+});
+test('standard linear algebra operators remain eligible for local math edits',()=>{
+ assert.ok(liveSourcePolicy(String.raw`\begin{align}\det R_\theta &= \cos^2\theta + \sin^2\theta = 1.\end{align}`).ok);
+ assert.ok(liveSourcePolicy(String.raw`For $T\colon V\to W$, $\dim V=\dim\ker T+\dim\operatorname{im}T$.`).ok);
 });
 test('row-break stars and spacing change the structural signature',()=>{
  const a=String.raw`\begin{align}x&=44\\y&=45\end{align}`;

@@ -13,7 +13,7 @@ export function splitPreamble(source) {
 const mathEnvironments=new Set('equation equation* align align* gather gather* multline multline* displaymath aligned gathered split cases matrix pmatrix bmatrix Bmatrix vmatrix Vmatrix smallmatrix'.split(' '));
 // A bounded vocabulary keeps state-changing TeX out of the persistent worker.
 export const liveCommands=new Set(('text textbf textit textrm textsf texttt emph mathrm mathit mathbf mathsf mathtt mathcal mathbb mathfrak mathnormal boldsymbol operatorname '+
- 'frac dfrac tfrac cfrac binom dbinom tbinom sqrt sum prod coprod int iint iiint oint lim limsup liminf min max sup inf log ln exp sin cos tan cot sec csc arcsin arccos arctan sinh cosh tanh '+
+ 'frac dfrac tfrac cfrac binom dbinom tbinom sqrt sum prod coprod int iint iiint oint lim limsup liminf min max sup inf log ln exp sin cos tan cot sec csc arcsin arccos arctan sinh cosh tanh det dim ker deg arg Pr hom gcd colon '+
  'alpha beta gamma delta epsilon varepsilon zeta eta theta vartheta iota kappa lambda mu nu xi pi varpi rho varrho sigma varsigma tau upsilon phi varphi chi psi omega Gamma Delta Theta Lambda Xi Pi Sigma Upsilon Phi Psi Omega '+
  'infty partial nabla ell hbar imath jmath Re Im aleph emptyset varnothing forall exists neg in notin ni subset supset subseteq supseteq cup cap setminus land lor '+
  'cdot cdots ldots vdots ddots dots times div pm mp ast star circ bullet le leq ge geq neq ne approx sim simeq equiv propto cong to mapsto rightarrow leftarrow leftrightarrow Rightarrow Leftarrow Leftrightarrow implies iff '+
@@ -97,7 +97,7 @@ export function findLiveEdit(before,after,capture,spans=captureSpans(before,capt
   if(before===after)return {unchanged:true,reason:'unchanged'};
   const a=splitPreamble(before),b=splitPreamble(after);
   if(!a||!b||a.preamble!==b.preamble)return {reason:'Preamble changed; rebuilding the engine'};
-  if(/\\(?:def|gdef|edef|xdef|let|newcommand|renewcommand|newenvironment|newif|catcode|directlua|mathversion|pdfmapline|pdfmapfile|pdfextension)\b/.test(before))return {reason:'Custom setup needs a full document pass'};
+  if(/\\(?:def|gdef|edef|xdef|let|newcommand|renewcommand|newenvironment|newif|catcode|directlua|mathversion|pdfmapline|pdfmapfile|pdfextension)\b/.test(before.slice(a.bodyStart)))return {reason:'Custom setup needs a full document pass'};
   let start=0;while(start<before.length&&start<after.length&&before[start]===after[start])start++;
   let oldEnd=before.length,newEnd=after.length;
   while(oldEnd>start&&newEnd>start&&before[oldEnd-1]===after[newEnd-1]){oldEnd--;newEnd--;}
