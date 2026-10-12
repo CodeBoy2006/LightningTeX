@@ -128,11 +128,16 @@ local function type1_descriptor(name)
       for line in io.lines(path) do
         -- Only direct, un-reencoded mappings have the same character codes as the TFM.
         local tfm, ps, pfb = line:match("^(%S+)%s+(%S+)%s+<(%S+%.pfb)%s*$")
-        if tfm then type1_map[tfm] = { psname = ps, filename = kpse.find_file(pfb, "type1 fonts") } end
+        if tfm then type1_map[tfm] = { psname = ps, pfb = pfb } end
       end
     end
   end
-  return type1_map[name]
+  local descriptor = type1_map[name]
+  -- Resolving the whole map downloads fonts unrelated to the current document.
+  if descriptor and descriptor.filename == nil then
+    descriptor.filename = kpse.find_file(descriptor.pfb, "type1 fonts") or false
+  end
+  return descriptor
 end
 local function font_descriptor(f)
   local d = descriptor_cache[f]

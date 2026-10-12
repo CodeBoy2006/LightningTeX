@@ -43,3 +43,9 @@
 - After an actual page reload, with every request to the package endpoint blocked, new background and live workers still compile the same document and typeset successfully. Cached package files are not requested again; optional missing-file probes may still be attempted. This tests cached package availability, not offline loading of the website itself.
 - `npm run build` passed; its existing large-JavaScript-chunk advisory remains. The production directory contains recommended assets and no obsolete basic assets.
 - No new dependency or package-management service was added. Safari/Firefox, arbitrary packages and external-program features remain unverified or unsupported as described in the README. The first bundled transfer grows from about 76 MiB to 168 MiB; browser memory profiling was not performed.
+
+## Type 1 font lookup timeout — 2026-10-12
+
+- Reproduced the 120-second timeout in the actual in-app browser. The capture module eagerly resolved every direct entry in `pdftex.map`, downloading unrelated Type 1 fonts. It now resolves only requested fonts and caches both successful and missing lookups; full and live workers share this code.
+- Added a real WASM regression that rejects unrelated font lookups, verifies one lookup per requested font across different font IDs, and checks descriptors for found and missing files. `npm test`: 110 passed. `npm run test:incremental`: 26 edits, no engine restart, exact final layout agreement. `npm run build` passed with the existing chunk-size advisory.
+- The user's unmodified rank–nullity example rendered a one-page PDF in the production UI (8.46 seconds). The attached full paper, with both supplied PDF figures, compiled through the same browser worker into 13 pages (373,845 bytes, 52.19 seconds). Its epstopdf shell-escape warning remained nonfatal. These timings are individual local observations, not latency guarantees.
