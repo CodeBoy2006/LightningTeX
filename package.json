@@ -1,0 +1,29 @@
+{
+  "name": "realtime-tex-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "node server.mjs",
+    "test": "node --test tests/*.test.mjs render/*.test.mjs ui/*.test.mjs",
+    "test:runtime": "node tests/runtime-smoke.mjs",
+    "test:integration": "node tests/integration-wasm.mjs",
+    "test:preview": "node tests/full-preview.mjs",
+    "test:incremental": "node tests/incremental-math.mjs",
+    "prebuild": "node scripts/prepare-build-assets.mjs"
+  },
+  "dependencies": {
+    "opentype.js": "2.0.0",
+    "pdfjs-dist": "6.4.299",
+    "vite": "8.3.4"
+  },
+  "devDependencies": {
+    "jsdom": "30.1.2"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

@@ -1,0 +1,12 @@
+HTTP/1.1 200 OK
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Resource-Policy: same-origin
+X-Content-Type-Options: nosniff
+Content-Type: text/html; charset=utf-8
+Content-Length: 613
+Cache-Control: no-cache
+Date: Mon, 12 Oct 2026 00:39:51 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+

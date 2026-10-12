@@ -1,0 +1,83 @@
+
+> realtime-tex-web@0.1.0 test:preview
+> node tests/full-preview.mjs
+
+[
+  {
+    "name": "initial math and references",
+    "passes": 2,
+    "pages": 1,
+    "durationMs": 1410.0292499999998,
+    "text": "Inline   x 2   = 81 .  1 2  +   √ 4 = 42 . y   = 10   (1) See Equation 1.  a   = 20 ,   (2)  b   = 30 .   (3) 1"
+  },
+  {
+    "name": "inline math edit",
+    "passes": 1,
+    "pages": 1,
+    "durationMs": 606.5537079999999,
+    "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 42 . y   = 10   (1) See Equation 1.  a   = 20 ,   (2)  b   = 30 .   (3) 1"
+  },
+  {
+    "name": "display fraction and radical edit",
+    "passes": 1,
+    "pages": 1,
+    "durationMs": 662.2222499999998,
+    "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 43 . y   = 10   (1) See Equation 1.  a   = 20 ,   (2)  b   = 30 .   (3) 1"
+  },
+  {
+    "name": "numbered equation edit",
+    "passes": 1,
+    "pages": 1,
+    "durationMs": 625.3637500000004,
+    "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 43 . y   = 11   (1) See Equation 1.  a   = 20 ,   (2)  b   = 30 .   (3) 1"
+  },
+  {
+    "name": "align edit",
+    "passes": 1,
+    "pages": 1,
+    "durationMs": 598.8224999999993,
+    "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 43 . y   = 11   (1) See Equation 1.  a   = 20 ,   (2)  b   = 31 .   (3) 1"
+  },
+  {
+    "name": "removed label cannot survive in cached aux",
+    "passes": 2,
+    "pages": 1,
+    "durationMs": 1204.4147920000005,
+    "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 43 . y   = 11   (1) See Equation   ?? .  a   = 20 ,   (2)  b   = 31 .   (3) 1"
+  },
+  {
+    "name": "restored label converges",
+    "passes": 2,
+    "pages": 1,
+    "durationMs": 1202.193542,
+    "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 43 . y   = 11   (1) See Equation 1.  a   = 20 ,   (2)  b   = 31 .   (3) 1"
+  },
+  {
+    "name": "unfinished math recovery preserves last good aux",
+    "passes": 1,
+    "pages": 1,
+    "durationMs": 585.2277090000007,
+    "text": "Inline   x 2   = 83 .  1 2  +   √ 4 = 43 . y   = 11   (1) See Equation 1.  a   = 20 ,   (2)  b   = 31 .   (3) 1"
+  },
+  {
+    "name": "preamble changes invalidate cached aux",
+    "passes": 2,
+    "pages": 1,
+    "durationMs": 1305.5552079999998,
+    "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 43 . y   = 11   (1) See Equation 1.  a   = 20 ,   (2)  b   = 31 .   (3) 1"
+  },
+  {
+    "name": "table of contents",
+    "passes": 2,
+    "pages": 1,
+    "durationMs": 855.0174160000006,
+    "text": "Contents  1   First heading   1  1   First heading  Some prose. 1"
+  },
+  {
+    "name": "unchanged aux cannot suppress TOC regeneration",
+    "passes": 2,
+    "pages": 1,
+    "durationMs": 879.2302080000009,
+    "text": "Contents  1   First heading   1  1   First heading  Revised prose. 1"
+  }
+]

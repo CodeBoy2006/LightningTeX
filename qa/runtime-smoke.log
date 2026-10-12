@@ -1,0 +1,28 @@
+[
+  {
+    "id": 1,
+    "type": "result",
+    "pdf": 5053,
+    "pages": 1,
+    "durationMs": 2458.23325
+  },
+  {
+    "id": 2,
+    "type": "result",
+    "pdf": 42773,
+    "pages": 1,
+    "durationMs": 1632.3433770000001
+  },
+  {
+    "id": 3,
+    "type": "error",
+    "error": "msy/m/n on input line 1.\nLaTeX Font Info:    ... okay on input line 1.\nLaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 1.\nLaTeX Font Info:    ... okay on input line 1.\nLaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 1.\nLaTeX Font Info:    ... okay on input line 1.\nLaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 1.\nLaTeX Font Info:    ... okay on input line 1.\nLaTeX Font Info:    Checking defaults for TU/lmr/m/n on input line 1.\nLaTeX Font Info:    ... okay on input line 1.\nLaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 1.\nLaTeX Font Info:    ... okay on input line 1.\nLaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 1.\nLaTeX Font Info:    ... okay on input line 1.\nInserting `rtex-capture' in `pre_shipout_filter'.\n! Undefined control sequence.\nl.1 ...s{article}\\begin{document}\\undefinedcommand\n                                                  \\end{document}\n\nHere is how much of LuaTeX's memory you used:\n 1054 strings out of 476075\n 100000,460012 words of node,token memory allocated\n 375 words of node memory still in use:\n   2 hlist, 1 rule, 1 dir, 3 kern, 1 glyph, 3 attribute, 48 glue_spec, 3 attribute_list, 1 write nodes\n   avail lists: 2:9,3:2,4:1,5:3,7:2,9:3\n 23575 multiletter control sequences out of 65536+600000\n 15 fonts using 510647 bytes\n 56i,0n,64p,217b,40s stack positions out of 10000i,1000n,20000p,200000b,200000s\n!  ==> Fatal error occurred, no output PDF file produced!\n"
+  },
+  {
+    "id": 4,
+    "type": "result",
+    "pdf": 3885,
+    "pages": 1,
+    "durationMs": 1669.3046609999992
+  }
+]

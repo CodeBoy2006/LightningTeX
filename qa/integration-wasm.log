@@ -1,0 +1,38 @@
+
+> realtime-tex-web@0.1.0 test:integration
+> node tests/integration-wasm.mjs
+
+[
+  {
+    "sample": 0,
+    "pages": 1,
+    "bytes": 46188,
+    "durationMs": 1351.6594170000003
+  },
+  {
+    "live": {
+      "edits": 20,
+      "baseline": {
+        "ok": true,
+        "rows": 2,
+        "glyphs": 153
+      },
+      "medianMs": 1.3080830000003516,
+      "minMs": 1.0579999999999927,
+      "maxMs": 1.983541999999943,
+      "errorRecovery": true
+    }
+  },
+  {
+    "sample": 1,
+    "pages": 1,
+    "bytes": 48309,
+    "durationMs": 1440.3244169999998
+  },
+  {
+    "sample": 2,
+    "pages": 1,
+    "bytes": 9237,
+    "durationMs": 885.4354169999997
+  }
+]

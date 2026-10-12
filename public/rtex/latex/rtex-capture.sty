@@ -1,0 +1,58 @@
+%% rtex-capture.sty — record unit/paragraph contexts, row placements and page display lists
+%% during a normal LuaLaTeX run. Adds no nodes; output is unchanged (verified by tests).
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{rtex-capture}[2026/10/11 v0.0.3 rtex layout capture]
+\RequirePackage{luatexbase}
+\directlua{
+  rtex_capture = dofile(kpse.find_file("rtex-capture.lua", "lua") or "rtex-capture.lua")
+  rtex_capture.setup{ jobname = tex.jobname }
+}
+\AddToHook{begindocument/end}{\directlua{rtex_capture.begin_document()}}
+\AddToHook{para/begin}{\directlua{rtex_capture.parbegin()}}
+\AddToHook{para/after}{\directlua{rtex_capture.parafter()}}
+% Pages are read from the box LuaTeX ships (pre_shipout_filter, registered at
+% \begin{document}), which holds the shipout/background and foreground material (eso-pic,
+% pdfpages, watermarks) that \ShipoutBox lacks in shipout/before; the page attributes are
+% taken here (pdflscape's /Rotate).
+\AddToHook{shipout/before}{\directlua{rtex_capture.page_attr("\luaescapestring{\the\pdfvariable pageattr}")}}
+\AddToHook{cmd/@outputpage/before}{\directlua{rtex_capture.output_begin()}}
+\AddToHook{cmd/@outputpage/after}{\directlua{rtex_capture.output_end()}}
+\AddToHook{cmd/@afterheading/before}{\directlua{rtex_capture.afterheading()}}
+\AddToHook{enddocument/afterlastpage}{\directlua{rtex_capture.finish()}}
+% Unit boundaries: block environments and sectioning commands. Extra block environments
+% (theorem-like) come from $RTEX_UNIT_ENVS, comma separated.
+\directlua{
+  token.set_macro("rtex@blockenvs", table.concat(rtex_capture.BLOCK_ENVS, ","))
+  token.set_macro("rtex@headings", table.concat(rtex_capture.HEADINGS, ","))
+}
+\def\rtex@hookenv#1{%
+  \edef\rtex@tmp{\noexpand\AddToHook{env/#1/begin}{\noexpand\directlua{rtex_capture.envbegin("#1")}}%
+    \noexpand\AddToHook{env/#1/after}{\noexpand\directlua{rtex_capture.envafter("#1")}}}%
+  \rtex@tmp}
+\def\rtex@hookheading#1{%
+  \edef\rtex@tmp{\noexpand\AddToHook{cmd/#1/before}{\noexpand\directlua{rtex_capture.heading("#1")}}}%
+  \rtex@tmp}
+\@for\rtex@n:=\rtex@blockenvs\do{\expandafter\rtex@hookenv\expandafter{\rtex@n}}
+\@for\rtex@n:=\rtex@headings\do{\expandafter\rtex@hookheading\expandafter{\rtex@n}}
+% Picture cache (see rtex-capture.lua): the begin macro of each picture environment is wrapped
+% so a picture the session's manifest lists is replaced by the cached region of an earlier
+% pass's PDF, and every other one is tagged so its page position is recorded.
+\newcatcodetable\rtexcapturecct
+{\makeatletter\savecatcodetable\rtexcapturecct}
+\directlua{rtex_capture.set_cct(\number\rtexcapturecct)}
+\def\rtex@picns{rtex_capture}
+\directlua{token.set_macro("rtex@picenvs", table.concat(rtex_capture.PICTURE_ENVS, ","))}
+\input{rtex-pic.tex}
+\AddToHook{begindocument/end}{\rtex@wrappicall}
+% imakeidx: record the index commands instead of running them (rtex-capture.lua, index_command)
+\AddToHook{package/imakeidx/after}{%
+  \def\imki@exec#1{\directlua{rtex_capture.index_command("\luaescapestring{#1}")}}%
+  \def\imki@finalmessage#1{\directlua{rtex_capture.index_command(
+    "\luaescapestring{\imki@program\imki@options#1.idx}")}}}
+% Map image resource indices to files so IMAGE display-list items can name their source.
+\AddToHook{package/graphicx/after}{%
+  \AddToHook{cmd/Gin@setfile/after}{%
+    \directlua{rtex_capture.image(\number\lastsavedimageresourceindex,
+      "\luaescapestring{\Gin@base\Gin@ext}", "\luaescapestring{\Gin@page}",
+      \number\lastsavedimageresourcepages)}}}
+\endinput

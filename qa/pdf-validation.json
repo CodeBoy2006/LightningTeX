@@ -1,0 +1,20 @@
+[
+  {
+    "sample": 0,
+    "pages": 1,
+    "text_characters": 612,
+    "text_excerpt": "A small change should not require rebuilding an entire world. Edit this paragraph and watch\nthe Live paragraph panel: the same warmed LuaTeX engine typesets only these lines.\nThe f"
+  },
+  {
+    "sample": 1,
+    "pages": 1,
+    "text_characters": 171,
+    "text_excerpt": "1\nA useful identity\nThe sum in Equation 1 follows by pairing the first and last terms.\nn\nX\nk=1\nk = n(n + 1)\n2\n.\n(1)\n(a + b)2 = a2 + 2ab + b2,\n(2)\nZ 1\n0\nx2 dx = 1\n3.\n(3)\n1\n"
+  },
+  {
+    "sample": 2,
+    "pages": 1,
+    "text_characters": 186,
+    "text_excerpt": "1\nA little structure\n\u2022 Source stays in your browser.\n\u2022 The compiler is real LuaLaTeX.\n\u2022 Complex blocks use full-document compilation.\nItem\nQuantity\nPrice\nNotebook\n2\n8.00\nPencil\n5\n1"
+  }
+]
