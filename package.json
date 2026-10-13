@@ -14,6 +14,7 @@
     "test:preview": "node tests/full-preview.mjs",
     "test:incremental": "node tests/incremental-math.mjs",
     "test:reflow": "node tests/live-reflow.mjs",
+    "test:sequence": "node tests/live-sequence.mjs",
     "test:project": "node tests/project-math.mjs",
     "prebuild": "node scripts/prepare-build-assets.mjs"
   },

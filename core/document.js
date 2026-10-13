@@ -113,11 +113,22 @@ export function findLiveEdit(before,after,capture,spans=captureSpans(before,capt
   let start=0;while(start<before.length&&start<after.length&&before[start]===after[start])start++;
   let oldEnd=before.length,newEnd=after.length;
   while(oldEnd>start&&newEnd>start&&before[oldEnd-1]===after[newEnd-1]){oldEnd--;newEnd--;}
-  const delta=after.length-before.length,candidates=spans.filter(span=>start>=span.start&&oldEnd<=span.end);
+  const delta=after.length-before.length;
+  let candidates=spans.filter(span=>start>=span.start&&oldEnd<=span.end);
+  // Restore an empty slot across its leftover whitespace before borrowing the following unit.
+  const empty=spans.filter(span=>span.start===span.end&&span.end<=start&&!before.slice(span.end,oldEnd).trim());
+  if(start===oldEnd&&empty.length)candidates=empty;
   let members=candidates;
   if(!members.length){
-    const trailing=spans.findLast(span=>span.end<start&&!before.slice(span.end,oldEnd).trim());
-    if(trailing)members=[trailing];
+    const left=spans.findLast(span=>span.end<=start),right=spans.find(span=>span.start>=oldEnd);
+    const gap=left&&right&&before.slice(left.end,right.start);
+    // Removing the last blank line joins both paragraphs, even with trailing spaces.
+    const joining=gap&&!gap.trim()&&/\n\s*\n/.test(gap)&&!/\n\s*\n/.test(after.slice(left.end,right.start+delta));
+    // Include surrounding whitespace without borrowing another unit's context.
+    const adjacent=!joining&&spans.find(span=>(start<span.end&&oldEnd>span.start||span.end<start||oldEnd<span.start)
+      &&!before.slice(Math.min(start,span.start),span.start).trim()
+      &&!before.slice(span.end,Math.max(oldEnd,span.end)).trim());
+    if(adjacent)members=[adjacent];
   }
   if(!members.length){
     const first=spans.findLastIndex(span=>span.start<=start),last=spans.findIndex(span=>span.end>=oldEnd);
@@ -126,19 +137,19 @@ export function findLiveEdit(before,after,capture,spans=captureSpans(before,capt
     if(members.some((span,index)=>span.unit.kind!=='par'||span.unit.nest!==1||index&&before.slice(members[index-1].end,span.start).trim()))members=[];
   }
   if(!members.length||candidates.length>1)return {reason:'This edit needs full-document layout'};
-  const span=members[0],end=Math.max(members.at(-1).end,oldEnd),oldText=before.slice(span.start,end),source=after.slice(span.start,end+delta);
+  const span=members[0],begin=Math.min(span.start,start),end=Math.max(members.at(-1).end,oldEnd),oldText=before.slice(begin,end),source=after.slice(begin,end+delta);
   const boundaries=/\n\s*\n/.test(before.slice(start-1,oldEnd+1))||/\n\s*\n/.test(after.slice(start-1,newEnd+1));
   const oldPolicy=oldText.trim()?liveSourcePolicy(oldText,macros):{ok:true,signature:'[]'};
   if(!oldPolicy.ok)return {reason:oldPolicy.reason};
   const policy=source.trim()?liveSourcePolicy(source,macros):{ok:true,signature:'[]'};
   if(!policy.ok)return policy;
-  return {unit:span.unit,span,removed:members.slice(1),end,source,reflow:members.length>1||boundaries||oldPolicy.signature!==policy.signature||!source.trim()};
+  return {unit:span.unit,span,removed:members.slice(1),start:begin,end,source,reflow:members.length>1||begin!==span.start||end!==span.end||boundaries||oldPolicy.signature!==policy.signature||!source.trim()};
 }
 export function acceptLiveEdit(state,edit,source){
   const delta=source.length-state.source.length,boundary=edit.end;
   state.spans=state.spans.filter(span=>!edit.removed.includes(span));
   for(const span of state.spans){
-    if(span===edit.span)span.end=boundary+delta;
+    if(span===edit.span){span.start=edit.start;span.end=boundary+delta;}
     else if(span.start>=boundary){span.start+=delta;span.end+=delta;}
   }
   state.source=source;

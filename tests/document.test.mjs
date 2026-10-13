@@ -128,3 +128,31 @@ test('trailing whitespace insertion and undo after deleting a unit stay live',as
  acceptLiveEdit(state,edit,empty);
  assert.equal(findLiveEdit(empty,source,capture,state.spans).unit.uid,1);
 });
+test('leading insertion and whole environment deletion include whitespace but preserve other units',async()=>{
+ const {captureSpans,acceptLiveEdit}=await import('../core/document.js');
+ const equation='\\begin{equation}\nx=1\n\\end{equation}';
+ const source='\nFirst.\n\n'+equation+'\n\nLast.';
+ const capture={units:[{uid:1,kind:'par',nest:1,begin_line:2,end_line:3},{uid:2,kind:'env',name:'equation',begin_line:4,end_line:6},{uid:3,kind:'par',nest:1,begin_line:8,end_line:8}]};
+ const state={source,spans:captureSpans(source,capture)};
+ for(const [from,to,uid] of [['\nFirst','Leading.\n\nFirst',1],['\n\n'+equation+'\n\n','\n\n',2],['\n\nLast','\n\n'+equation+'\n\nLast',2],['x=1','x=2',2],['Last','Final',3]]){
+  const next=state.source.replace(from,to),edit=findLiveEdit(state.source,next,capture,state.spans);
+  assert.equal(edit.unit?.uid,uid,edit.reason);assert.equal(edit.removed.length,0);
+  acceptLiveEdit(state,edit,next);assert.equal(state.source.slice(edit.span.start,edit.span.end),edit.source);
+ }
+ assert.equal(state.spans[1].original,equation);
+ const beforeDelete=state.source,deleted=beforeDelete.replace(equation.replace('x=1','x=2'),'');
+ acceptLiveEdit(state,findLiveEdit(beforeDelete,deleted,capture,state.spans),deleted);
+ const restored=findLiveEdit(deleted,beforeDelete,capture,state.spans);
+ assert.equal(restored.unit?.uid,2,'leftover blank lines must not route restoration to the following paragraph');
+ const boundary='First.\n\\input{part}\nLast.',units={units:[{uid:1,begin_line:1,end_line:1},{uid:2,begin_line:3,end_line:3}]};
+ assert.equal(findLiveEdit(boundary,boundary.replace('\\input{part}','Added.'),units).unit,undefined,'non-whitespace gaps still require full layout');
+});
+test('removing a blank paragraph separator also joins paragraphs with trailing spaces or extra newlines',async()=>{
+ const {captureSpans}=await import('../core/document.js');
+ for(const gap of [' \n\n','\n\n\n',' \n \n\n']){
+  const before='First.'+gap+'Second.',after='First. Second.';
+  const capture={units:[{uid:1,kind:'par',nest:1,begin_line:1,end_line:1},{uid:2,kind:'par',nest:1,begin_line:before.split('\n').length,end_line:before.split('\n').length}]};
+  const edit=findLiveEdit(before,after,capture,captureSpans(before,capture));
+  assert.equal(edit.source,after,gap);assert.deepEqual(edit.removed.map(span=>span.unit.uid),[2]);
+ }
+});

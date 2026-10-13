@@ -1,0 +1,162 @@
+{
+  "date": "2026-10-13",
+  "browser": "Codex in-app browser",
+  "inputMethod": "Repeated textarea fills dispatching input events; not physical keyboard or IME",
+  "typing": {
+    "events": 46,
+    "sampledDurationMs": 855,
+    "completedFullCount": [
+      2,
+      2
+    ],
+    "liveStates": [
+      {
+        "at": 1791903258163,
+        "full": 2,
+        "live": "Live 5.6 ms · pagination pending",
+        "reason": "",
+        "status": "Live"
+      },
+      {
+        "at": 1791903258242,
+        "full": 2,
+        "live": "Live 4.2 ms · pagination pending",
+        "reason": "",
+        "status": "Live"
+      },
+      {
+        "at": 1791903258320,
+        "full": 2,
+        "live": "Live 4.3 ms · pagination pending",
+        "reason": "",
+        "status": "Live"
+      },
+      {
+        "at": 1791903258397,
+        "full": 2,
+        "live": "Live 3.6 ms · pagination pending",
+        "reason": "",
+        "status": "Live"
+      },
+      {
+        "at": 1791903258544,
+        "full": 2,
+        "live": "Live 4.1 ms · pagination pending",
+        "reason": "",
+        "status": "Live"
+      },
+      {
+        "at": 1791903258622,
+        "full": 2,
+        "live": "Live 3.9 ms · pagination pending",
+        "reason": "",
+        "status": "Live"
+      },
+      {
+        "at": 1791903258696,
+        "full": 2,
+        "live": "Live 4.3 ms · pagination pending",
+        "reason": "",
+        "status": "Live"
+      },
+      {
+        "at": 1791903258775,
+        "full": 2,
+        "live": "Live 5.6 ms · pagination pending",
+        "reason": "",
+        "status": "Live"
+      }
+    ]
+  },
+  "leadingParagraphTyping": {
+    "events": 35,
+    "liveStates": [
+      {
+        "full": 2,
+        "live": "Live 8.2 ms",
+        "reason": "",
+        "status": "Live"
+      },
+      {
+        "full": 2,
+        "live": "Live 5.0 ms",
+        "reason": "",
+        "status": "Live"
+      },
+      {
+        "full": 2,
+        "live": "Live 4.9 ms · pagination pending",
+        "reason": "",
+        "status": "Live"
+      },
+      {
+        "full": 2,
+        "live": "Live 4.4 ms · pagination pending",
+        "reason": "",
+        "status": "Live"
+      },
+      {
+        "full": 2,
+        "live": "Live 4.1 ms · pagination pending",
+        "reason": "",
+        "status": "Live"
+      },
+      {
+        "full": 2,
+        "live": "Live 4.8 ms · pagination pending",
+        "reason": "",
+        "status": "Live"
+      }
+    ]
+  },
+  "formulaGrowth": {
+    "full": 3,
+    "live": "Live 37 ms · pagination pending",
+    "reason": "",
+    "status": "Live"
+  },
+  "crossPageGrowth": {
+    "full": 4,
+    "live": "Live 162 ms · pagination pending",
+    "pages": 2,
+    "reason": "",
+    "status": "Live"
+  },
+  "deleteRestore": [
+    {
+      "name": "delete equation",
+      "samples": 8,
+      "last": {
+        "full": 4,
+        "live": "Live 45 ms · pagination pending",
+        "reason": "",
+        "status": "Live"
+      }
+    },
+    {
+      "name": "restore equation",
+      "samples": 8,
+      "last": {
+        "full": 4,
+        "live": "Live 31 ms · pagination pending",
+        "reason": "",
+        "status": "Live"
+      }
+    }
+  ],
+  "settledPages": 3,
+  "download": {
+    "filename": "main (7).pdf",
+    "verifiedWith": "pdftotext, page-number footers removed, whitespace normalized",
+    "verifiedOriginalSentences": 120,
+    "verifiedAppendedSentences": 25,
+    "verifiedText": [
+      "A new leading paragraph.",
+      "Continuous typing changes the paragraph width.",
+      "Second paragraph remains visible.",
+      "Last paragraph with v = 4.",
+      "(1)"
+    ]
+  },
+  "limits": "Displayed local timings exclude the 60 ms input scheduler. Completed-full log counts do not instrument worker submissions. Other browsers, IME and memory profiling untested."
+}

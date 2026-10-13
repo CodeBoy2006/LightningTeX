@@ -55,6 +55,8 @@ Ctrl / Command + Enter 完整编译。可以取消正在进行的编译。草稿
 
 2026-10-13 的扩展验收通过 145 项测试，另覆盖 11 类真实 WASM 即时编辑，局部阶段只有一次初始全文编译、没有引擎重启；每种结果的字形、字号、进宽和规则都与独立完整编译核对（临时位置和分页不要求一致）。浏览器实测段落拆分、合并、列表增项、公式增高、子文件连续编辑与未完成公式恢复、缩放和最新 PDF 导出。运行 `npm run test:reflow` 可复现引擎检查，完整记录见 QA.md。
 
+后续累计 benchmark 通过 147 项测试：112 次有效局部修改和 17 次未完成公式输入，覆盖连续输入/退格、段落增删与恢复、跨页增长/缩短、公式增高和整块删除/撤销；15 个检查点与独立全文编译核对字形和规则。首段前插入、连同空行删除公式现在也能即时更新；恢复已删除内容会复用原单元，避免误用后续段落的公式计数器。运行 `npm run test:sequence` 复现，结果写入 `qa/live-sequence.json`。Node 本机一次运行中位 5.95 ms、P95 102.88 ms（含局部排版、字形绘制和检查，不含浏览器输入计时器）。浏览器另验证连续输入期间 Live 更新、跨页校准及最新 PDF 内容；详见 QA.md。
+
 浏览器验证限定桌面 Codex 内置浏览器。最新重排改动使用合成文档验收，未重跑上述完整论文；Safari、Firefox、移动端及更大文档的性能尚未验收。局部绘制要求白色纸面，不能解释的全页绘制仍回退。不能据这些样例声称任意 LaTeX 操作都即时完成。
 
 ## 开发
@@ -71,6 +73,7 @@ npm run test:integration
 npm run test:preview
 npm run test:incremental
 npm run test:reflow
+npm run test:sequence
 ```
 
 npm run preview 使用本机静态服务器提供 dist。Worker 位于 public/runtime，原项目 Lua/TeX 文件在 public/rtex，压缩 WASM/数据在 public/busytex。Vite 只负责前端构建，不运行原生 TeX。

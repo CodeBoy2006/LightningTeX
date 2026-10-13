@@ -1,0 +1,686 @@
+{
+  "runtime": "actual WASM and font outlines; sequential requests, no browser input timer",
+  "initialPages": 2,
+  "localEdits": 112,
+  "incompleteInputsRetained": 17,
+  "fullCompilesDuringLocalEdits": 1,
+  "restarts": 0,
+  "independentFullComparisons": 15,
+  "medianMs": 5.95,
+  "p95Ms": 102.88,
+  "maxMs": 269.21,
+  "results": [
+    {
+      "name": "typing",
+      "ms": 269.21,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 6.87,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 7.19,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 6.34,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.79,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.16,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.67,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.06,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.83,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.48,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.7,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.52,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.85,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 6.14,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.27,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.97,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.27,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.69,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.5,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 4.86,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.18,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.57,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.05,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.34,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.18,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.32,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 5.55,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "typing",
+      "ms": 6.01,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.5,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.08,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 6,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 6.21,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 7.3,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 7.27,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 7.94,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.95,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.42,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.89,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.5,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.73,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.57,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.47,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.46,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.6,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.8,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.46,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 6.13,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 7.15,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 6.79,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.62,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 6.09,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.45,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.28,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.6,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.33,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.6,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.76,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.9,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.9,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.69,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.74,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 6.15,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 6.26,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.95,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 8.03,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.67,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.82,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.87,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 7.06,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 6.8,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 6.34,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 6.56,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.95,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.93,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 6.16,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "typing",
+      "ms": 5.99,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 5.98,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 5.91,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 6.18,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 5.97,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 5.92,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 6.13,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 6.06,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 6.17,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 5.89,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 5.75,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 5.99,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 5.88,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 6.39,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 6.06,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 5.99,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 6.26,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 7.41,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 7.03,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 11.92,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "backspace",
+      "ms": 7.06,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "split",
+      "ms": 6.72,
+      "pages": 1,
+      "rows": 3
+    },
+    {
+      "name": "join",
+      "ms": 6.59,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "insert between paragraphs",
+      "ms": 10.72,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "delete inserted paragraph",
+      "ms": 10.46,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "join with trailing spaces",
+      "ms": 13.24,
+      "pages": 1,
+      "rows": 3
+    },
+    {
+      "name": "formula typing",
+      "ms": 37.22,
+      "pages": 1,
+      "rows": 3
+    },
+    {
+      "name": "grow equation",
+      "ms": 25.86,
+      "pages": 1,
+      "rows": 2
+    },
+    {
+      "name": "grow across pages",
+      "ms": 264.28,
+      "pages": 2,
+      "rows": 92
+    },
+    {
+      "name": "shrink across pages",
+      "ms": 109.92,
+      "pages": 2,
+      "rows": 13
+    },
+    {
+      "name": "delete cross-page paragraph",
+      "ms": 122.7,
+      "pages": 2,
+      "rows": 0
+    },
+    {
+      "name": "restore cross-page paragraph",
+      "ms": 188.02,
+      "pages": 2,
+      "rows": 80
+    },
+    {
+      "name": "edit later paragraph",
+      "ms": 102.88,
+      "pages": 1,
+      "rows": 1
+    },
+    {
+      "name": "insert before first paragraph",
+      "ms": 101.4,
+      "pages": 1,
+      "rows": 4
+    },
+    {
+      "name": "delete whole equation with separators",
+      "ms": 97.87,
+      "pages": 1,
+      "rows": 0
+    },
+    {
+      "name": "restore whole equation",
+      "ms": 97.94,
+      "pages": 1,
+      "rows": 2
+    }
+  ]
+}
