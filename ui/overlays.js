@@ -2,7 +2,7 @@
 import {icon} from './icons.js';
 
 let dismissMenu=null;
-/** items: {label, icon?, hint?, danger?, disabled?, checked?, run} | 'separator' | {heading}. at: DOMRect-like or {x,y}. */
+/** items: {label, icon?, hint?, danger?, disabled?, run} | 'separator' | {heading}. at: DOMRect-like or {x,y}. */
 export function openMenu(host,at,items){
   dismissMenu?.();
   const menu=document.createElement('div');menu.className='menu';menu.setAttribute('role','menu');menu.tabIndex=-1;
@@ -25,7 +25,7 @@ export function openMenu(host,at,items){
     if(item.heading){menu.append(Object.assign(document.createElement('div'),{className:'menu-heading',textContent:item.heading}));continue;}
     const button=document.createElement('button');button.type='button';button.setAttribute('role','menuitem');button.disabled=!!item.disabled;
     if(item.danger)button.classList.add('danger');
-    button.innerHTML=`<span class="menu-icon">${item.checked?icon('check'):item.icon?icon(item.icon):''}</span><span class="menu-label"></span><span class="menu-hint"></span>`;
+    button.innerHTML=`<span class="menu-icon">${item.icon?icon(item.icon):''}</span><span class="menu-label"></span><span class="menu-hint"></span>`;
     button.children[1].textContent=item.label;button.children[2].textContent=item.hint||'';
     button.addEventListener('click',()=>{close();item.run?.();});
     menu.append(button);
@@ -39,7 +39,6 @@ export function openMenu(host,at,items){
   menu.style.top=Math.max(8,y-bounds.top+height>bounds.height-8?anchorTop-bounds.top-height-4:y-bounds.top)+'px';
   document.addEventListener('pointerdown',outside,true);document.addEventListener('keydown',keys,true);
   (buttons()[0]||menu).focus({preventScroll:true});
-  return close;
 }
 
 /** Resolves true when confirmed. */

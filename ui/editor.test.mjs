@@ -248,6 +248,16 @@ test('file tree keeps folder-first natural order, depth and collapsed descendant
     h.ui.openFile('chapters/deep/a.tex');assert.deepEqual(rows(),expected);
   }finally{h.cleanup();}
 });
+test('tree background menu offers creation actions and restores source focus on Escape',()=>{
+  const h=setup();
+  try {
+    h.q('source').focus();
+    h.q('tree').dispatchEvent(new h.dom.window.MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:20,clientY:30}));
+    const menu=h.root.querySelector('[role="menu"]');
+    assert.deepEqual([...menu.querySelectorAll('.menu-label')].map(label=>label.textContent),['New file','New folder','Upload files']);
+    h.event(menu,'keydown',{key:'Escape'});assert.equal(h.root.querySelector('[role="menu"]'),null);assert.equal(document.activeElement,h.q('source'));
+  }finally{h.cleanup();}
+});
 test('indent and comment edits share selection bounds without including the following line',()=>{
   const source='alpha\n\n beta\ngamma',h=setup({source});
   try {
@@ -313,13 +323,14 @@ test('settings apply at once, persist, and reject corrupt stored values',()=>{
 });
 
 test('a document without pages shows an empty page instead of a failure; a new project clears the old preview',async()=>{
-  let empty=true;const h=setup({onCompile:async()=>empty?{empty:true}:{pdf:bytes(1)}});
+  let empty=true;const pdf=new Uint8Array(2048);pdf[pdf.length-1]=1;
+  const h=setup({onCompile:async()=>empty?{empty:true}:{pdf}});
   try {h.auto(false);await h.ui.compile();
-    assert.equal(h.q('sheet').dataset.state,'empty');assert.equal(h.q('preview-status-text').textContent,'Up to date');assert.equal(h.q('panel').hidden,true);assert.equal(h.q('toast').hidden,true);assert.equal(h.a('download-pdf').disabled,true);
+    assert.equal(h.q('sheet').dataset.state,'empty');assert.equal(h.q('preview-status-text').textContent,'Up to date');assert.equal(h.q('panel').hidden,true);assert.equal(h.q('toast').hidden,true);assert.equal(h.a('download-pdf').disabled,true);assert.equal(h.q('stat-doc').textContent,'');
     h.edit('text');assert.equal(h.q('preview-status-text').textContent,'Out of date');empty=false;await h.ui.compile();
-    assert.equal(h.q('preview-viewport').textContent,'PDF 1');assert.equal(h.q('sheet'),null);assert.equal(h.a('download-pdf').disabled,false);
+    assert.equal(h.q('preview-viewport').textContent,'PDF 1');assert.equal(h.q('sheet'),null);assert.equal(h.a('download-pdf').disabled,false);assert.match(h.q('stat-doc').textContent,/2\.0 KB/);
     h.ui.project.load({files:[{path:'main.tex',text:'other project'}]});
-    assert.ok(h.q('sheet'),'the previous project\'s pages are gone');assert.equal(h.q('preview-status-text').textContent,'Not compiled');assert.equal(h.a('download-pdf').disabled,true);assert.equal(h.ui.getState().pdfRevision,-1);
+    assert.ok(h.q('sheet'),'the previous project\'s pages are gone');assert.equal(h.q('preview-status-text').textContent,'Not compiled');assert.equal(h.a('download-pdf').disabled,true);assert.equal(h.ui.getState().pdfRevision,-1);assert.equal(h.q('stat-doc').textContent,'');
     empty=true;await h.ui.compile();assert.equal(h.q('sheet').dataset.state,'empty');
     h.ui.setError(new Error('boom'));assert.equal(h.q('sheet').dataset.state,'failed');h.q('sheet').querySelector('[data-action="show-problems"]').click();assert.equal(h.q('panel').hidden,false);}finally{h.cleanup();}
 });

@@ -26,17 +26,12 @@ const shapes={
   sidebar:stroke('M2 3h12v10H2zM6 3v10'),
   plus:stroke('M8 3.5v9M3.5 8h9'),
   minus:stroke('M3.5 8h9'),
-  fit:stroke('M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10'),
   trash:stroke('M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.75h5.8l.6-8.75M6.8 7v3.75M9.2 7v3.75'),
   edit:stroke('M2.75 13.25l.6-2.9L11 2.7l2.3 2.3-7.65 7.65zM9.6 4.1l2.3 2.3'),
-  star:stroke('M8 2l1.8 3.75 4.1.55-3 2.85.75 4.1L8 11.25l-3.65 2 .75-4.1-3-2.85 4.1-.55z'),
-  check:stroke('M3.25 8.5l3 3 6.5-7'),
   warning:stroke('M8 2.4 14.2 13H1.8zM8 6.6v3')+dot(8,11.3,.8),
   error:ring(8,8,6)+stroke('M6 6l4 4M10 6l-4 4'),
   info:ring(8,8,6)+stroke('M8 7.4v3.4')+dot(8,5.3,.8),
-  log:stroke('M2 3h12v10H2zM4.75 6.5l2 2-2 2M8.25 10.5h3'),
   archive:stroke('M2.5 3h11v3h-11zM3.5 6v7h9V6M6.5 8.75h3'),
   template:stroke('M2.5 2.5h11v11h-11zM2.5 6h11M6.5 6v7.5'),
-  spinner:'<path d="M8 2a6 6 0 1 0 6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
 };
 export const icon=(name,size=16)=>`<svg class="icon icon-${name}" viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true">${shapes[name]||''}</svg>`;

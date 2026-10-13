@@ -50,7 +50,7 @@ export function createMathPopover({typeset,t}){
     show(result||{state:'unavailable'});place();
   }
   return {
-    el,update,place,
+    update,place,
     hide(){queued=null;sequence++;hide();dismissed=null;},
     /** Escape: stay hidden until the caret leaves this formula. */
     dismiss(){if(el.hidden)return false;dismissed=key;queued=null;sequence++;el.hidden=true;return true;},

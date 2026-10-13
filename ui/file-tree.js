@@ -121,7 +121,7 @@ export function createFileTree({el,host,project,t,actions}){
     catch(error){actions.notify(error.message==='exists'?'toast.exists':'toast.badName',{name:basename(from)});}
   });
   return {
-    render,create,menu,
+    render,create,
     /** Highlight the file shown in the editor and make sure its folders are open. */
     setActive(path){active=path;if(path){selected=path;expandTo(path);}render();},
     /** Folder that new or uploaded files should land in, from the current selection. */

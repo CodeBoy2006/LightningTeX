@@ -114,7 +114,7 @@ export function mountEditor(options={}){
   const settings=loadSettings(),i18n=createI18n(settings.lang),t=i18n.t,project=createProject();
   settings.panel=false; // The problems panel opens on demand; it never starts open.
   const state={revision:0,filesRev:0,pdfRevision:-1,previewRevision:-1,engine:'loading',progress:null,loaded:false,
-    compiling:false,busy:false,pdf:null,meta:null,empty:false,run:0,logs:[],problems:[],failed:false,live:null,marker:null,dirty:false,save:'off',destroyed:false};
+    compiling:false,busy:false,pdf:null,meta:null,run:0,logs:[],problems:[],failed:false,live:null,marker:null,dirty:false,save:'off',destroyed:false};
   const views=new Map(),removers=[];
   let tabs=[],active=null,compileTimer,busyTimer,zoomTimer,saveTimer,rendererAbort,pdfSequence=0,store=null,saving=false,restoring=false,storageWarned=false;
   let pending=emptyPending(),panelAuto=false;
@@ -217,7 +217,7 @@ export function mountEditor(options={}){
     const bar=$('load-bar');bar.hidden=!loading;bar.dataset.mode=percent==null?'indeterminate':'determinate';bar.firstChild.style.width=percent==null?'':percent+'%';
     const sheet=$('sheet');
     if(sheet){
-      sheet.dataset.state=loading||state.busy?'loading':state.failed||failed?'failed':state.empty?'empty':'idle';
+      sheet.dataset.state=loading||state.busy?'loading':state.failed||failed?'failed':!state.pdf&&state.pdfRevision>=0?'empty':'idle';
       $('sheet-note').textContent=text||(state.failed?t('preview.failed'):'');action('show-problems').hidden=!state.failed;
     }
   }
@@ -229,7 +229,7 @@ export function mountEditor(options={}){
   function updateSave(){$('save-status').textContent=t('save.'+state.save);$('save-status').dataset.state=state.save;}
   function updateDoc(){
     const meta=state.meta;
-    $('stat-doc').textContent=!meta?'':[meta.pages?(meta.pages===1?t('page'):t('pages',{n:meta.pages})):null,Number.isFinite(meta.bytes)?`${(meta.bytes/1024).toFixed(1)} KB`:null,Number.isFinite(meta.durationMs)?`${(meta.durationMs/1000).toFixed(2)} s`:null].filter(Boolean).join(' · ');
+    $('stat-doc').textContent=!meta?'':[meta.pages?(meta.pages===1?t('page'):t('pages',{n:meta.pages})):null,`${(state.pdf.byteLength/1024).toFixed(1)} KB`,Number.isFinite(meta.durationMs)?`${(meta.durationMs/1000).toFixed(2)} s`:null].filter(Boolean).join(' · ');
   }
   function refreshText(){
     i18n.apply(root);renderSettings();renderTabs();tree.render();renderProblems();updateControls();updateEngine();updateLive();updateSave();updateDoc();updateZoomLabel();
@@ -399,7 +399,7 @@ export function mountEditor(options={}){
   /** Drop the PDF and show the stand-in page; revision >= 0 marks an empty document as current. */
   function showSheet(revision=-1){
     ++pdfSequence;rendererAbort?.abort();if(state.pdfUrl)URL.revokeObjectURL(state.pdfUrl);
-    state.pdf=state.pdfUrl=state.meta=null;state.pdfRevision=state.previewRevision=revision;state.empty=revision>=0;
+    state.pdf=state.pdfUrl=state.meta=null;state.pdfRevision=state.previewRevision=revision;
     if(!$('sheet')){viewport.innerHTML=SHEET;i18n.apply(viewport);}
     action('download-pdf').disabled=true;marker.remove();updateDoc();updateStatus();updateEngine();updatePage();
   }
@@ -451,8 +451,8 @@ export function mountEditor(options={}){
       if(state.pdfUrl)URL.revokeObjectURL(state.pdfUrl);state.pdfUrl=newUrl;
       const scroll=viewport.scrollTop;
       viewport.replaceChildren(container);viewport.scrollTop=scroll;
-      state.pdf=data;state.empty=false;state.pdfRevision=metadata.revision??state.revision;state.previewRevision=state.pdfRevision;
-      state.meta={pages:metadata.pages??rendered?.pages,durationMs:metadata.durationMs,bytes:data.byteLength};
+      state.pdf=data;state.pdfRevision=metadata.revision??state.revision;state.previewRevision=state.pdfRevision;
+      state.meta={pages:metadata.pages??rendered?.pages,durationMs:metadata.durationMs};
       action('download-pdf').disabled=false;
       updateDoc();updateStatus();updatePage();updateZoomLabel();placeMarker();
     }catch(error){if(newUrl)URL.revokeObjectURL(newUrl);if(sequence===pdfSequence&&!state.destroyed)api.setError(new Error(`PDF preview could not be rendered: ${error.message||error}`));}
@@ -573,7 +573,6 @@ export function mountEditor(options={}){
   listen(action('project-menu'),'click',projectMenu);
   listen($('file-input'),'change',()=>{const files=[...$('file-input').files];$('file-input').value='';if(files.length)void upload(files,state.uploadDir||'');});
   listen($('zip-input'),'change',()=>{const file=$('zip-input').files[0];$('zip-input').value='';if(file)void importArchive(file);});
-  listen($('tree'),'contextmenu',event=>{if(event.target===$('tree')){event.preventDefault();tree.menu(null,{x:event.clientX,y:event.clientY});}});
   listen($('tabs'),'click',event=>{const tab=event.target.closest('.tab');if(!tab)return;if(event.target.closest('.tab-close'))closeTab(tab.dataset.path,true);else openFile(tab.dataset.path,{focus:true});});
   listen($('tabs'),'auxclick',event=>{const tab=event.target.closest('.tab');if(tab&&event.button===1){event.preventDefault();closeTab(tab.dataset.path);}});
   listen($('tabs'),'keydown',event=>{
@@ -657,7 +656,7 @@ export function mountEditor(options={}){
     setSource(source){project.write(project.main||'main.tex',String(source));if(!active&&project.main)openFile(project.main);},
     getSource:mainText,
     getState:()=>({source:mainText(),root:project.main,revision:state.revision,filesRev:state.filesRev,ready:state.engine==='ready',compiling:state.compiling,pdfRevision:state.pdfRevision,previewRevision:state.previewRevision,
-      filename:project.main,active,zoom:settings.zoom}),
+      active,zoom:settings.zoom}),
     getSettings:()=>({...settings}),
     setLivePages({canvases,revision,durationMs}){
       if(state.destroyed||revision!==state.revision)return false;
