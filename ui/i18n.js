@@ -71,7 +71,7 @@ export function createI18n(preference='auto'){
   /** Refresh every tagged element below root. */
   const apply=root=>{
     for(const node of root.querySelectorAll('[data-i18n]'))node.textContent=t(node.dataset.i18n);
-    for(const node of root.querySelectorAll('[data-i18n-title]')){const text=t(node.dataset.i18nTitle)+(node.dataset.keys?` (${node.dataset.keys})`:'');node.title=text;node.setAttribute('aria-label',t(node.dataset.i18nTitle));}
+    for(const node of root.querySelectorAll('[data-i18n-title]')){const text=t(node.dataset.i18nTitle);node.title=text+(node.dataset.keys?` (${node.dataset.keys})`:'');node.setAttribute('aria-label',text);}
   };
   return {t,set,apply,get lang(){return lang;}};
 }

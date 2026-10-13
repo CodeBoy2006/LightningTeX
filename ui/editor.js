@@ -113,7 +113,7 @@ export function mountEditor(options={}){
   if(!root)throw new Error('LightningTeX needs a root element');
   const settings=loadSettings(),i18n=createI18n(settings.lang),t=i18n.t,project=createProject();
   settings.panel=false; // The problems panel opens on demand; it never starts open.
-  const state={revision:0,filesRev:0,pdfRevision:-1,previewRevision:-1,ready:false,engine:'loading',progress:null,loaded:false,
+  const state={revision:0,filesRev:0,pdfRevision:-1,previewRevision:-1,engine:'loading',progress:null,loaded:false,
     compiling:false,busy:false,pdf:null,meta:null,empty:false,run:0,logs:[],problems:[],failed:false,live:null,marker:null,dirty:false,save:'off',destroyed:false};
   const views=new Map(),removers=[];
   let tabs=[],active=null,compileTimer,busyTimer,zoomTimer,saveTimer,rendererAbort,pdfSequence=0,store=null,saving=false,restoring=false,storageWarned=false;
@@ -207,7 +207,7 @@ export function mountEditor(options={}){
   }
   function updateControls(){
     const run=action('compile'),stop=action('cancel');
-    run.disabled=!state.ready||!state.loaded||state.compiling||!project.main;run.hidden=state.busy;stop.hidden=!state.busy;
+    run.disabled=state.engine!=='ready'||!state.loaded||state.compiling||!project.main;run.hidden=state.busy;stop.hidden=!state.busy;
     updateStatus();
   }
   function updateEngine(){
@@ -244,9 +244,15 @@ export function mountEditor(options={}){
   }
   function openPanel(tab=settings.panelTab){set('panelTab',tab);set('panel',true);}
   function renderProblems(){
-    const list=$('problems'),counts={error:0,warning:0,info:0};list.replaceChildren();
+    const list=$('problems'),counts={error:0,warning:0,info:0},marksByFile=new Map(),rank={error:3,warning:2,info:1};list.replaceChildren();
     for(const problem of state.problems){
       counts[problem.severity]=(counts[problem.severity]||0)+1;
+      if(problem.line){
+        let marks=marksByFile.get(problem.file);
+        if(!marks)marksByFile.set(problem.file,marks=new Map());
+        // The worst problem on a line decides its gutter mark.
+        if((rank[marks.get(problem.line)]||0)<rank[problem.severity])marks.set(problem.line,problem.severity);
+      }
       const row=Object.assign(document.createElement('button'),{type:'button',className:'problem'});row.dataset.severity=problem.severity;
       row.innerHTML=`${icon(problem.severity==='error'?'error':problem.severity==='warning'?'warning':'info',14)}<span class="problem-text"></span><span class="problem-where"></span>`;
       row.children[1].textContent=problem.message;row.children[2].textContent=[problem.file,problem.line].filter(value=>value!=null).join(':');
@@ -260,10 +266,7 @@ export function mountEditor(options={}){
     stat.children[1].textContent=String(counts.error);stat.children[3].textContent=String(counts.warning);stat.dataset.state=counts.error?'error':counts.warning?'warning':'';
     for(const [path,view] of views){
       if(!view.editor)continue;
-      // The worst problem on a line decides its gutter mark.
-      const marks=new Map(),rank={error:3,warning:2,info:1};
-      for(const problem of state.problems)if(problem.file===path&&problem.line&&(rank[marks.get(problem.line)]||0)<rank[problem.severity])marks.set(problem.line,problem.severity);
-      view.editor.setMarkers(marks);
+      view.editor.setMarkers(marksByFile.get(path)||new Map());
     }
   }
   const log=(message,level='info')=>{
@@ -366,7 +369,7 @@ export function mountEditor(options={}){
   const finishRun=()=>{state.compiling=false;clearTimeout(busyTimer);state.busy=false;updateControls();updateEngine();};
   async function compile(reason='manual'){
     clearTimeout(compileTimer);compileTimer=null;
-    if(!state.ready||!state.loaded||state.compiling||state.destroyed||!project.main)return;
+    if(state.engine!=='ready'||!state.loaded||state.compiling||state.destroyed||!project.main)return;
     const run=++state.run,revision=state.revision,main=project.main,began=performance.now();
     state.compiling=true;
     // Local updates finish within a frame or two; only a real wait shows the busy state.
@@ -504,7 +507,7 @@ export function mountEditor(options={}){
     toast(t('toast.uploaded',{n:added}),{label:t('common.undo'),run:()=>{for(const step of undo.reverse())step();}});
   }
   async function replaceProject(data){
-    if(project.paths().length&&!await confirmDialog(app,{title:t('project.replaceTitle'),message:t('project.replaceBody'),confirm:t('project.replace'),cancel:t('common.cancel'),danger:true}))return false;
+    if(project.files().length&&!await confirmDialog(app,{title:t('project.replaceTitle'),message:t('project.replaceBody'),confirm:t('project.replace'),cancel:t('common.cancel'),danger:true}))return false;
     project.load(data);if(project.main)openFile(project.main);
     return true;
   }
@@ -515,7 +518,7 @@ export function mountEditor(options={}){
       // Archives usually wrap everything in one folder; open it.
       const top=entries[0]?.path.split('/')[0];
       if(entries.length&&entries.every(entry=>entry.path.startsWith(top+'/')))entries=entries.map(entry=>({...entry,path:entry.path.slice(top.length+1)}));
-      if(await replaceProject({files:entries.map(entry=>{const text=decodeText(entry.data);return text==null?entry:{path:entry.path,text};})}))notify('toast.imported',{n:project.paths().length});
+      if(await replaceProject({files:entries.map(entry=>{const text=decodeText(entry.data);return text==null?entry:{path:entry.path,text};})}))notify('toast.imported',{n:project.files().length});
     }catch(error){notify('toast.zip',{message:error.message||error});}
   }
   function remove(path){
@@ -527,7 +530,7 @@ export function mountEditor(options={}){
     openMenu(app,action('project-menu').getBoundingClientRect(),[{heading:t('project.template')},
       ...TEMPLATES.map(template=>({label:template.name[i18n.lang]||template.name.en,icon:'template',run:()=>void replaceProject(templateProject(template))})),'separator',
       {label:t('project.import'),icon:'archive',run:()=>$('zip-input').click()},
-      {label:t('project.export'),icon:'download',disabled:!project.paths().length,run:()=>download(zip(project.files().map(file=>({path:file.path,data:fileBytes(file)}))),(project.main?basename(project.main).replace(/\.tex$/i,''):'project')+'.zip','application/zip')}]);
+      {label:t('project.export'),icon:'download',disabled:!project.files().length,run:()=>download(zip(project.files().map(file=>({path:file.path,data:fileBytes(file)}))),(project.main?basename(project.main).replace(/\.tex$/i,''):'project')+'.zip','application/zip')}]);
   }
   const tree=createFileTree({el:$('tree'),host:app,project,t,actions:{open:path=>{openFile(path,{focus:true});if(narrowQuery?.matches)toggleSidebar(false);},remove,download:downloadFile,upload:(files,dir)=>void upload(files,dir),notify,
     pick:dir=>{state.uploadDir=dir;$('file-input').click();}}});
@@ -653,7 +656,7 @@ export function mountEditor(options={}){
     /** Replace the main file's text. */
     setSource(source){project.write(project.main||'main.tex',String(source));if(!active&&project.main)openFile(project.main);},
     getSource:mainText,
-    getState:()=>({source:mainText(),root:project.main,revision:state.revision,filesRev:state.filesRev,ready:state.ready,compiling:state.compiling,pdfRevision:state.pdfRevision,previewRevision:state.previewRevision,
+    getState:()=>({source:mainText(),root:project.main,revision:state.revision,filesRev:state.filesRev,ready:state.engine==='ready',compiling:state.compiling,pdfRevision:state.pdfRevision,previewRevision:state.previewRevision,
       filename:project.main,active,zoom:settings.zoom}),
     getSettings:()=>({...settings}),
     setLivePages({canvases,revision,durationMs}){
@@ -666,7 +669,7 @@ export function mountEditor(options={}){
       updateStatus();return true;
     },
     setEngineStatus({status='loading',progress}={}){
-      state.ready=status==='ready';state.engine=status;state.progress=Number.isFinite(progress)?clamp(progress,0,1):null;
+      state.engine=status;state.progress=Number.isFinite(progress)?clamp(progress,0,1):null;
       updateControls();updateEngine();
     },
     setError(error,{quiet=false}={}){

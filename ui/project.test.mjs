@@ -32,6 +32,14 @@ test('every write gets a new revision; text and bytes are told apart',()=>{
   assert.equal(decodeText(new TextEncoder().encode('héllo 中文')),'héllo 中文');assert.equal(decodeText(new Uint8Array([137,80,78,71,0])),null);assert.equal(decodeText(new Uint8Array([0xff,0xfe])),null);
   project.write('f.png',new Uint8Array([1,2]));assert.deepEqual([...fileBytes(project.get('f.png'))],[1,2]);assert.deepEqual([...fileBytes(project.get('a.tex'))],[121]);
 });
+test('folder membership distinguishes file ancestors from explicit nested folders',()=>{
+ const project=createProject();project.mkdir('empty/nested');project.write('chapters/deep/a.tex','A');
+ for(const path of ['empty/nested','chapters','chapters/deep'])assert.equal(project.isFolder(path),true,path);
+ for(const path of ['empty','chapter','chapters/deep/a.tex','chapters/','',null,undefined,{},Symbol('chapters')])assert.equal(project.isFolder(path),false);
+ assert.throws(()=>project.write('chapters','conflict'),/exists/);
+ project.write('main.tex','');assert.throws(()=>project.rename('main.tex','chapters/deep'),/exists/);
+ project.remove('chapters/deep/a.tex');assert.equal(project.isFolder('chapters'),false);assert.equal(project.isFolder('empty/nested'),true);
+});
 
 const classes=(text,state)=>{const result=tokenizeLine(text,state);return [result.tokens.map(([name,part])=>name?`${name}:${part}`:part),result.state];};
 test('tokens rebuild the line exactly and classify commands, math and comments',()=>{

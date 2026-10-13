@@ -9,10 +9,19 @@ const fileIcon=path=>isImagePath(path)?'image':/\.(tex|sty|cls|bib|ltx)$/i.test(
 export function createFileTree({el,host,project,t,actions}){
   const collapsed=new Set();let selected=null,active=null,renaming=null;
   const rows=()=>{
-    const folders=project.folders(),files=project.paths(),out=[];
+    const children=new Map(),out=[];
+    const add=(path,folder)=>{
+      const dir=dirname(path);let group=children.get(dir);
+      if(!group)children.set(dir,group=[]);
+      group.push({path,folder});
+    };
+    for(const path of project.folders())add(path,true);
+    for(const path of project.paths())add(path,false);
     const walk=(dir,depth)=>{
-      for(const folder of folders)if(dirname(folder)===dir){out.push({path:folder,folder:true,depth});if(!collapsed.has(folder))walk(folder,depth+1);}
-      for(const file of files)if(dirname(file)===dir)out.push({path:file,folder:false,depth});
+      for(const row of children.get(dir)||[]){
+        out.push({...row,depth});
+        if(row.folder&&!collapsed.has(row.path))walk(row.path,depth+1);
+      }
     };
     walk('',0);return out;
   };
@@ -60,7 +69,7 @@ export function createFileTree({el,host,project,t,actions}){
   function create(folder,dir=''){
     try{
       const path=folder?project.mkdir(project.unique(dir,'folder')):project.write(project.unique(dir,'untitled.tex'),'');
-      collapsed.delete(dir);expandTo(path);selected=path;renaming=path;render();
+      expandTo(path);selected=path;renaming=path;render();
     }catch{actions.notify('toast.badName');}
   }
   const rename=path=>{renaming=path;selected=path;render();};

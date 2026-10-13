@@ -29,6 +29,11 @@ export function createProject(){
     for(const path of files.keys())for(let dir=dirname(path);dir;dir=dirname(dir))all.add(dir);
     return all;
   };
+  function isFolder(path){
+    if(folders.has(path))return true;
+    if(typeof path==='string')for(const file of files.keys())if(file.startsWith(path+'/'))return true;
+    return false;
+  }
   const pickMain=()=>{
     const candidates=[...files.keys()].filter(canBeMain).sort(collator.compare);
     return candidates.find(path=>/\\documentclass/.test(files.get(path).text||''))??candidates[0]??null;
@@ -37,14 +42,14 @@ export function createProject(){
     get main(){return main;},
     on(listener){listeners.add(listener);return ()=>listeners.delete(listener);},
     has:path=>files.has(path),get:path=>files.get(path),
-    isFolder:path=>allFolders().has(path),
+    isFolder,
     paths:()=>[...files.keys()].sort(collator.compare),
     folders:()=>[...allFolders()].sort(collator.compare),
     explicitFolders:()=>[...folders],
     files:()=>[...files.values()],
     write(path,content,origin){
       const target=normalizePath(path),existed=files.has(target);
-      if(allFolders().has(target))throw Error('exists');
+      if(isFolder(target))throw Error('exists');
       files.set(target,record(target,content));
       if(!main)main=pickMain();
       emit({type:existed?'write':'create',path:target,origin});
@@ -68,7 +73,7 @@ export function createProject(){
     rename(from,to){
       const target=normalizePath(to);
       if(target===from)return target;
-      if(files.has(target)||allFolders().has(target))throw Error('exists');
+      if(files.has(target)||isFolder(target))throw Error('exists');
       if(under(target,from))throw Error('Unsafe project path');
       const moved=[];
       for(const file of [...files.values()])if(under(file.path,from)){

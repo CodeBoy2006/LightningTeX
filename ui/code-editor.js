@@ -88,7 +88,7 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
   function cursor(){
     const offset=input.selectionEnd,{line,col}=locate(offset);
     if(line!==active){const previous=active;active=line;decorate(previous);decorate(line);}
-    onCursor?.({offset,start:input.selectionStart,line:line+1,col:col+1,length:text.length});
+    onCursor?.({offset,line:line+1,col:col+1});
   }
   function sync(silent=false){
     const current=input.value;
@@ -110,20 +110,22 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
     if(to<0)to=text.length;
     return [from,to];
   };
-  function indent(outdent){
-    const start=input.selectionStart,end=input.selectionEnd,unit=' '.repeat(options.tabSize);
-    if(start===end&&!outdent){edit(start,end,unit);return;}
-    const [from,to]=lineRange(start,end),block=text.slice(from,to).split('\n');
-    const changed=block.map(line=>outdent?line.replace(new RegExp(`^(?: {1,${options.tabSize}}|\\t)`),''):line?unit+line:line);
+  function editLines(transform){
+    const start=input.selectionStart,end=input.selectionEnd,[from,to]=lineRange(start,end),block=text.slice(from,to).split('\n');
+    const changed=transform(block);
     const replacement=changed.join('\n'),first=changed[0].length-block[0].length,total=replacement.length-(to-from);
     edit(from,to,replacement,Math.max(from,start+first),Math.max(from,end+total));
   }
+  function indent(outdent){
+    const start=input.selectionStart,end=input.selectionEnd,unit=' '.repeat(options.tabSize);
+    if(start===end&&!outdent){edit(start,end,unit);return;}
+    editLines(block=>block.map(line=>outdent?line.replace(new RegExp(`^(?: {1,${options.tabSize}}|\\t)`),''):line?unit+line:line));
+  }
   function toggleComment(){
-    const start=input.selectionStart,end=input.selectionEnd,[from,to]=lineRange(start,end),block=text.slice(from,to).split('\n');
-    const filled=block.filter(line=>line.trim()),off=filled.length>0&&filled.every(line=>/^\s*%/.test(line));
-    const changed=block.map(line=>!line.trim()?line:off?line.replace(/^(\s*)% ?/,'$1'):line.replace(/^(\s*)/,'$1% '));
-    const replacement=changed.join('\n'),first=changed[0].length-block[0].length,total=replacement.length-(to-from);
-    edit(from,to,replacement,Math.max(from,start+first),Math.max(from,end+total));
+    editLines(block=>{
+      const filled=block.filter(line=>line.trim()),off=filled.length>0&&filled.every(line=>/^\s*%/.test(line));
+      return block.map(line=>!line.trim()?line:off?line.replace(/^(\s*)% ?/,'$1'):line.replace(/^(\s*)/,'$1% '));
+    });
   }
   function newline(){
     const start=input.selectionStart,end=input.selectionEnd,from=text.lastIndexOf('\n',start-1)+1,before=text.slice(from,start);

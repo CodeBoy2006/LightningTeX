@@ -40,6 +40,17 @@ test('repeat compilation replaces PDF and manual requests do not overlap',async(
   let calls=0;const wait=deferred();const h=setup({onCompile:async()=>{calls++;if(calls===1)await wait.promise;return {pdf:bytes(calls)};}});
   try {const first=h.ui.compile();await h.ui.compile();assert.equal(calls,1);wait.resolve();await first;await h.ui.compile();assert.equal(calls,2);assert.deepEqual(h.rendered,[1,2]);assert.equal(h.q('preview-status-text').textContent,'Up to date');}finally{h.cleanup();}
 });
+test('readiness and compile controls follow the engine status',async()=>{
+  let calls=0;const h=setup({onCompile:async()=>{calls++;}});
+  try {
+    for(const status of ['loading','error']){
+      h.ui.setEngineStatus({status});assert.equal(h.ui.getState().ready,false);assert.equal(h.a('compile').disabled,true);
+      await h.ui.compile();assert.equal(calls,0);
+    }
+    h.ui.setEngineStatus({status:'ready'});assert.equal(h.ui.getState().ready,true);assert.equal(h.a('compile').disabled,false);
+    await h.ui.compile();assert.equal(calls,1);
+  }finally{h.cleanup();}
+});
 
 test('cancellation ignores stale response and allows a fresh compilation',async()=>{
   const first=deferred();let calls=0,cancels=0;const h=setup({onCancel:()=>cancels++,onCompile:()=>++calls===1?first.promise:Promise.resolve({pdf:bytes(2)})});
@@ -223,6 +234,30 @@ test('deleting a file closes its tab and can be undone; renaming keeps the tab',
     h.q('toast').querySelector('button').click();assert.equal(h.ui.project.get('sub/b.tex').text,'A');
     h.ui.project.remove('main.tex');assert.equal(h.ui.getState().root,null);assert.equal(h.a('compile').disabled,true);assert.equal(h.q('stat-engine').textContent,'No main file');}finally{h.cleanup();}
 });
+test('file tree keeps folder-first natural order, depth and collapsed descendants',()=>{
+  const h=setup();
+  try {
+    h.auto(false);h.ui.project.load({folders:['empty','orphan/nested'],files:[
+      {path:'z.tex',text:'Z'},{path:'chapters/10.tex',text:'10'},{path:'chapters/deep/a.tex',text:'A'},
+      {path:'main.tex',text:''},{path:'chapters/2.tex',text:'2'}]});
+    const rows=()=>[...h.q('tree').children].map(row=>[row.dataset.path,Number(row.style.getPropertyValue('--depth'))]);
+    const expected=[['chapters',0],['chapters/deep',1],['chapters/deep/a.tex',2],['chapters/2.tex',1],['chapters/10.tex',1],['empty',0],['main.tex',0],['z.tex',0]];
+    assert.deepEqual(rows(),expected);
+    h.event(h.q('tree').firstChild,'keydown',{key:'ArrowLeft'});
+    assert.deepEqual(rows(),[['chapters',0],['empty',0],['main.tex',0],['z.tex',0]]);
+    h.ui.openFile('chapters/deep/a.tex');assert.deepEqual(rows(),expected);
+  }finally{h.cleanup();}
+});
+test('indent and comment edits share selection bounds without including the following line',()=>{
+  const source='alpha\n\n beta\ngamma',h=setup({source});
+  try {
+    h.auto(false);const input=h.q('source');input.focus();input.setSelectionRange(1,13);
+    h.event(input,'keydown',{key:'Tab'});assert.equal(input.value,'  alpha\n\n   beta\ngamma');assert.deepEqual([input.selectionStart,input.selectionEnd],[3,17]);
+    h.event(input,'keydown',{key:'Tab',shiftKey:true});assert.equal(input.value,source);assert.deepEqual([input.selectionStart,input.selectionEnd],[1,13]);
+    h.event(input,'keydown',{key:'/',ctrlKey:true});assert.equal(input.value,'% alpha\n\n % beta\ngamma');assert.deepEqual([input.selectionStart,input.selectionEnd],[3,17]);
+    h.event(input,'keydown',{key:'/',ctrlKey:true});assert.equal(input.value,source);assert.deepEqual([input.selectionStart,input.selectionEnd],[1,13]);
+  }finally{h.cleanup();}
+});
 
 test('typed brackets pair, closers are typed over, and a closing dollar is not doubled',()=>{
   const h=setup();
@@ -245,6 +280,22 @@ test('problems list jumps to the file and line; gutter marks follow the file',()
     const rows=h.q('problems').querySelectorAll('.problem');assert.equal(rows[2].disabled,true);rows[0].click();
     assert.equal(h.ui.getState().active,'part.tex');assert.equal(h.q('source').selectionStart,2);assert.deepEqual(marked(),['','mark-error flash']);
     h.ui.setProblems([]);assert.equal(h.q('problems').textContent,'No problems');assert.deepEqual(marked(),['','flash']);}finally{h.cleanup();}
+});
+test('gutter marks retain the worst severity per file and clear every open editor',()=>{
+  const h=setup({source:'one\ntwo'});
+  try {
+    h.auto(false);h.ui.project.write('part.tex','part');h.ui.openFile('part.tex');h.ui.openFile('main.tex');
+    h.ui.setProblems([
+      {file:'main.tex',line:1,severity:'warning',message:'warning'},
+      {file:'main.tex',line:1,severity:'error',message:'error'},
+      {file:'main.tex',line:1,severity:'info',message:'info'},
+      {file:'main.tex',line:0,severity:'error',message:'no line'},
+      {file:'part.tex',line:1,severity:'info',message:'part info'},
+      {file:'part.tex',line:1,severity:'warning',message:'part warning'}]);
+    const shown=()=>[...h.root.querySelectorAll('.view:not([hidden]) .cl')].map(line=>[...line.classList].filter(name=>name.startsWith('mark-')));
+    assert.deepEqual(shown(),[['mark-error'],[]]);h.ui.openFile('part.tex');assert.deepEqual(shown(),[['mark-warning']]);
+    h.ui.setProblems([]);assert.equal(h.root.querySelectorAll('.mark-error,.mark-warning,.mark-info').length,0);
+  }finally{h.cleanup();}
 });
 
 test('settings apply at once, persist, and reject corrupt stored values',()=>{
