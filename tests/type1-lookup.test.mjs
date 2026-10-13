@@ -1,20 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
-import {Worker as NodeWorker} from 'node:worker_threads';
-import {fileURLToPath} from 'node:url';
+import {BrowserWorker,loadSupportFiles} from './runtime-helpers.mjs';
 import {BackgroundEngine} from '../core/engine-client.js';
 
 test('Type 1 descriptors resolve only requested fonts and cache hits and misses', {timeout:60000}, async()=>{
- const base=new URL('../public/',import.meta.url),files={};
- for(const name of ['rtex-json.lua','rtex-dl.lua','rtex-dl-bin.lua','rtex-capture.lua','rtex-serve.lua','rtex-pic.lua','latex/rtex-capture.sty','latex/rtex-pic.tex','latex/rtex-serve-patches.tex'])
-  files[name]=await fs.readFile(new URL('rtex/'+name,base),'utf8');
+ const base=new URL('../public/',import.meta.url),files=await loadSupportFiles(base);
  const priorWorker=globalThis.Worker;
- globalThis.Worker=class {
-  constructor(url){this.worker=new NodeWorker(new URL('worker-harness.cjs',import.meta.url),{workerData:{script:fileURLToPath(url)}});this.worker.on('message',data=>this.onmessage?.({data}));this.worker.on('error',error=>this.onerror?.(error));}
-  postMessage(data){this.worker.postMessage(data);}
-  terminate(){void this.worker.terminate();}
- };
+ globalThis.Worker=BrowserWorker;
  const engine=new BackgroundEngine({base,files});
  try {
   const result=await engine.compile(String.raw`\documentclass{article}

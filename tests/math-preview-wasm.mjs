@@ -1,21 +1,14 @@
 // Real formula previews with the TOC paragraph context used by the multi-file report.
-import {Worker as NodeWorker} from 'node:worker_threads';
-import fs from 'node:fs/promises';
-import {fileURLToPath} from 'node:url';
+import {BrowserWorker,loadSupportFiles} from './runtime-helpers.mjs';
 import assert from 'node:assert/strict';
 import {BackgroundEngine,LiveEngine} from '../core/engine-client.js';
 import {splitPreamble} from '../core/document.js';
-import {finalizeCapture,unitContext,liveUnitEligibility} from '../core/capture.js';
+import {unitContext,liveUnitEligibility} from '../core/capture.js';
 import {mathAt,previewSource,parseMacros,inkBounds} from '../core/math-preview.js';
 import {decodeDisplayList} from '../render/index.mjs';
 
-const root=new URL('../',import.meta.url),base=new URL('public/',root),files={};
-for(const name of ['rtex-json.lua','rtex-dl.lua','rtex-dl-bin.lua','rtex-capture.lua','rtex-serve.lua','rtex-pic.lua','latex/rtex-capture.sty','latex/rtex-pic.tex','latex/rtex-serve-patches.tex'])
- files[name]=await fs.readFile(new URL('rtex/'+name,base),'utf8');
-globalThis.Worker=class {
- constructor(url){this.w=new NodeWorker(new URL('worker-harness.cjs',import.meta.url),{workerData:{script:fileURLToPath(url)}});this.w.on('message',data=>this.onmessage?.({data}));this.w.on('error',e=>this.onerror?.(e));}
- postMessage(data){this.w.postMessage(data);}terminate(){void this.w.terminate();}
-};
+const base=new URL('../public/',import.meta.url),files=await loadSupportFiles(base);
+globalThis.Worker=BrowserWorker;
 const source=String.raw`\documentclass[11pt]{article}
 \usepackage{amsmath,amssymb}
 \input{macros}
@@ -27,7 +20,7 @@ const macros=String.raw`\newcommand{\R}{\mathbb{R}}`,paragraph=String.raw`We stu
 const project=[{path:'macros.tex',data:macros,rev:1},{path:'introduction.tex',data:'\\section{Introduction}\n'+paragraph+'\n',rev:1}];
 const bg=new BackgroundEngine({base,files}),live=new LiveEngine({base,files});
 try {
- const full=await bg.compile(source,{files:project}),capture=finalizeCapture(full.capture);
+ const full=await bg.compile(source,{files:project}),capture=full.capture;
  const borrowed=capture.units.find(unit=>unit.kind==='par'&&liveUnitEligibility(capture,unit).ok),context=unitContext(capture,borrowed);
  assert.match(borrowed.file,/\.toc$/,'reproduce the preview borrowing the first TOC paragraph');
  assert.equal(context.glues.parfillskip[1],0,'TOC paragraphs do not have normal final-line stretch');

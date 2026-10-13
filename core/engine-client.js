@@ -1,6 +1,6 @@
 import {splitPreamble,safeProjectPath} from './document.js';
 const encoder=new TextEncoder(),decoder=new TextDecoder();
-const TEX_FILES=['rtex-json.lua','rtex-dl.lua','rtex-dl-bin.lua','rtex-capture.lua','rtex-serve.lua','rtex-pic.lua','latex/rtex-capture.sty','latex/rtex-pic.tex','latex/rtex-serve-patches.tex'];
+export const TEX_FILES=['rtex-json.lua','rtex-dl.lua','rtex-dl-bin.lua','rtex-capture.lua','rtex-serve.lua','rtex-pic.lua','latex/rtex-capture.sty','latex/rtex-pic.tex','latex/rtex-serve-patches.tex'];
 export async function loadSupport(base){return Object.fromEntries(await Promise.all(TEX_FILES.map(async p=>{const r=await fetch(new URL('rtex/'+p,base));if(!r.ok)throw Error(`Missing rtex support: ${p}`);return [p,await r.text()]})))}
 export class BackgroundEngine {
  constructor({base,files,onLog=()=>{}}){Object.assign(this,{base,files,onLog});this.next=0;this.pending=new Map();this.generation=0;this.ready=null;this.worker=null;this.synced=new Map();this.root=null}

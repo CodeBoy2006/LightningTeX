@@ -1,24 +1,18 @@
 // Real persistent WASM edits, exact full-layout comparison, and real font outlines.
-import {Worker as NodeWorker} from 'node:worker_threads';
+import {BrowserWorker,loadSupportFiles} from './runtime-helpers.mjs';
 import fs from 'node:fs/promises';
-import {fileURLToPath} from 'node:url';
 import assert from 'node:assert/strict';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {createCanvas} from '@napi-rs/canvas';
 import {BackgroundEngine,LiveEngine} from '../core/engine-client.js';
 import {splitPreamble,captureSpans,findLiveEdit,acceptLiveEdit} from '../core/document.js';
-import {finalizeCapture,unitContext,liveUnitEligibility,compareUnitBaseline,fontKey} from '../core/capture.js';
+import {unitContext,liveUnitEligibility,compareUnitBaseline,fontKey} from '../core/capture.js';
 import {replaceUnitRows} from '../core/live-layout.js';
 import {decodeDisplayList,createDisplayListRenderer} from '../render/index.mjs';
 import {parseEngineFont} from '../render/type1-font.mjs';
 import {parseMacros} from '../core/math-preview.js';
-const root=new URL('../',import.meta.url),base=new URL('public/',root),files={};
-for(const name of ['rtex-json.lua','rtex-dl.lua','rtex-dl-bin.lua','rtex-capture.lua','rtex-serve.lua','rtex-pic.lua','latex/rtex-capture.sty','latex/rtex-pic.tex','latex/rtex-serve-patches.tex'])
- files[name]=await fs.readFile(new URL('rtex/'+name,base),'utf8');
-globalThis.Worker=class {
- constructor(url){this.w=new NodeWorker(new URL('worker-harness.cjs',import.meta.url),{workerData:{script:fileURLToPath(url)}});this.w.on('message',data=>this.onmessage?.({data}));this.w.on('error',e=>this.onerror?.(e));}
- postMessage(data){this.w.postMessage(data);}terminate(){void this.w.terminate();}
-};
+const root=new URL('../',import.meta.url),base=new URL('public/',root),files=await loadSupportFiles(base);
+globalThis.Worker=BrowserWorker;
 const fonts=new Map(),bg=new BackgroundEngine({base,files}),live=new LiveEngine({base,files,onFonts:items=>Object.entries(items).forEach(([key,value])=>fonts.set(key,value))});
 const renderer=createDisplayListRenderer({resolveFont:async name=>fonts.get(name),parseFont:(buffer,desc)=>parseEngineFont(buffer,desc,pdfjs)});
 const initial=String.raw`\documentclass{article}
@@ -58,7 +52,7 @@ A method yields $w=21$.
 \end{document}`;
 const ink=page=>[...(page.other||[]),...page.lines.flatMap(line=>line.items)].filter(item=>['g','r'].includes(item[0])).map(item=>item[0]==='g'?['g',fontKey(page.fonts[item[1]]),...item.slice(2)]:item);
 try {
- const full=await bg.compile(initial),capture=finalizeCapture(full.capture),state={source:initial,spans:captureSpans(initial,capture),macros:parseMacros(splitPreamble(initial).preamble)},proofs=new Map();
+ const full=await bg.compile(initial),capture=full.capture,state={source:initial,spans:captureSpans(initial,capture),macros:parseMacros(splitPreamble(initial).preamble)},proofs=new Map();
  let pages=full.pages;Object.entries(full.fonts).forEach(([key,value])=>fonts.set(key,value));
  await live.start(splitPreamble(initial).preamble+'\n\\RequirePackage{luatexbase}\n',full.aux,[],full.packageMisses);
  const generation=live.generation,times=[];

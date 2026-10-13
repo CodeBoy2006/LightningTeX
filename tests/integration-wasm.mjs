@@ -1,8 +1,8 @@
-import{Worker as NodeWorker}from'node:worker_threads';import fs from'node:fs/promises';import path from'node:path';import{pathToFileURL,fileURLToPath}from'node:url';import assert from'node:assert/strict';
+import{BrowserWorker,loadSupportFiles}from'./runtime-helpers.mjs';import fs from'node:fs/promises';import path from'node:path';import{pathToFileURL}from'node:url';import assert from'node:assert/strict';
 import{BackgroundEngine,LiveEngine}from'../core/engine-client.js';import{splitPreamble,findLiveEdit}from'../core/document.js';import{unitContext,liveUnitEligibility,compareUnitBaseline}from'../core/capture.js';import{decodeDisplayList,createDisplayListRenderer}from'../render/index.mjs';import{createCanvas}from'@napi-rs/canvas';import*as pdfjs from'pdfjs-dist/legacy/build/pdf.mjs';import{parseEngineFont}from'../render/type1-font.mjs';
 const root=path.resolve(import.meta.dirname,'..'),base=pathToFileURL(root+'/public/');
-global.Worker=class{constructor(url){this.w=new NodeWorker(path.join(import.meta.dirname,'worker-harness.cjs'),{workerData:{script:fileURLToPath(url)}});this.w.on('message',data=>this.onmessage?.({data}));this.w.on('error',e=>this.onerror?.(e))}postMessage(x){this.w.postMessage(x)}terminate(){void this.w.terminate()}};
-const files={};for(const name of ['rtex-json.lua','rtex-dl.lua','rtex-dl-bin.lua','rtex-capture.lua','rtex-serve.lua','rtex-pic.lua','latex/rtex-capture.sty','latex/rtex-pic.tex','latex/rtex-serve-patches.tex'])files[name]=await fs.readFile(root+'/public/rtex/'+name,'utf8');
+globalThis.Worker=BrowserWorker;
+const files=await loadSupportFiles(base);
 const {TEMPLATES}=await import('../ui/templates.js'),samples=TEMPLATES.map(template=>template.files[template.main]);
 const others=template=>Object.entries(template.files).filter(([name])=>name!==template.main).map(([name,data],rev)=>({path:name,data,rev}));
 const fonts=new Map(),bg=new BackgroundEngine({base,files}),live=new LiveEngine({base,files,onFonts:o=>{for(const[k,v]of Object.entries(o))fonts.set(k,v)}}),results=[];

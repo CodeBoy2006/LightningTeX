@@ -1,22 +1,16 @@
 // Real WASM: multi-file projects, error attribution, and standalone formula previews in the persistent engine.
-import {Worker as NodeWorker} from 'node:worker_threads';
+import {BrowserWorker,loadSupportFiles} from './runtime-helpers.mjs';
 import fs from 'node:fs/promises';
-import {fileURLToPath} from 'node:url';
 import assert from 'node:assert/strict';
 import {BackgroundEngine,LiveEngine} from '../core/engine-client.js';
 import {splitPreamble} from '../core/document.js';
-import {finalizeCapture,unitContext,liveUnitEligibility} from '../core/capture.js';
+import {unitContext,liveUnitEligibility} from '../core/capture.js';
 import {mathAt,previewSource,parseMacros,inkBounds} from '../core/math-preview.js';
 import {parseTexLog} from '../core/tex-log.js';
 import {decodeDisplayList} from '../render/index.mjs';
 import {TEMPLATES} from '../ui/templates.js';
-const root=new URL('../',import.meta.url),base=new URL('public/',root),files={};
-for(const name of ['rtex-json.lua','rtex-dl.lua','rtex-dl-bin.lua','rtex-capture.lua','rtex-serve.lua','rtex-pic.lua','latex/rtex-capture.sty','latex/rtex-pic.tex','latex/rtex-serve-patches.tex'])
- files[name]=await fs.readFile(new URL('rtex/'+name,base),'utf8');
-globalThis.Worker=class {
- constructor(url){this.w=new NodeWorker(new URL('worker-harness.cjs',import.meta.url),{workerData:{script:fileURLToPath(url)}});this.w.on('message',data=>this.onmessage?.({data}));this.w.on('error',e=>this.onerror?.(e));}
- postMessage(data){this.w.postMessage(data);}terminate(){void this.w.terminate();}
-};
+const root=new URL('../',import.meta.url),base=new URL('public/',root),files=await loadSupportFiles(base);
+globalThis.Worker=BrowserWorker;
 const bg=new BackgroundEngine({base,files}),live=new LiveEngine({base,files});
 const report=TEMPLATES.find(template=>template.id==='report'),png=Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='),c=>c.charCodeAt(0));
 let rev=0;const project=overrides=>Object.entries({...report.files,...overrides}).filter(([path,data])=>path!=='main.tex'&&data!=null).map(([path,data])=>({path,data,rev:++rev}));
@@ -26,7 +20,7 @@ try {
  const figure=main.replace('\\input{macros}','\\usepackage{graphicx}\n\\input{macros}').replace('\\input{sections/method}','\\input{sections/method}\n\\includegraphics[width=1cm]{figures/dot.png}');
  const full=await bg.compile(figure,{root:'report.tex',files:project({'figures/dot.png':png})});
  assert.ok(full.pdf.length>1000);assert.match(full.log,/<\.\/figures\/dot\.png>/);
- const capture=finalizeCapture(full.capture),sources=new Set(capture.units.map(unit=>unit.file));
+ const capture=full.capture,sources=new Set(capture.units.map(unit=>unit.file));
  for(const file of ['./report.tex','./sections/introduction.tex','./sections/method.tex'])assert.ok(sources.has(file),'units from '+file);
  out.multiFile={pages:full.pages.length,passes:full.passes,units:capture.units.length,ms:Math.round(full.durationMs)};
 
@@ -41,7 +35,7 @@ try {
  // Formula previews: the engine gets the preamble's files, so macros defined there are available.
  const preamble=splitPreamble(main).preamble,macros=parseMacros(preamble+'\n'+report.files['macros.tex']);
  assert.deepEqual([...macros.keys()].sort(),['R','argmin','norm']);
- const unit=finalizeCapture(again.capture).units.find(candidate=>candidate.kind==='par'&&liveUnitEligibility(again.capture,candidate).ok);
+ const unit=again.capture.units.find(candidate=>candidate.kind==='par'&&liveUnitEligibility(again.capture,candidate).ok);
  assert.ok(unit,'a paragraph context for previews');
  const context=unitContext(again.capture,unit);
  await live.start(preamble+'\n\\RequirePackage{luatexbase}\n',again.aux,[{path:'macros.tex',data:report.files['macros.tex'],rev:1}]);

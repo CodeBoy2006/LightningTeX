@@ -1,19 +1,12 @@
 // Actual WASM -> PDF.js regression, separate from browser UI acceptance.
-import {Worker as NodeWorker} from 'node:worker_threads';
+import {BrowserWorker,loadSupportFiles} from './runtime-helpers.mjs';
 import fs from 'node:fs/promises';
-import {fileURLToPath} from 'node:url';
 import assert from 'node:assert/strict';
 import {getDocument,PDFWorker} from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {BackgroundEngine} from '../core/engine-client.js';
 
-const root=new URL('../',import.meta.url),base=new URL('public/',root),files={};
-for(const name of ['rtex-json.lua','rtex-dl.lua','rtex-dl-bin.lua','rtex-capture.lua','rtex-serve.lua','rtex-pic.lua','latex/rtex-capture.sty','latex/rtex-pic.tex','latex/rtex-serve-patches.tex'])
-  files[name]=await fs.readFile(new URL('rtex/'+name,base),'utf8');
-globalThis.Worker=class {
-  constructor(url){this.worker=new NodeWorker(new URL('worker-harness.cjs',import.meta.url),{workerData:{script:fileURLToPath(url)}});this.worker.on('message',data=>this.onmessage?.({data}));this.worker.on('error',error=>this.onerror?.(error));}
-  postMessage(data){this.worker.postMessage(data);}
-  terminate(){void this.worker.terminate();}
-};
+const root=new URL('../',import.meta.url),base=new URL('public/',root),files=await loadSupportFiles(base);
+globalThis.Worker=BrowserWorker;
 const engine=new BackgroundEngine({base,files}),worker=new PDFWorker(),results=[];
 const document=body=>String.raw`\documentclass{article}
 \usepackage{amsmath}
