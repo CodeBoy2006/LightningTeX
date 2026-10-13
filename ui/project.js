@@ -40,6 +40,7 @@ export function createProject(){
     isFolder:path=>allFolders().has(path),
     paths:()=>[...files.keys()].sort(collator.compare),
     folders:()=>[...allFolders()].sort(collator.compare),
+    explicitFolders:()=>[...folders],
     files:()=>[...files.values()],
     write(path,content,origin){
       const target=normalizePath(path),existed=files.has(target);
@@ -94,7 +95,6 @@ export function createProject(){
       for(let n=2;files.has(candidate)||taken.has(candidate);n++)candidate=joinPath(dir,`${stem}-${n}${ext}`);
       return candidate;
     },
-    snapshot:()=>({files:[...files.values()].map(file=>({...file})),folders:[...folders],main}),
     /** Replaces everything. Entries with unusable paths are skipped rather than failing the load. */
     load(data){
       files.clear();folders.clear();

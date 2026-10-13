@@ -12,7 +12,6 @@ import {openMenu,confirmDialog,createToast} from './overlays.js';
 import {mathAt} from '../core/math-preview.js';
 import {zip,unzip} from '../core/zip.js';
 
-export const DEFAULT_SOURCE=TEMPLATES[0].files['main.tex'];
 const LEGACY_DRAFT='realtime-tex-web:draft:v1',LEGACY_CONSENT='realtime-tex-web:save-draft:v1';
 const MAX_UPLOAD=20*1024*1024,ZOOMS=[0.5,0.67,0.8,0.9,1,1.1,1.25,1.5,1.75,2,2.5,3];
 const ACCENTS={bolt:'#f5b800',indigo:'#6366f1',teal:'#0d9488',rose:'#e5487d'};
@@ -118,7 +117,7 @@ export function mountEditor(options={}){
     compiling:false,busy:false,pdf:null,meta:null,empty:false,run:0,logs:[],problems:[],failed:false,live:null,marker:null,dirty:false,save:'off',destroyed:false};
   const views=new Map(),removers=[];
   let tabs=[],active=null,compileTimer,busyTimer,zoomTimer,saveTimer,rendererAbort,pdfSequence=0,store=null,saving=false,restoring=false,storageWarned=false;
-  let pending={put:new Set(),remove:new Set(),reset:false},panelAuto=false;
+  let pending=emptyPending(),panelAuto=false;
   root.innerHTML=shell();
   const app=root.firstElementChild;
   const $=id=>root.querySelector(`[data-id="${id}"]`);
@@ -282,7 +281,7 @@ export function mountEditor(options={}){
     const source=editor.getValue();void popover.update(editor,mathAt(source,editor.caret),source,active);
   }
   function createView(path){
-    const file=project.get(path),el=document.createElement('div'),view={el,path,position:null};el.className='view';el.hidden=true;
+    const file=project.get(path),el=document.createElement('div'),view={el,position:null};el.className='view';el.hidden=true;
     if(typeof file.text==='string'){
       view.editor=createCodeEditor({value:file.text,settings,label:t('editor.label'),describedBy:'editor-keyboard-help',
         onChange:value=>project.write(path,value,'editor'),
@@ -457,7 +456,7 @@ export function mountEditor(options={}){
   }
 
   // ---- files ------------------------------------------------------------------------------------
-  const emptyPending=()=>({put:new Set(),remove:new Set(),reset:false});
+  function emptyPending(){return {put:new Set(),remove:new Set(),reset:false};}
   function queueSave(change){
     if(!store||!settings.persist||restoring||state.destroyed)return;
     if(change?.type==='load'){pending=emptyPending();pending.reset=true;for(const path of project.paths())pending.put.add(path);}
@@ -473,7 +472,7 @@ export function mountEditor(options={}){
     const job=pending;pending=emptyPending();saving=true;
     try{
       await store.save({reset:job.reset,remove:[...job.remove],put:[...job.put].map(path=>project.get(path)).filter(Boolean).map(file=>typeof file.text==='string'?{path:file.path,text:file.text}:{path:file.path,data:file.data}),
-        meta:{main:project.main,folders:project.snapshot().folders,tabs,active}});
+        meta:{main:project.main,folders:project.explicitFolders(),tabs,active}});
       if(!saveTimer){state.save='saved';state.dirty=false;}
     }catch{
       state.save='failed';if(!storageWarned){storageWarned=true;notify('toast.storage');}
@@ -670,7 +669,6 @@ export function mountEditor(options={}){
       state.ready=status==='ready';state.engine=status;state.progress=Number.isFinite(progress)?clamp(progress,0,1):null;
       updateControls();updateEngine();
     },
-    setCompiling(value){state.compiling=Boolean(value);if(!value){clearTimeout(busyTimer);state.busy=false;}updateControls();},
     setError(error,{quiet=false}={}){
       log(error?.message??String(error),quiet?'warning':'error');state.failed=true;updateStatus();updateEngine();
       if(quiet)return;

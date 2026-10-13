@@ -21,6 +21,7 @@ test('the main file is chosen, follows a rename, and is replaced when deleted',(
 test('folders can be empty, renamed with their contents, and removed as a whole',()=>{
   const project=createProject();project.write('main.tex','');project.mkdir('figures');project.write('chapters/one.tex','1');project.write('chapters/deep/two.tex','2');
   assert.deepEqual(project.folders(),['chapters','chapters/deep','figures']);
+  const explicit=project.explicitFolders();assert.deepEqual(explicit,['figures']);explicit.push('unrelated');assert.deepEqual(project.explicitFolders(),['figures']);
   project.rename('chapters','parts');assert.deepEqual(project.paths(),['main.tex','parts/deep/two.tex','parts/one.tex']);assert.ok(project.isFolder('parts/deep'));
   assert.throws(()=>project.rename('parts','parts/inner'),/Unsafe/);assert.throws(()=>project.rename('main.tex','parts'),/exists/);assert.throws(()=>project.write('figures','x'),/exists/);assert.throws(()=>project.mkdir('main.tex'),/exists/);
   const restore=project.remove('parts');assert.deepEqual(project.paths(),['main.tex']);restore();assert.equal(project.get('parts/deep/two.tex').text,'2');

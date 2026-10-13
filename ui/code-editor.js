@@ -115,15 +115,15 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
     if(start===end&&!outdent){edit(start,end,unit);return;}
     const [from,to]=lineRange(start,end),block=text.slice(from,to).split('\n');
     const changed=block.map(line=>outdent?line.replace(new RegExp(`^(?: {1,${options.tabSize}}|\\t)`),''):line?unit+line:line);
-    const first=changed[0].length-block[0].length,total=changed.join('\n').length-(to-from);
-    edit(from,to,changed.join('\n'),Math.max(from,start+first),Math.max(from,end+total));
+    const replacement=changed.join('\n'),first=changed[0].length-block[0].length,total=replacement.length-(to-from);
+    edit(from,to,replacement,Math.max(from,start+first),Math.max(from,end+total));
   }
   function toggleComment(){
     const start=input.selectionStart,end=input.selectionEnd,[from,to]=lineRange(start,end),block=text.slice(from,to).split('\n');
     const filled=block.filter(line=>line.trim()),off=filled.length>0&&filled.every(line=>/^\s*%/.test(line));
     const changed=block.map(line=>!line.trim()?line:off?line.replace(/^(\s*)% ?/,'$1'):line.replace(/^(\s*)/,'$1% '));
-    const first=changed[0].length-block[0].length,total=changed.join('\n').length-(to-from);
-    edit(from,to,changed.join('\n'),Math.max(from,start+first),Math.max(from,end+total));
+    const replacement=changed.join('\n'),first=changed[0].length-block[0].length,total=replacement.length-(to-from);
+    edit(from,to,replacement,Math.max(from,start+first),Math.max(from,end+total));
   }
   function newline(){
     const start=input.selectionStart,end=input.selectionEnd,from=text.lastIndexOf('\n',start-1)+1,before=text.slice(from,start);
@@ -181,7 +181,7 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
   }
   configure({});input.value=value;sync(true);
   return {
-    el,input,body,scroller,rectAt,reveal,configure,
+    el,input,body,scroller,rectAt,configure,
     getValue:()=>text,
     setValue(next){input.value=next;sync(true);},
     focus(){input.focus({preventScroll:true});},

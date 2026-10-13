@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
-import { mountEditor, DEFAULT_SOURCE } from './editor.js';
+import { mountEditor } from './editor.js';
 import { TEMPLATES } from './templates.js';
 const tick = (ms=0) => new Promise(resolve=>setTimeout(resolve,ms));
 const deferred = () => {let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};
@@ -34,7 +34,7 @@ function memoryStore(saved=null){
     async clear(){files.clear();meta=null;this.cleared++;}};
 }
 
-test('templates do not force legacy T1 fonts',()=>{assert.ok(DEFAULT_SOURCE.includes('\\documentclass'));for(const template of TEMPLATES)for(const text of Object.values(template.files))assert.ok(!text.includes('fontenc'));});
+test('templates do not force legacy T1 fonts',()=>{assert.ok(TEMPLATES[0].files['main.tex'].includes('\\documentclass'));for(const template of TEMPLATES)for(const text of Object.values(template.files))assert.ok(!text.includes('fontenc'));});
 
 test('repeat compilation replaces PDF and manual requests do not overlap',async()=>{
   let calls=0;const wait=deferred();const h=setup({onCompile:async()=>{calls++;if(calls===1)await wait.promise;return {pdf:bytes(calls)};}});
@@ -84,7 +84,8 @@ test('files are kept in the store by default; turning that off clears it',async(
   const store=memoryStore(),h=setup({store});
   try {await h.ui.ready;h.auto(false);assert.equal(h.q('persist').checked,true);h.edit('private draft');await tick(450);
     assert.equal(store.files.get('main.tex').text,'private draft');assert.equal(store.meta.main,'main.tex');assert.equal(h.q('save-status').textContent,'Saved');
-    h.ui.project.write('notes/a.tex','A');h.ui.project.rename('notes/a.tex','notes/b.tex');await tick(450);assert.deepEqual([...store.files.keys()].sort(),['main.tex','notes/b.tex']);
+    h.ui.project.mkdir('figures');h.ui.project.write('notes/a.tex','A');h.ui.project.rename('notes/a.tex','notes/b.tex');await tick(450);assert.deepEqual([...store.files.keys()].sort(),['main.tex','notes/b.tex']);
+    assert.deepEqual(store.meta.folders,['figures'],'saving must not turn inferred directories into explicit folders');
     h.q('persist').checked=false;h.event(h.q('persist'),'change');await tick();assert.equal(store.cleared,1);assert.equal(store.files.size,0);assert.equal(h.q('save-status').textContent,'Not saved');
     h.edit('later');await tick(450);assert.equal(store.files.size,0);}finally{h.cleanup();}
 });
