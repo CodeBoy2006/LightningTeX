@@ -32,6 +32,7 @@ export function decodeDisplayList(input) {
   const unknownRecords = []; let line = null, ended = false;
   const add = item => (line ? line.items : dl.other).push(item);
   while (r.pos < bytes.length) {
+    // Taking the full payload also skips extensions and unknown records.
     const offset = r.pos, tag = r.u8(), n = r.u32(), p = new Reader(r.take(n), offset + 5);
     switch (tag) {
       case 1: {
@@ -77,9 +78,8 @@ export function decodeDisplayList(input) {
         if (line) throw new DisplayListError('Unclosed LINE', offset);
         if (r.pos !== bytes.length) throw new DisplayListError('Trailing data after END', r.pos);
         ended = true; break;
-      default: unknownRecords.push({ tag, offset, payloadLength: n }); p.pos = n;
+      default: unknownRecords.push({ tag, offset, payloadLength: n });
     }
-    // Known record extensions are safely skipped, consistent with the upstream reader.
     if (tag === 0xff) { if (n) throw new DisplayListError('END payload must be empty', offset); break; }
   }
   if (!ended) throw new DisplayListError('Missing END', r.pos);

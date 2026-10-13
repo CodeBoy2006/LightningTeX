@@ -26,6 +26,8 @@ The result exports `FS`, `ENV`, `callMain`, `HEAPU8`, `_flush_streams`, etc. FS 
 
 Include all upstream `tex/*.lua` and `tex/latex/*`. The 16-byte mailbox header is an Int32Array: index 0 = available byte count, index 1 = EOF, indices 2–3 reserved. Payload begins at byte offset 16. Only write when index 0 is zero, fill payload then atomically store byte length at index 0 and notify. Reader consumes a chunk, stores zero and notifies. Serialize queued requests in coordinator; do not overwrite an occupied mailbox. JSON requests end in newline; upstream compact C frames also work.
 
+Both workers use `writeEngineFile(fs, absolutePath, contents)` from `raw-loader.js` to create parent directories and install support/project files. Callers retain their existing path validation and choose the `/rtex`, `/project`, or `/live` destination; text and binary contents are passed unchanged to the engine filesystem.
+
 Messages are `{log}`, `{bytes,fonts}`, `{fontError,message}`, `{done,exit}`, or `{error,stack}`. `bytes` contains a COMPLETE frame: u32LE length, u8 kind, payload. Kind 0 is JSON; kind 1 payload contains u32LE JSON length + result JSON + RTDL bytes. `fonts` is a map of exact font filenames to Uint8Array font contents, attached to each result. Response buffering rejects frames over 64MiB. No second worker message is handled while Lua is synchronously running; requests must use the shared mailbox. To cancel hung code, terminate the worker.
 
 The response write callback extracts filenames from real RTDL FONT records and reads FS while the runtime is still executing. This avoids trying to query FS after the runtime blocks waiting for the next request.

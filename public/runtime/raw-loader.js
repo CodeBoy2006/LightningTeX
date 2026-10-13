@@ -64,3 +64,7 @@ self.loadRtexEngine = async function ({base = './busytex/', print = console.log,
   return m;
 };
 self.rtexLuaArgs = file => ['luahblatex', '--no-shell-escape', '--interaction=nonstopmode', '--halt-on-error', '--fmt', '/texlive/texmf-dist/texmf-var/web2c/luahbtex/luahblatex.fmt', '--nosocket', file];
+self.writeEngineFile = (fs, path, data) => {
+  fs.mkdirTree(path.slice(0, path.lastIndexOf('/')));
+  fs.writeFile(path, data);
+};

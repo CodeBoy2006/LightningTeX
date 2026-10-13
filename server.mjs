@@ -13,9 +13,10 @@ http.createServer((req,res)=>{
   if(pathname==='/')pathname='/ui/index.html';
   const path=resolve(root,'.'+pathname);
   if(path!==root&&!path.startsWith(root+sep)){res.writeHead(403).end();return}
-  if(!existsSync(path)||!statSync(path).isFile()){res.writeHead(404).end('Not found');return}
+  const stat=existsSync(path)?statSync(path):null;
+  if(!stat?.isFile()){res.writeHead(404).end('Not found');return}
   res.setHeader('Content-Type',types[extname(path)]||'application/octet-stream');
-  res.setHeader('Content-Length',statSync(path).size);
+  res.setHeader('Content-Length',stat.size);
   res.setHeader('Cache-Control',/\.(wasm|data)$|\.part\d+$/.test(path)?'public,max-age=86400':'no-cache');
   if(req.method==='HEAD'){res.end();return}createReadStream(path).pipe(res);
 }).listen(port,'127.0.0.1',()=>console.log(`Realtime TeX Web: http://127.0.0.1:${port}/`));

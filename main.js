@@ -1,13 +1,12 @@
 import {mountEditor} from './ui/editor.js';
 import {BackgroundEngine,LiveEngine,loadSupport} from './core/engine-client.js';
 import {splitPreamble,findLiveEdit,captureSpans,acceptLiveEdit} from './core/document.js';
-import {finalizeCapture,unitContext,liveUnitEligibility,compareUnitBaseline} from './core/capture.js';
+import {unitContext,liveUnitEligibility,compareUnitBaseline} from './core/capture.js';
 import {previewSource,parseMacros,inkBounds} from './core/math-preview.js';
 import {parseTexLog} from './core/tex-log.js';
-import {decodeDisplayList,createDisplayListRenderer} from './render/index.mjs';
+import {decodeDisplayList,createDisplayListRenderer,CSS_PX_PER_SP} from './render/index.mjs';
 import {replaceUnitRows,unitInkRegion} from './core/live-layout.js';
 import {parseEngineFont} from './render/type1-font.mjs';
-import {CSS_PX_PER_SP} from './render/canvas-renderer.mjs';
 import * as pdfjs from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 pdfjs.GlobalWorkerOptions.workerSrc=pdfWorkerUrl;
@@ -68,8 +67,8 @@ const ui=mountEditor({renderPdf,typesetMath,
      return {empty:true};
    }
    if(ui.getState().revision===revision){
-     const capture=finalizeCapture(result.capture),preamble=splitPreamble(source)?.preamble??'',support=supportFiles(preamble,files);
-     snapshot={source,root,filesRev,revision,capture,pages:result.pages,drawnPages:result.pages,pdf:result.pdf,baseCanvases:new Map(),inkBounds:new Map(),liveUnits:new Set(),aux:result.aux,proofs:new Map(),spans:captureSpans(source,capture,root),
+     const capture=result.capture,preamble=splitPreamble(source)?.preamble??'',support=supportFiles(preamble,files);
+     snapshot={source,root,filesRev,capture,pages:result.pages,drawnPages:result.pages,pdf:result.pdf,baseCanvases:new Map(),inkBounds:new Map(),liveUnits:new Set(),aux:result.aux,proofs:new Map(),spans:captureSpans(source,capture,root),
        support,packageMisses:result.packageMisses,macros:parseMacros([preamble,...support.map(file=>file.data)].join('\n')),context:previewContext(capture)};
      for(const[k,v]of Object.entries(result.fonts))fonts.set(k,v);
      prepareLive(snapshot);syncMarker(false);

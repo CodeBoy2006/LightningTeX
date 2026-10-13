@@ -1,12 +1,11 @@
 /* Browser-only TeX job worker; native shell execution disabled. */
 importScripts('./raw-loader.js');
-let engine,snapshot,files,lastPreamble,lastAux;const decoder=new TextDecoder();
+let engine,snapshot,lastPreamble,lastAux;const decoder=new TextDecoder();
 function removeTree(fs,path){if(!fs.analyzePath(path).exists)return;for(const name of fs.readdir(path)){if(name==='.'||name==='..')continue;const p=path+'/'+name;fs.isDir(fs.stat(p).mode)?removeTree(fs,p):fs.unlink(p)}if(path!=='/project'&&path!=='/out')fs.rmdir(path)}
 async function init(data){
- files=data.files;
  engine=await loadRtexEngine({base:data.base||'../busytex/',env:{TEXINPUTS:'/rtex/latex//:',LUAINPUTS:'/rtex//:',RTEX_CAPTURE_DIR:'/out',RTEX_UNIT_ENVS:'equation,equation*,align,align*,gather,gather*,multline,multline*,displaymath',openout_any:'a',max_print_line:'100000',shell_escape:'f'},print:t=>postMessage({type:'log',text:t}),printErr:t=>postMessage({type:'log',text:t})});
  const fs=engine.FS;fs.mkdirTree('/rtex/latex');fs.mkdirTree('/out');
- for(const [name,contents] of Object.entries(files)){const p='/rtex/'+name;fs.mkdirTree(p.slice(0,p.lastIndexOf('/')));fs.writeFile(p,contents)}
+ for(const [name,contents] of Object.entries(data.files))writeEngineFile(fs,'/rtex/'+name,contents);
  const cut=2**26;const tail=engine.HEAPU8.subarray(cut);snapshot=engine.HEAPU8.slice(0,tail.some(x=>x)?engine.HEAPU8.length:cut);
  postMessage({type:'ready'});
 }
@@ -15,7 +14,7 @@ function mirrorDirs(fs,from,to){for(const name of fs.readdir(from)){if(name==='.
 function syncProject(fs,project){
  if(!project||project.reset)removeTree(fs,'/project');
  for(const path of project?.remove||[])if(fs.analyzePath('/project/'+path).exists)fs.unlink('/project/'+path);
- for(const {path,data} of project?.write||[]){const p='/project/'+path;fs.mkdirTree(p.slice(0,p.lastIndexOf('/')));fs.writeFile(p,data)}
+ for(const {path,data} of project?.write||[])writeEngineFile(fs,'/project/'+path,data);
 }
 function run(source,id,preamble,root='main.tex',project){
  const began=performance.now(),fs=engine.FS;syncProject(fs,project);removeTree(fs,'/out');fs.chdir('/project');fs.writeFile(root,source);
@@ -28,7 +27,7 @@ function run(source,id,preamble,root='main.tex',project){
  const logs=[];let exit=0,passes=0,aux;
  for(let pass=0;pass<2;pass++){
   fs.chdir('/project');
-  const args=[...rtexLuaArgs(job).slice(0,-1),'--no-shell-escape','--jobname=main','--output-directory=/out',job];
+  const args=[...rtexLuaArgs(job).slice(0,-1),'--jobname=main','--output-directory=/out',job];
   try{exit=engine.callMain(args);engine._flush_streams()}catch(e){exit=typeof e.status==='number'?e.status:1;logs.push(String(e))}
   if(fs.analyzePath('/out/main.log').exists)logs.push(decoder.decode(fs.readFile('/out/main.log')));
   // Match the upstream BusyTeX full-job memory reset. Never used by live worker.

@@ -31,18 +31,21 @@ export function replaceUnitRows(pages,unit,baseline,live){
     throw Error('Line count changed; full pagination is needed');
   if(live.lines.some((line,i)=>line.h!==baseline.lines[i].h||line.d!==baseline.lines[i].d||line.y!==baseline.lines[i].y))
     throw Error('Line height changed; full pagination is needed');
-  const changed=new Map();
+  const changed=new Map(),fontIds=new Map();
   for(let i=0;i<live.lines.length;i++){
     const reference=unit.placements.find(row=>row.row===i+1),proof=baseline.lines[i];
     if(!reference)throw Error('Missing row placement');
-    let page=changed.get(reference.page);
-    if(!page){page=structuredClone(pages.find(page=>page.page===reference.page));changed.set(reference.page,page);}
-    const ids=new Map(),keys=new Map(Object.entries(page.fonts).map(([id,desc])=>[fontKey(desc),Number(id)]));
-    let next=Math.max(0,...Object.keys(page.fonts).map(Number));
-    for(const [id,desc] of Object.entries(live.fonts)){
-      const key=fontKey(desc);let target=keys.get(key);
-      if(target===undefined){target=++next;page.fonts[target]={...desc,id:target};keys.set(key,target);}
-      ids.set(Number(id),target);
+    let page=changed.get(reference.page),ids=fontIds.get(reference.page);
+    if(!page){
+      page=structuredClone(pages.find(page=>page.page===reference.page));changed.set(reference.page,page);
+      ids=new Map();fontIds.set(reference.page,ids);
+      const keys=new Map(Object.entries(page.fonts).map(([id,desc])=>[fontKey(desc),Number(id)]));
+      let next=Math.max(0,...Object.keys(page.fonts).map(Number));
+      for(const [id,desc] of Object.entries(live.fonts)){
+        const key=fontKey(desc);let target=keys.get(key);
+        if(target===undefined){target=++next;page.fonts[target]={...desc,id:target};keys.set(key,target);}
+        ids.set(Number(id),target);
+      }
     }
     // A centered formula's x coordinate changes with its width; retain that offset.
     const dx=reference.x-proof.x,dy=reference.y-proof.y,line=structuredClone(live.lines[i]);
