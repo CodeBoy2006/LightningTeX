@@ -11,6 +11,7 @@ test('local replacement preserves surrounding content and remaps colliding font 
  assert.equal(page.lines[0].x,110);assert.equal(page.lines[0].items[0][4],112);
  assert.equal(page.lines[0].items[0][1],2);assert.equal(page.fonts[2].filename,'math.pfb');
  assert.deepEqual(page.lines[1],before[0].lines[1]);assert.deepEqual(page.other,before[0].other);
+ assert.equal(page.glyphs,3,'count the replaced row, surrounding row and page drawing');
  const again=replaceUnitRows([page],unit,baseline,live).get(1);
  assert.deepEqual(again,page,'repeated edits must not drift or accumulate font IDs');
  assert.equal(before[0].lines[0].x,100,'original capture must remain immutable');
@@ -19,6 +20,12 @@ test('changed row count or height requires full pagination',()=>{
  assert.throws(()=>replaceUnitRows(pages(),unit,baseline,{...live,lines:[]}),/Line count/);
  const taller=structuredClone(live);taller.lines[0].h++;
  assert.throws(()=>replaceUnitRows(pages(),unit,baseline,taller),/Line height/);
+});
+test('glyph counts skip sparse row slots and include surrounding drawing',()=>{
+ const before=pages(),sparse=structuredClone(live);
+ before[0].lines[1].items.length=3;sparse.lines[0].items.length=3;
+ const page=replaceUnitRows(before,unit,baseline,sparse).get(1);
+ assert.equal(page.glyphs,3);
 });
 test('multiple rows share font IDs within each page without mixing page font tables',()=>{
  const placements=[{page:1,row:1,x:100,y:200},{page:1,row:2,x:100,y:240},{page:2,row:3,x:100,y:200}];
@@ -29,6 +36,7 @@ test('multiple rows share font IDs within each page without mixing page font tab
  const result=replaceUnitRows(before,{uid:1,placements},proof,output);
  assert.deepEqual(result.get(1).lines.filter(row=>row.unit===1).map(row=>row.items[0][1]),[2,2]);
  assert.equal(result.get(2).lines[0].items[0][1],7);
+ assert.equal(result.get(1).glyphs,4);assert.equal(result.get(2).glyphs,1);
  assert.deepEqual(Object.keys(result.get(1).fonts),['1','2']);assert.deepEqual(Object.keys(result.get(2).fonts),['7']);
  assert.deepEqual(before,original,'captured pages remain untouched');
  assert.deepEqual(replaceUnitRows([...result.values()],{uid:1,placements},proof,output),result,'repeated edits preserve font IDs');

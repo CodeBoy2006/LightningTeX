@@ -33,8 +33,8 @@ export function unitContext(capture, unitOrId) {
     merge(macros,current.macros,v=>typeof v==='string');
     if(current===unit)break;
   }
-  const first = firstParagraph(capture,unit), params = unit.kind==='par' && first ? first : unit;
-  const start = unit.kind==='par' && first?.begin != null ? first.begin : unit;
+  const first = unit.kind==='par' ? firstParagraph(capture,unit) : null, params = first || unit;
+  const start = first?.begin != null ? first.begin : unit;
   return clone({kind:unit.kind,name:unit.name??null,
     ints:map(params.ints),dims:map(params.dims),glues:map(params.glues),parshape:params.parshape??null,
     // A captured heading includes its own command, which installs its own everypar.
@@ -51,8 +51,10 @@ export function liveUnitEligibility(capture, unitOrId) {
     ||unit.kind==='heading'&&['paragraph','subparagraph'].includes(unit.name);
   if (!math&&!composite&&(unit.kind!=='par' || unit.nest!==1)) return fail('Only top-level text and math units are live');
   if (!math&&!composite&&unit.seqs?.length!==1) return fail('Composite or nested paragraphs require full layout');
-  const p=firstParagraph(capture,unit);
-  if (!math&&!composite&&(!p?.begin || p.nest!==1)) return fail('No unambiguous paragraph context');
+  if (!math&&!composite) {
+    const p=firstParagraph(capture,unit);
+    if (!p?.begin || p.nest!==1) return fail('No unambiguous paragraph context');
+  }
   if (!unit.placements?.length) return fail('No captured row placements');
   // The server validates/replays kernel everypar (including paragraphs after headings).
   if (unit.noskipsec) return fail('Run-in headings require full layout');
@@ -62,8 +64,7 @@ export function liveUnitEligibility(capture, unitOrId) {
   // inserts, marks, adjustments, direction changes and whatsits still fall back.
   const structural = new Set(['glyphs','hlist','vlist','rule','math','whatsit_pdf_start_link','whatsit_pdf_end_link','whatsit_write']);
   if (unit.kind==='env'&&unit.name==='abstract')structural.add('adjust');
-  const members=(capture.paragraphs||[]).filter(paragraph=>unit.seqs?.includes(paragraph.seq));
-  if (members.some(paragraph=>Object.entries(map(paragraph.flags)).some(([key,value]) =>
+  if ((capture.paragraphs||[]).some(paragraph=>unit.seqs?.includes(paragraph.seq)&&Object.entries(map(paragraph.flags)).some(([key,value]) =>
     !Number.isSafeInteger(value) || value < 0 || (value !== 0 && !structural.has(key)))))
     return fail('Paragraph has unsupported engine flags');
   // The capture records these standard kernel meanings even in a blank article.

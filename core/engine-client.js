@@ -70,11 +70,11 @@ export class LiveEngine {
   if(this.worker&&key===this.startKey)return this.ready;
   this.stop();this.startKey=key;const generation=this.generation;
   try{
-   this.mailbox=new SharedArrayBuffer(1024*1024+16);this.ctl=new Int32Array(this.mailbox,0,4);this.payload=new Uint8Array(this.mailbox,16);
+   const mailbox=new SharedArrayBuffer(1024*1024+16);this.ctl=new Int32Array(mailbox,0,4);this.payload=new Uint8Array(mailbox,16);
    const worker=this.worker=new Worker(new URL('runtime/live-worker.js',this.base));this.failure=null;
    worker.onmessage=({data})=>{if(generation!==this.generation||worker!==this.worker)return;try{if(data.log)this.onLog(data.log);if(data.fonts)this.onFonts(data.fonts);if(data.bytes)this.feed(data.bytes,generation);if(data.error)this.fail(Error(data.error),generation);if(data.done)this.fail(Error('Live engine ended'),generation)}catch(error){this.fail(error,generation)}};
    worker.onerror=e=>this.fail(Error(e.message||'Live worker failed'),generation);
-   worker.postMessage({base:new URL('busytex/',this.base).href,files:this.files,preamble,aux,mailbox:this.mailbox,packageMisses,project:files.map(({path,data})=>({path,data}))});
+   worker.postMessage({base:new URL('busytex/',this.base).href,files:this.files,preamble,aux,mailbox,packageMisses,project:files.map(({path,data})=>({path,data}))});
    this.ready=this.read(120000,generation).then(ready=>{
     this.current(generation);
     if(ready.header.op!=='ready')throw Error('Live engine did not become ready');return ready.header;

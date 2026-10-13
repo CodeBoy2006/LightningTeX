@@ -8,8 +8,7 @@ export function splitPreamble(source) {
     offset+=line.length+1;
   }return null;
 }
-const mathEnvironments=new Set('equation equation* align align* gather gather* multline multline* displaymath aligned gathered split cases matrix pmatrix bmatrix Bmatrix vmatrix Vmatrix smallmatrix'.split(' '));
-const liveEnvironments=new Set([...mathEnvironments,'proof','abstract']);
+const liveEnvironments=new Set('equation equation* align align* gather gather* multline multline* displaymath aligned gathered split cases matrix pmatrix bmatrix Bmatrix vmatrix Vmatrix smallmatrix proof abstract'.split(' '));
 // A bounded vocabulary keeps state-changing TeX out of the persistent worker.
 export const liveCommands=new Set(('text textbf textit textrm textsf texttt emph mathrm mathit mathbf mathsf mathtt mathcal mathbb mathfrak mathnormal boldsymbol operatorname '+
  'frac dfrac tfrac cfrac binom dbinom tbinom sqrt sum prod coprod int iint iiint oint lim limsup liminf min max sup inf log ln exp sin cos tan cot sec csc arcsin arccos arctan sinh cosh tanh det dim ker deg arg Pr hom gcd colon '+
@@ -109,8 +108,9 @@ export function findLiveEdit(before,after,capture,spans=captureSpans(before,capt
   const span=candidates[0],oldText=before.slice(span.start,span.end),source=after.slice(span.start,span.end+delta);
   // Composite units already contain paragraph breaks; reject edits that touch a break.
   if(/\n\s*\n/.test(before.slice(start-1,oldEnd+1))||/\n\s*\n/.test(after.slice(start-1,newEnd+1)))return {reason:'Paragraph boundaries changed'};
-  const oldPolicy=liveSourcePolicy(oldText,macros),policy=liveSourcePolicy(source,macros);
+  const oldPolicy=liveSourcePolicy(oldText,macros);
   if(!oldPolicy.ok)return {reason:oldPolicy.reason};
+  const policy=liveSourcePolicy(source,macros);
   if(!policy.ok)return policy;
   if(oldPolicy.signature!==policy.signature)return {reason:'Environment, label or reference changed'};
   return {unit:span.unit,span,source};

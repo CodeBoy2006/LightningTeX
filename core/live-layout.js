@@ -62,6 +62,11 @@ export function replaceUnitRows(pages,unit,baseline,live){
     if(index<0)throw Error('Missing captured row');
     page.lines[index]=line;
   }
-  for(const page of changed.values())page.glyphs=[...(page.other||[]),...page.lines.flatMap(line=>line.items)].filter(item=>item[0]==='g').length;
+  for(const page of changed.values()){
+    let glyphs=0;
+    for(const item of page.other||[])if(item[0]==='g')glyphs++;
+    page.lines.forEach(line=>line.items.forEach(item=>{if(item[0]==='g')glyphs++;}));
+    page.glyphs=glyphs;
+  }
   return changed;
 }

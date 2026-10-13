@@ -47,6 +47,8 @@ test('first paragraph exact fallback order and environment context',()=>{
  c.paragraphs[1].begin=null;assert.equal(firstParagraph(c,2).seq,20);
  c.units[1].seqs=[999,21];assert.equal(firstParagraph(c,2),null);
  c.units[0].kind='env';assert.equal(unitContext(c,1).ints.tolerance,2);assert.equal(unitContext(c,1).begin.nfss.family,'unit');
+ c.units[0].name='equation';c.paragraphs=[];
+ assert.deepEqual(liveUnitEligibility(c,1),{ok:true});assert.equal(unitContext(c,1).ints.tolerance,2);
 });
 test('strict paragraph eligibility declines side effects and complex contexts',()=>{
  const c=capture();assert.equal(liveUnitEligibility(c,1).ok,true);assert.equal(liveUnitEligibility(c,2).ok,false);
@@ -141,6 +143,7 @@ test('known composite units retain side-effect checks and heading context replay
  c.paragraphs[0].flags={glyphs:10,whatsit_pdf_start_link:1,whatsit_pdf_end_link:1,whatsit_write:1};
  assert.equal(liveUnitEligibility(c,1).ok,true);assert.equal(unitContext(c,1).everypar,'');
  c.units[0].seqs.push(21);assert.equal(liveUnitEligibility(c,1).ok,true);
+ c.paragraphs.push({seq:10,flags:{ins:1}});assert.equal(liveUnitEligibility(c,1).ok,false);c.paragraphs.pop();
  c.paragraphs[2].flags={ins:1};assert.equal(liveUnitEligibility(c,1).ok,false);
  delete c.paragraphs[2].flags;c.units[0].kind='env';c.units[0].name='proof';assert.equal(liveUnitEligibility(c,1).ok,true);
  c.paragraphs[0].flags.adjust=1;assert.equal(liveUnitEligibility(c,1).ok,false);

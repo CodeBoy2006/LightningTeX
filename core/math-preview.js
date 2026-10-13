@@ -60,7 +60,7 @@ export function mathAt(source,offset){
         const arg=name==='begin'||name==='end'?/^\s*\{([A-Za-z]+\*?)\}/.exec(source.slice(after,after+40)):null;
         if(arg){
           const env=arg[1],end=after+arg[0].length;
-          if(name==='begin'&&!open&&mathEnvironments.has(env)){open={start:i,bodyStart:end,kind:env==='math'?'inline':'display',env,close:'env'};depth=0;}
+          if(name==='begin'&&!open&&mathEnvironments.has(env)){open={start:i,bodyStart:end,kind:env==='math'?'inline':'display',env};depth=0;}
           else if(name==='end'&&open?.env===env){if(inside(open.start,end))return found(i,end);open=null;}
           i=end-1;
         }else i=after-1;
