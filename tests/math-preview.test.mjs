@@ -54,6 +54,12 @@ test('definitions may use parameters; formulas may not',()=>{
   assert.ok(prepareBody('#1+#2',new Map(),{definition:true}).tex);
   assert.ok(prepareBody('#1',new Map()).unsupported);
 });
+test('macro bodies share nested and escaped brace handling with ordinary arguments',()=>{
+ const macros=parseMacros(String.raw`\newcommand{\braces}[1]{\{#1\}}
+\newcommand{\nested}{\frac{{1}}{2}}
+\newcommand{\unfinished}{\frac{1}{2}`);
+ assert.deepEqual([...macros.keys()],['braces','nested']);assert.equal(macros.get('braces').arity,1);
+});
 test('ink bounds cover glyph advances, rules and line extents only where something is drawn',()=>{
   const list={lines:[{x:0,y:100,w:900,h:10,d:0,items:[]},{x:0,y:200,w:900,h:30,d:12,items:[['g',1,65,3,400,200,50,0],['g',1,66,4,450,200,40,0],['r',380,150,5,70]]}]};
   assert.deepEqual(inkBounds(list),{x:380,y:150,w:110,h:70});

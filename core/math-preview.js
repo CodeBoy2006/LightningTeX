@@ -28,7 +28,7 @@ const extraCommands=('mathscr bm pmb not dagger ddagger top bot parallel nparall
  'upharpoonright upharpoonleft downharpoonright downharpoonleft restriction multimap leftrightarrows rightleftarrows leftleftarrows rightrightarrows upuparrows downdownarrows '+
  'Lleftarrow Rrightarrow leftarrowtail rightarrowtail looparrowleft looparrowright curvearrowleft curvearrowright circlearrowleft circlearrowright nleftarrow nrightarrow nLeftarrow nRightarrow nleftrightarrow nLeftrightarrow '+
  'tfrac mspace hspace hskip mkern mskip kern').split(' ');
-export const previewCommands=new Set([...liveCommands,...extraCommands]);
+const previewCommands=new Set([...liveCommands,...extraCommands]);
 const previewArity=Object.assign(Object.create(null),liveArity);
 for(const name of 'mathscr bm pmb not xrightarrow xleftarrow overrightarrow overleftarrow overleftrightarrow underrightarrow underleftarrow pmod pod check breve acute grave mathring dddot ddddot substack boxed mathop mathbin mathrel mathord mathopen mathclose mathpunct mathinner textup textnormal textsc textmd mbox tag eqref ref intertext mspace hspace'.split(' '))previewArity[name]=1;
 const symbols=new Set(['\\',',',';',':','!',' ','{','}','|','&','%','$','#','_','/','-','>','<','\n']);
@@ -160,17 +160,16 @@ export function previewSource(found,source,macros){
   return {tex:env?`\\begin{${env}}${prepared.tex}\\end{${env}}`:'\\['+prepared.tex+'\\]'};
 }
 
-const balanced=(text,open)=>{let depth=0;for(let i=open;i<text.length;i++){const c=text[i];if(c==='\\')i++;else if(c==='{')depth++;else if(c==='}'&&!--depth)return i;}return -1;};
 /** Preamble macros whose bodies stay inside the preview vocabulary: name -> {arity}. */
 export function parseMacros(preamble){
   const text=preamble.replace(/(^|[^\\])%.*$/gm,'$1'),candidates=[];
   const pattern=/\\(?:(?:re)?newcommand|providecommand|DeclareMathOperator|DeclareRobustCommand)\*?\s*\{?\s*\\([A-Za-z]+)\s*\}?\s*(?:\[(\d)\])?\s*(\[[^\]]*\])?\s*(?=\{)|\\def\s*\\([A-Za-z]+)((?:#\d)*)\s*(?=\{)/g;
   for(let match;(match=pattern.exec(text));){
-    const open=pattern.lastIndex,close=balanced(text,open);
-    if(close<0)continue;
+    const open=pattern.lastIndex,end=skipArgument(text,open);
+    if(end<0)continue;
     const name=match[1]||match[4],count=match[1]?Number(match[2]||0):match[5].length/2;
-    candidates.push({name,arity:Math.max(0,count-(match[3]?1:0)),body:text.slice(open+1,close)});
-    pattern.lastIndex=close+1;
+    candidates.push({name,arity:Math.max(0,count-(match[3]?1:0)),body:text.slice(open+1,end-1)});
+    pattern.lastIndex=end;
   }
   // A macro is usable once everything its body calls is; iterate until no more qualify.
   const macros=new Map();

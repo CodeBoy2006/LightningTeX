@@ -2,6 +2,18 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import {splitPreamble,liveSourcePolicy,findLiveEdit,safeProjectPath} from '../core/document.js';
 import {parseMacros} from '../core/math-preview.js';
 test('commented document marker ignored',()=>assert.equal(splitPreamble('% \\begin{document}\n\\documentclass{article}\n\\begin{document}Hi').preamble,'% \\begin{document}\n\\documentclass{article}\n'));
+test('document markers retain the existing immediate-backslash comment rule and source offsets',()=>{
+ const marker=String.raw`\begin{document}`;
+ for(const prefix of ['',String.raw`\% `,String.raw`\\% `,'text ']){
+   const source=prefix+marker+'Body % comment';
+   assert.deepEqual(splitPreamble(source),{preamble:prefix,bodyStart:prefix.length+16});
+ }
+ for(const prefix of ['% ',String.raw`\%% `,'text % ']){
+   const line=prefix+marker+' '+marker+'\n';
+   assert.deepEqual(splitPreamble(line+marker+'Body'),{preamble:line,bodyStart:line.length+16});
+ }
+ assert.equal(splitPreamble('no marker\n% '+marker),null);
+});
 test('single captured paragraph mapping',()=>{let s='\\documentclass{article}\n\\begin{document}\nHello world.\n\nNext paragraph.\n\\end{document}\n';let c={units:[{kind:'par',file:'./main.tex',uid:1,begin_line:3,end_line:4}]};assert.equal(findLiveEdit(s,s.replace('world','reader'),c).source,'Hello reader.');assert.ok(findLiveEdit(s,s.replace('article','report'),c).reason);assert.ok(findLiveEdit(s,s.replace('world','world\n\nMore'),c).reason)});
 test('unchanged preamble definitions allow local edits; body definitions still require a full pass',()=>{
  const source='\\documentclass{article}\n\\newcommand{\\R}{\\mathbb{R}}\n\\begin{document}\nHello world.\n\\end{document}',capture={units:[{kind:'par',uid:1,begin_line:4,end_line:5}]};

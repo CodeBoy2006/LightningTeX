@@ -3,10 +3,8 @@
 export function splitPreamble(source) {
   const lines=source.split('\n'); let offset=0;
   for(const line of lines){
-    let visible='';
-    for(let i=0;i<line.length;i++){if(line[i]==='%'&&(i===0||line[i-1]!=='\\'))break;visible+=line[i]}
-    const i=visible.indexOf('\\begin{document}');
-    if(i>=0)return {preamble:source.slice(0,offset+i),bodyStart:offset+i+16};
+    const i=line.indexOf('\\begin{document}');
+    if(i>=0&&!/(^|[^\\])%/.test(line.slice(0,i)))return {preamble:source.slice(0,offset+i),bodyStart:offset+i+16};
     offset+=line.length+1;
   }return null;
 }
@@ -115,7 +113,7 @@ export function findLiveEdit(before,after,capture,spans=captureSpans(before,capt
   if(!oldPolicy.ok)return {reason:oldPolicy.reason};
   if(!policy.ok)return policy;
   if(oldPolicy.signature!==policy.signature)return {reason:'Environment, label or reference changed'};
-  return {unit:span.unit,span,source,start:span.start,end:span.end+delta};
+  return {unit:span.unit,span,source};
 }
 export function acceptLiveEdit(state,edit,source){
   const delta=source.length-state.source.length,boundary=edit.span.end;
