@@ -1,0 +1,73 @@
+{
+  "fullCompilesDuringLocalEdits": 1,
+  "restarts": 0,
+  "independentFullComparisons": 11,
+  "results": [
+    {
+      "name": "wrap",
+      "oldRows": 1,
+      "newRows": 4,
+      "ms": 89
+    },
+    {
+      "name": "split",
+      "oldRows": 1,
+      "newRows": 2,
+      "ms": 6
+    },
+    {
+      "name": "delete",
+      "oldRows": 1,
+      "newRows": 0,
+      "ms": 4
+    },
+    {
+      "name": "join",
+      "oldRows": 1,
+      "newRows": 2,
+      "ms": 11
+    },
+    {
+      "name": "taller math",
+      "oldRows": 2,
+      "newRows": 2,
+      "ms": 21
+    },
+    {
+      "name": "list item",
+      "oldRows": 2,
+      "newRows": 3,
+      "ms": 6
+    },
+    {
+      "name": "numbered item",
+      "oldRows": 2,
+      "newRows": 3,
+      "ms": 6
+    },
+    {
+      "name": "heading",
+      "oldRows": 1,
+      "newRows": 1,
+      "ms": 6
+    },
+    {
+      "name": "quotation",
+      "oldRows": 1,
+      "newRows": 1,
+      "ms": 5
+    },
+    {
+      "name": "included file",
+      "oldRows": 1,
+      "newRows": 1,
+      "ms": 3
+    },
+    {
+      "name": "cross-page",
+      "oldRows": 86,
+      "newRows": 103,
+      "ms": 232
+    }
+  ]
+}

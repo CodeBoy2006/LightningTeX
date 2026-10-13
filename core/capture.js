@@ -47,8 +47,8 @@ export function unitContext(capture, unitOrId) {
 export function liveUnitEligibility(capture, unitOrId) {
   let unit; try {unit=resolveUnit(capture,unitOrId);} catch(e) {return fail(e.message);}
   const math=unit.kind==='env'&&/^(equation|align|gather|multline|displaymath)\*?$/.test(unit.name);
-  const composite=unit.kind==='env'&&['proof','abstract'].includes(unit.name)
-    ||unit.kind==='heading'&&['paragraph','subparagraph'].includes(unit.name);
+  const composite=unit.kind==='env'&&['proof','abstract','itemize','enumerate','description','quote','quotation','verse','center','flushleft','flushright'].includes(unit.name)
+    ||unit.kind==='heading'&&['section','subsection','subsubsection','paragraph','subparagraph'].includes(unit.name);
   if (!math&&!composite&&(unit.kind!=='par' || unit.nest!==1)) return fail('Only top-level text and math units are live');
   if (!math&&!composite&&unit.seqs?.length!==1) return fail('Composite or nested paragraphs require full layout');
   if (!math&&!composite) {
@@ -58,7 +58,7 @@ export function liveUnitEligibility(capture, unitOrId) {
   if (!unit.placements?.length) return fail('No captured row placements');
   // The server validates/replays kernel everypar (including paragraphs after headings).
   if (unit.noskipsec) return fail('Run-in headings require full layout');
-  if (Object.keys(map(unit.advanced)).some(key=>key!=='equation'&&!(unit.kind==='heading'&&['bookmark@seq@number','section@level'].includes(key)))) return fail('Counter changes require full layout');
+  if (Object.keys(map(unit.advanced)).some(key=>key!=='equation'&&!(unit.kind==='heading'&&['section','subsection','subsubsection','paragraph','subparagraph','bookmark@seq@number','section@level'].includes(key))&&!(unit.kind==='env'&&unit.name==='enumerate'&&/^enum[iv]+$/.test(key)))) return fail('Counter changes require full layout');
   // capture.lua::scan_flags reports node COUNTS, not only degradation flags.
   // Ordinary prose has glyphs and an indentation hlist. Accept structural counts;
   // inserts, marks, adjustments, direction changes and whatsits still fall back.
@@ -164,7 +164,8 @@ export function compareBaseline(baseline, live) {
   let glyphs=0;
   for(let i=0;i<baseline.rows.length;i++) {
     const reference=baseline.rows[i],a=live.lines[i],b=reference.line;
-    if(['w','h','d'].some(k=>a[k]!==b[k]) || Math.abs((a.gs??0)-(b.gs??0))>1e-12
+    // An included file can leave trailing space in infinite parfillskip; actual ink must still agree below.
+    if(['w','h','d'].some(k=>a[k]!==b[k]) || (!(a.gorder>0)&&Math.abs((a.gs??0)-(b.gs??0))>1e-12)
       || (a.gsign??0)!==(b.gsign??0) || (a.gorder??0)!==(b.gorder??0))return fail(`Row ${i+1} box or glue differs`);
     const left=normalizeRow(a,live.fonts||{}),right=normalizeRow(b,reference.fonts);
     if(!left.ok)return left;if(!right.ok)return right;

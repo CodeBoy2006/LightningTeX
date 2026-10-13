@@ -59,7 +59,7 @@ test('cancellation ignores stale response and allows a fresh compilation',async(
 
 test('newer edit during compile schedules a second compile, then reaches current revision',async()=>{
   const first=deferred();const requests=[];const h=setup({onCompile:request=>{requests.push(request);return requests.length===1?first.promise:Promise.resolve({pdf:bytes(2)});}});
-  try {const run=h.ui.compile();h.edit('new document');await tick(10);assert.equal(requests.length,1);first.resolve({pdf:bytes(1)});await run;assert.equal(h.q('preview-status-text').textContent,'Out of date');await tick(30);assert.equal(requests.length,2);assert.equal(requests[1].source,'new document');assert.equal(h.ui.getState().pdfRevision,h.ui.getState().revision);}finally{h.cleanup();}
+  try {const run=h.ui.compile();h.edit('new document');await tick(10);assert.equal(requests.length,1);first.resolve({pdf:bytes(1)});await run;assert.equal(h.rendered.length,0,'obsolete PDF must never replace a newer live preview');await tick(30);assert.equal(requests.length,2);assert.equal(requests[1].source,'new document');assert.equal(h.ui.getState().pdfRevision,h.ui.getState().revision);}finally{h.cleanup();}
 });
 
 test('compile errors preserve last good PDF, mark edits stale and open the panel',async()=>{
@@ -150,9 +150,39 @@ test('continuous input cannot postpone Full indefinitely; busy work coalesces to
     first.resolve({pdf:bytes(1)});await tick(25);
     assert.equal(requests.length,2);
     assert.equal(requests[1].source,'Latest equation $x^{99}$');
-    assert.deepEqual(h.rendered,[1,2]);
+    assert.deepEqual(h.rendered,[2]);
     assert.equal(h.ui.getState().pdfRevision,h.ui.getState().revision);
   }finally{h.cleanup();}
+});
+
+test('live updates continue during a full pass; idle reflow settles only the latest source',async()=>{
+ const pending=deferred(),previews=[],compiles=[];
+ const h=setup({onPreview:async job=>{previews.push(job.source);h.ui.setLivePages({canvases:new Map(),revision:job.revision});return 'reflow';},onCompile:job=>{compiles.push(job);return compiles.length===1?pending.promise:Promise.resolve({pdf:bytes(2)});}});
+ try{
+  await h.ui.setPdf(bytes(0));const first=h.ui.compile();
+  h.edit('first reflow');await tick(20);h.edit('newest reflow');await tick(20);
+  assert.deepEqual(previews,['first reflow','newest reflow']);assert.equal(compiles.length,1);
+  assert.equal(h.ui.getState().previewRevision,h.ui.getState().revision);
+  pending.resolve({pdf:bytes(1)});await first;await tick(30);assert.deepEqual(h.rendered,[0]);
+  await tick(520);assert.equal(compiles.length,2);assert.equal(compiles[1].source,'newest reflow');assert.deepEqual(h.rendered,[0,2]);
+ }finally{h.cleanup();}
+});
+test('disabling Auto or cancelling clears a pending pagination pass',async()=>{
+ let compiles=0;const h=setup({onPreview:async()=> 'reflow',onCompile:async()=>{compiles++;return {pdf:bytes(1)};}});
+ try{
+  h.edit('pending');await tick(20);h.auto(false);await tick(520);assert.equal(compiles,0);
+  h.auto(true);await tick(20);h.ui.cancel();await tick(520);assert.equal(compiles,0);
+ }finally{h.cleanup();}
+});
+test('a PDF finishing rasterization after a new edit cannot roll back a live preview',async()=>{
+ const pending=deferred();let slow=false;
+ const h=setup({renderPdf:async({container})=>{if(slow)await pending.promise;container.textContent=slow?'old render':'original';}});
+ try{
+  h.auto(false);await h.ui.setPdf(bytes(0),{revision:0});slow=true;
+  const rendering=h.ui.setPdf(bytes(1),{revision:0});h.edit('newer source');
+  h.ui.setLivePages({canvases:new Map(),revision:h.ui.getState().revision});pending.resolve();await rendering;
+  assert.equal(h.q('preview-viewport').textContent,'original');assert.equal(h.ui.getState().previewRevision,h.ui.getState().revision);assert.equal(h.ui.getState().pdfRevision,0);
+ }finally{h.cleanup();}
 });
 
 test('disabling Auto stops pending and follow-up compilation; re-enabling resumes',async()=>{

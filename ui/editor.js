@@ -98,11 +98,12 @@ const SETTINGS=[
 const choiceLabel={lang:{en:'English',zh:'中文',auto:'set.lang.auto'},theme:value=>'set.theme.'+value,mathScale:value=>'size.'+value};
 
 /**
- * mountEditor({ root, source?, project?, store?, onCompile, onCancel?, onSourceChange?, renderPdf?,
+ * mountEditor({ root, source?, project?, store?, onCompile, onPreview?, onCancel?, onSourceChange?, renderPdf?,
  *   typesetMath?, onCursor?, onPreviewPick?, previewIntervalMs? })
  * onCompile({source, root, files, filesRev, revision, reason}) may return {pdf:Uint8Array, revision?, durationMs?},
  *   or {empty:true} for a document without pages; files are the project's other files as {path, data, rev}.
  *   Never return a fake PDF.
+ * onPreview(request) uses the same input, returning true, 'reflow' (settle after idle), or false (full pass).
  * renderPdf({bytes, container, signal, zoom, viewport}) renders into an offscreen container; only a
  *   successful render replaces the old preview. Page canvases carry data-page and data-base (CSS px at 100%).
  * typesetMath({found, source, scale, maxWidth}) resolves {canvas} or {state, message} for the formula popover.
@@ -114,9 +115,9 @@ export function mountEditor(options={}){
   const settings=loadSettings(),i18n=createI18n(settings.lang),t=i18n.t,project=createProject();
   settings.panel=false; // The problems panel opens on demand; it never starts open.
   const state={revision:0,filesRev:0,pdfRevision:-1,previewRevision:-1,engine:'loading',progress:null,loaded:false,
-    compiling:false,busy:false,pdf:null,meta:null,run:0,logs:[],problems:[],failed:false,live:null,marker:null,dirty:false,save:'off',destroyed:false};
+    compiling:false,previewing:false,busy:false,pdf:null,meta:null,run:0,logs:[],problems:[],failed:false,live:null,marker:null,dirty:false,save:'off',destroyed:false};
   const views=new Map(),removers=[];
-  let tabs=[],active=null,compileTimer,busyTimer,zoomTimer,saveTimer,rendererAbort,pdfSequence=0,store=null,saving=false,restoring=false,storageWarned=false;
+  let tabs=[],active=null,compileTimer,settleTimer,busyTimer,zoomTimer,saveTimer,rendererAbort,pdfSequence=0,previewRun=0,store=null,saving=false,restoring=false,storageWarned=false;
   let pending=emptyPending(),panelAuto=false;
   root.innerHTML=shell();
   const app=root.firstElementChild;
@@ -151,7 +152,7 @@ export function mountEditor(options={}){
     else if(key==='lang'){i18n.set(value);applyAppearance();refreshText();}
     else if(key==='sidebar'||key==='split'||key==='sidebarOpen')applyLayout();
     else if(['fontSize','wrap','autoClose','tabSize','spellcheck'].includes(key)){for(const view of views.values())view.editor?.configure(settings);popover?.place();}
-    else if(key==='autoCompile'){$('auto-compile').checked=value;clearTimeout(compileTimer);compileTimer=null;if(value&&state.pdfRevision!==state.revision)scheduleCompile();}
+    else if(key==='autoCompile'){$('auto-compile').checked=value;clearTimeout(compileTimer);clearTimeout(settleTimer);compileTimer=null;if(value&&state.pdfRevision!==state.revision)scheduleCompile();}
     else if(key==='mathPreview'||key==='mathScale'){popover?.hide();if(value)updateMath();}
     else if(key==='persist')void persistChanged();
     else if(key==='panel'||key==='panelTab')renderPanel();
@@ -223,7 +224,7 @@ export function mountEditor(options={}){
   }
   function updateLive(){
     const live=state.live,el=$('stat-live');
-    el.textContent=!live?'':live.state==='live'?t('live.ms',{ms:live.ms<10?live.ms.toFixed(1):Math.round(live.ms)}):live.state==='full'?t('live.full'):live.state==='waiting'?t('live.wait'):live.state==='off'?t('live.off'):'';
+    el.textContent=!live?'':live.state==='live'||live.state==='reflow'?t(live.state==='reflow'?'live.reflow':'live.ms',{ms:live.ms<10?live.ms.toFixed(1):Math.round(live.ms)}):live.state==='full'?t('live.full'):live.state==='waiting'?t('live.wait'):live.state==='off'?t('live.off'):'';
     el.title=live?.reason?String(live.reason):'';el.dataset.state=live?.state||'';
   }
   function updateSave(){$('save-status').textContent=t('save.'+state.save);$('save-status').dataset.state=state.save;}
@@ -362,24 +363,39 @@ export function mountEditor(options={}){
 
   // ---- compile and preview ----------------------------------------------------------------------
   const scheduleCompile=(delay=options.previewIntervalMs??60)=>{
-    if(compileTimer||state.compiling||!settings.autoCompile||state.destroyed)return;
+    if(compileTimer||state.previewing||state.compiling&&!options.onPreview||!settings.autoCompile||state.destroyed)return;
     // A trailing debounce starves Full while typing. Keep one timer and read the latest source.
     compileTimer=setTimeout(()=>{compileTimer=null;void compile('auto');},delay);
   };
+  const request=reason=>({source:mainText(),root:project.main,files:project.files().filter(file=>file.path!==project.main).map(file=>({path:file.path,data:file.text??file.data,rev:file.rev})),filesRev:state.filesRev,revision:state.revision,reason});
+  async function preview(){
+    if(state.previewing)return;
+    clearTimeout(settleTimer);settleTimer=null;
+    const run=++previewRun,job=request('auto');state.previewing=true;
+    try{
+      const result=await options.onPreview(job);
+      if(run!==previewRun||state.destroyed||job.revision!==state.revision||!settings.autoCompile)return;
+      if(result==='reflow')settleTimer=setTimeout(()=>{settleTimer=null;void compile('settle');},500);
+      else if(!result)void compile('settle');
+    }catch(error){if(run===previewRun&&job.revision===state.revision)api.setError(error,{quiet:true});}
+    finally{if(run===previewRun){state.previewing=false;if(job.revision!==state.revision)scheduleCompile(0);}}
+  }
   const finishRun=()=>{state.compiling=false;clearTimeout(busyTimer);state.busy=false;updateControls();updateEngine();};
   async function compile(reason='manual'){
     clearTimeout(compileTimer);compileTimer=null;
-    if(state.engine!=='ready'||!state.loaded||state.compiling||state.destroyed||!project.main)return;
-    const run=++state.run,revision=state.revision,main=project.main,began=performance.now();
+    if(state.engine!=='ready'||!state.loaded||state.destroyed||!project.main)return;
+    if(reason==='auto'&&options.onPreview)return preview();
+    if(state.compiling)return;
+    clearTimeout(settleTimer);settleTimer=null;
+    const run=++state.run,revision=state.revision,began=performance.now();
     state.compiling=true;
     // Local updates finish within a frame or two; only a real wait shows the busy state.
     busyTimer=setTimeout(()=>{state.busy=true;updateControls();updateEngine();},250);
     updateControls();
     try{
       if(!options.onCompile)throw new Error('No TeX engine is connected.');
-      const files=project.files().filter(file=>file.path!==main).map(file=>({path:file.path,data:file.text??file.data,rev:file.rev}));
-      const result=await options.onCompile({source:mainText(),root:main,files,filesRev:state.filesRev,revision,reason});
-      if(run!==state.run||state.destroyed)return;
+      const result=await options.onCompile(request(reason));
+      if(run!==state.run||state.destroyed||revision!==state.revision)return;
       state.failed=false;
       // A panel that opened for an error steps aside once the document compiles again.
       if(panelAuto){panelAuto=false;set('panel',false);}
@@ -391,8 +407,8 @@ export function mountEditor(options={}){
     }
   }
   const cancel=()=>{
-    if(!state.compiling)return;
-    ++state.run;++pdfSequence;rendererAbort?.abort();clearTimeout(compileTimer);compileTimer=null;
+    if(!state.compiling&&!state.previewing&&!settleTimer)return;
+    ++state.run;++pdfSequence;++previewRun;state.previewing=false;rendererAbort?.abort();clearTimeout(compileTimer);clearTimeout(settleTimer);compileTimer=settleTimer=null;
     try{Promise.resolve(options.onCancel?.()).catch(error=>log(`Cancellation: ${error.message||error}`,'warning'));}catch(error){log(`Cancellation: ${error.message||error}`,'warning');}
     log('Compilation cancelled. The previous PDF is retained.');finishRun();
   };
@@ -447,7 +463,7 @@ export function mountEditor(options={}){
     try{
       if(options.renderPdf)rendered=await options.renderPdf({bytes:data.slice(),container,signal:rendererAbort.signal,zoom:settings.zoom,viewport});
       else{newUrl=URL.createObjectURL(new Blob([data],{type:'application/pdf'}));const frame=document.createElement('iframe');frame.title='Compiled PDF document';frame.src=newUrl;container.append(frame);}
-      if(state.destroyed||sequence!==pdfSequence){if(newUrl)URL.revokeObjectURL(newUrl);return;}
+      if(state.destroyed||sequence!==pdfSequence||metadata.revision!==undefined&&metadata.revision!==state.revision){if(newUrl)URL.revokeObjectURL(newUrl);return;}
       if(state.pdfUrl)URL.revokeObjectURL(state.pdfUrl);state.pdfUrl=newUrl;
       const scroll=viewport.scrollTop;
       viewport.replaceChildren(container);viewport.scrollTop=scroll;
@@ -540,7 +556,8 @@ export function mountEditor(options={}){
     if(state.destroyed||restoring)return;
     const typed=change.origin==='editor';
     state.revision++;state.dirty=true;
-    // Only edits to the main file's text can be typeset locally; everything else needs a full pass.
+    clearTimeout(settleTimer);settleTimer=null;
+    // Track project dependencies separately; the host decides which file edits can be replayed.
     if(change.path!==project.main||change.type==='create'||change.type==='main')state.filesRev++;
     if(change.type==='load'){for(const path of [...views.keys()])dropView(path);tabs=[];active=null;state.problems=[];state.failed=false;renderProblems();showSheet();}
     else if(change.type==='remove')for(const path of change.paths)closeTab(path);
@@ -658,14 +675,14 @@ export function mountEditor(options={}){
     getState:()=>({source:mainText(),root:project.main,revision:state.revision,filesRev:state.filesRev,ready:state.engine==='ready',compiling:state.compiling,pdfRevision:state.pdfRevision,previewRevision:state.previewRevision,
       active,zoom:settings.zoom}),
     getSettings:()=>({...settings}),
-    setLivePages({canvases,revision,durationMs}){
+    setLivePages({canvases,revision,durationMs,reflow=false}){
       if(state.destroyed||revision!==state.revision)return false;
       const targets=[...canvases].map(([page,canvas])=>[viewport.querySelector(`[data-page="${page}"]`),canvas]);
       if(targets.some(([target])=>!target))return false;
       for(const [target,canvas] of targets){for(const key of Object.keys(target.dataset))canvas.dataset[key]=target.dataset[key];canvas.style.cssText=target.style.cssText;canvas.setAttribute('aria-label',target.getAttribute('aria-label'));target.replaceWith(canvas);}
       state.previewRevision=revision;
-      if(Number.isFinite(durationMs)&&canvases.size)api.setLiveStatus({state:'live',ms:durationMs,revision});
-      updateStatus();return true;
+      if(Number.isFinite(durationMs)&&canvases.size)api.setLiveStatus({state:reflow?'reflow':'live',ms:durationMs,revision});
+      updateStatus();updatePage();placeMarker();return true;
     },
     setEngineStatus({status='loading',progress}={}){
       state.engine=status;state.progress=Number.isFinite(progress)?clamp(progress,0,1):null;
@@ -686,8 +703,8 @@ export function mountEditor(options={}){
     refreshMath:updateMath,
     clearLogs(){state.logs=[];$('logs').textContent='';},
     destroy(){
-      state.destroyed=true;state.run++;pdfSequence++;
-      for(const timer of [compileTimer,busyTimer,zoomTimer,saveTimer])clearTimeout(timer);
+      state.destroyed=true;state.run++;pdfSequence++;previewRun++;
+      for(const timer of [compileTimer,settleTimer,busyTimer,zoomTimer,saveTimer])clearTimeout(timer);
       toaster.hide();rendererAbort?.abort();if(state.pdfUrl)URL.revokeObjectURL(state.pdfUrl);
       for(const path of [...views.keys()])dropView(path);
       popover?.destroy();removers.forEach(remove=>remove());root.replaceChildren();

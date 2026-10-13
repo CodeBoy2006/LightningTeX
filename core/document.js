@@ -8,7 +8,7 @@ export function splitPreamble(source) {
     offset+=line.length+1;
   }return null;
 }
-const liveEnvironments=new Set('equation equation* align align* gather gather* multline multline* displaymath aligned gathered split cases matrix pmatrix bmatrix Bmatrix vmatrix Vmatrix smallmatrix proof abstract'.split(' '));
+const liveEnvironments=new Set('equation equation* align align* gather gather* multline multline* displaymath aligned gathered split cases matrix pmatrix bmatrix Bmatrix vmatrix Vmatrix smallmatrix proof abstract itemize enumerate description quote quotation verse center flushleft flushright tabular tabular*'.split(' '));
 // A bounded vocabulary keeps state-changing TeX out of the persistent worker.
 export const liveCommands=new Set(('text textbf textit textrm textsf texttt emph mathrm mathit mathbf mathsf mathtt mathcal mathbb mathfrak mathnormal boldsymbol operatorname '+
  'frac dfrac tfrac cfrac binom dbinom tbinom sqrt sum prod coprod int iint iiint oint lim limsup liminf min max sup inf log ln exp sin cos tan cot sec csc arcsin arccos arctan sinh cosh tanh det dim ker deg arg Pr hom gcd colon '+
@@ -16,10 +16,10 @@ export const liveCommands=new Set(('text textbf textit textrm textsf texttt emph
  'infty partial nabla ell hbar imath jmath Re Im aleph emptyset varnothing forall exists neg in notin ni subset supset subseteq supseteq cup cap setminus land lor perp '+
  'cdot cdots ldots vdots ddots dots times div pm mp ast star circ bullet le leq ge geq neq ne approx sim simeq equiv propto cong to mapsto rightarrow leftarrow leftrightarrow Rightarrow Leftarrow Leftrightarrow implies iff '+
  'left right middle big Big bigg Bigg bigl bigr Bigl Bigr biggl biggr Biggl Biggr langle rangle lbrace rbrace lvert rvert lVert rVert vert Vert floor lfloor rfloor lceil rceil '+
- 'overline underline bar hat widehat tilde widetilde vec dot ddot overbrace underbrace overset underset stackrel limits nolimits displaystyle textstyle scriptstyle scriptscriptstyle quad qquad thinspace medspace thickspace negthinspace phantom hphantom vphantom smash nonumber notag').split(' '));
+ 'overline underline bar hat widehat tilde widetilde vec dot ddot overbrace underbrace overset underset stackrel limits nolimits displaystyle textstyle scriptstyle scriptscriptstyle quad qquad thinspace medspace thickspace negthinspace phantom hphantom vphantom smash nonumber notag item par noindent newline linebreak hline toprule midrule bottomrule multicolumn').split(' '));
 // Mandatory arguments. A command typed before its arguments would otherwise swallow the
 // tokens that close the persistent engine's unit group.
-export const liveArity=Object.assign(Object.create(null),{frac:2,dfrac:2,tfrac:2,cfrac:2,binom:2,dbinom:2,tbinom:2,overset:2,underset:2,stackrel:2});
+export const liveArity=Object.assign(Object.create(null),{frac:2,dfrac:2,tfrac:2,cfrac:2,binom:2,dbinom:2,tbinom:2,overset:2,underset:2,stackrel:2,multicolumn:3});
 for(const name of 'text textbf textit textrm textsf texttt emph mathrm mathit mathbf mathsf mathtt mathcal mathbb mathfrak mathnormal boldsymbol operatorname sqrt overline underline bar hat widehat tilde widetilde vec dot ddot overbrace underbrace phantom hphantom vphantom smash left right middle big Big bigg Bigg bigl bigr Bigl Bigr biggl biggr Biggl Biggr'.split(' '))liveArity[name]=1;
 /** Index just past one plausible macro argument starting at i, or -1 when none has been typed yet. */
 export function skipArgument(text,i){
@@ -51,7 +51,17 @@ export function liveSourcePolicy(text,macros=new Map()){
       const command=match[0];i+=command.length;
       const macro=macros.get(command);
       if(missingArgument(text,command,i+1,macro?.arity??liveArity[command]))return {incomplete:true,reason:'Waiting for an argument'};
-      if(['begin','end','label','ref','eqref','pageref','tag','cite','paragraph','subparagraph'].includes(command)){
+      if(['section','subsection','subsubsection','paragraph','subparagraph'].includes(command)){
+        let start=i+1+(/^\s*\*?\s*/.exec(text.slice(i+1))[0].length);
+        if(text[start]==='['){
+          const close=text.indexOf(']',start+1);if(close<0)return {incomplete:true,reason:'Waiting for a short title'};
+          start=close+1+(/^\s*/.exec(text.slice(close+1))[0].length);
+          if(text[start]&&text[start]!=='{')return {reason:'Complex short title needs full layout'};
+        }
+        const end=skipArgument(text,start);
+        if(text[start]!=='{'||end<0)return {incomplete:true,reason:'Waiting for a heading title'};
+        signature.push(command+text.slice(i+1,end));
+      }else if(['begin','end','label','ref','eqref','pageref','tag','cite'].includes(command)){
         const tail=text.slice(i+1),notes=command==='cite'?/^(?:\s*\[[^\[\]\\{}$]*\]){0,2}/.exec(tail)[0]:'';
         if(command==='cite'&&tail.slice(notes.length).trimStart().startsWith('['))return {reason:'Complex citation needs full layout'};
         const arg=/^\s*(\*)?\s*\{([^{}]*)\}/.exec(tail.slice(notes.length));
@@ -87,38 +97,48 @@ export function liveSourcePolicy(text,macros=new Map()){
 function offsets(s){let a=[0];for(let i=0;i<s.length;i++)if(s[i]==='\n')a.push(i+1);return a;}
 const sameFile=(a,b)=>String(a).replace(/^\.\//,'')===b;
 export function captureSpans(source,capture,root='main.tex'){
-  const lines=offsets(source),bodyStart=splitPreamble(source)?.bodyStart??0,end=source.lastIndexOf('\\end{document}'),units=capture?.units||[];
+  const lines=offsets(source),bodyStart=splitPreamble(source)?.bodyStart??0,end=source.lastIndexOf('\\end{document}'),units=(capture?.units||[]).filter(unit=>!unit.file||sameFile(unit.file,root));
   return units.map((unit,index)=>{
     const start=Math.max(lines[unit.begin_line-1],bodyStart),next=lines[units[index+1]?.begin_line-1];
     const limit=Math.min(lines[unit.end_line]??source.length,end>=0?end:source.length,next>start?next:source.length);
     const text=source.slice(start,limit).trimEnd();
     return {unit,start,end:start+text.length,original:text};
-  }).filter(span=>Number.isInteger(span.start)&&span.end>span.start&&(!span.unit.file||sameFile(span.unit.file,root)));
+  }).filter(span=>Number.isInteger(span.start)&&span.end>span.start);
 }
 export function findLiveEdit(before,after,capture,spans=captureSpans(before,capture),macros=new Map()){
   if(before===after)return {unchanged:true,reason:'unchanged'};
   const a=splitPreamble(before),b=splitPreamble(after);
-  if(!a||!b||a.preamble!==b.preamble)return {reason:'Preamble changed; rebuilding the engine'};
-  if(/\\(?:def|gdef|edef|xdef|let|newcommand|renewcommand|newenvironment|newif|catcode|directlua|mathversion|pdfmapline|pdfmapfile|pdfextension)\b/.test(before.slice(a.bodyStart)))return {reason:'Custom setup needs a full document pass'};
+  if(!!a!==!!b||a?.preamble!==b?.preamble)return {reason:'Preamble changed; rebuilding the engine'};
+  if(/\\(?:def|gdef|edef|xdef|let|newcommand|renewcommand|newenvironment|newif|catcode|directlua|mathversion|pdfmapline|pdfmapfile|pdfextension)\b/.test(before.slice(a?.bodyStart??0)))return {reason:'Custom setup needs a full document pass'};
   let start=0;while(start<before.length&&start<after.length&&before[start]===after[start])start++;
   let oldEnd=before.length,newEnd=after.length;
   while(oldEnd>start&&newEnd>start&&before[oldEnd-1]===after[newEnd-1]){oldEnd--;newEnd--;}
   const delta=after.length-before.length,candidates=spans.filter(span=>start>=span.start&&oldEnd<=span.end);
-  if(candidates.length!==1)return {reason:'This edit needs full-document layout'};
-  const span=candidates[0],oldText=before.slice(span.start,span.end),source=after.slice(span.start,span.end+delta);
-  // Composite units already contain paragraph breaks; reject edits that touch a break.
-  if(/\n\s*\n/.test(before.slice(start-1,oldEnd+1))||/\n\s*\n/.test(after.slice(start-1,newEnd+1)))return {reason:'Paragraph boundaries changed'};
-  const oldPolicy=liveSourcePolicy(oldText,macros);
+  let members=candidates;
+  if(!members.length){
+    const trailing=spans.findLast(span=>span.end<start&&!before.slice(span.end,oldEnd).trim());
+    if(trailing)members=[trailing];
+  }
+  if(!members.length){
+    const first=spans.findLastIndex(span=>span.start<=start),last=spans.findIndex(span=>span.end>=oldEnd);
+    members=first>=0&&last>=first?spans.slice(first,last+1):[];
+    // Borrow only adjacent plain paragraphs; headings, includes and state changes retain full layout.
+    if(members.some((span,index)=>span.unit.kind!=='par'||span.unit.nest!==1||index&&before.slice(members[index-1].end,span.start).trim()))members=[];
+  }
+  if(!members.length||candidates.length>1)return {reason:'This edit needs full-document layout'};
+  const span=members[0],end=Math.max(members.at(-1).end,oldEnd),oldText=before.slice(span.start,end),source=after.slice(span.start,end+delta);
+  const boundaries=/\n\s*\n/.test(before.slice(start-1,oldEnd+1))||/\n\s*\n/.test(after.slice(start-1,newEnd+1));
+  const oldPolicy=oldText.trim()?liveSourcePolicy(oldText,macros):{ok:true,signature:'[]'};
   if(!oldPolicy.ok)return {reason:oldPolicy.reason};
-  const policy=liveSourcePolicy(source,macros);
+  const policy=source.trim()?liveSourcePolicy(source,macros):{ok:true,signature:'[]'};
   if(!policy.ok)return policy;
-  if(oldPolicy.signature!==policy.signature)return {reason:'Environment, label or reference changed'};
-  return {unit:span.unit,span,source};
+  return {unit:span.unit,span,removed:members.slice(1),end,source,reflow:members.length>1||boundaries||oldPolicy.signature!==policy.signature||!source.trim()};
 }
 export function acceptLiveEdit(state,edit,source){
-  const delta=source.length-state.source.length,boundary=edit.span.end;
+  const delta=source.length-state.source.length,boundary=edit.end;
+  state.spans=state.spans.filter(span=>!edit.removed.includes(span));
   for(const span of state.spans){
-    if(span===edit.span)span.end+=delta;
+    if(span===edit.span)span.end=boundary+delta;
     else if(span.start>=boundary){span.start+=delta;span.end+=delta;}
   }
   state.source=source;

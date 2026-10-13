@@ -61,6 +61,13 @@ test('baseline compares relative origins with stable font identity and rules',()
  const baseline=extractUnitRows(new Map([[1,page]]),unit);page.lines[0].x=900;assert.equal(baseline.rows[0].line.x,100);
  assert.equal(compareBaseline(baseline,live).ok,true);
 });
+test('trailing infinite fill may differ only when every glyph still matches',()=>{
+ const {unit,page,live}=drawing();page.lines[0].gorder=live.lines[0].gorder=2;live.lines[0].gs=20;
+ assert.equal(compareUnitBaseline(unit,[page],live).ok,true);
+ live.lines[0].items[0][4]++;assert.equal(compareUnitBaseline(unit,[page],live).ok,false);
+ live.lines[0].items[0][4]--;page.lines[0].gorder=live.lines[0].gorder=0;
+ assert.equal(compareUnitBaseline(unit,[page],live).ok,false);
+});
 test('selected-row proof retains unedited graphics and rejects hidden binary degradation',()=>{
  const {unit,page,live}=drawing();page.flags={literal:1};page.other=[['l',0,'untouched PDF graphics']];
  page.lines.push({unit:9,row:1,items:[['i',1,0,0,1,1]]});

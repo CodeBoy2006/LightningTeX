@@ -5,7 +5,7 @@ import {unitContext,liveUnitEligibility,compareUnitBaseline} from './core/captur
 import {previewSource,parseMacros,inkBounds} from './core/math-preview.js';
 import {parseTexLog} from './core/tex-log.js';
 import {decodeDisplayList,createDisplayListRenderer,CSS_PX_PER_SP} from './render/index.mjs';
-import {replaceUnitRows,unitInkRegion} from './core/live-layout.js';
+import {replaceUnitRows,pageFlow} from './core/live-layout.js';
 import {parseEngineFont} from './render/type1-font.mjs';
 import * as pdfjs from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -49,32 +49,35 @@ const ui=mountEditor({renderPdf,typesetMath,
  onCursor:position=>{caret=position;if(snapshot)syncMarker();},
  onPreviewPick:pick,
  onCancel:()=>{generation++;background?.stop();live?.stop();liveStart=null;snapshot=null;ui.setLiveStatus({state:'ready'});ui.setMarker(null);},
+ onPreview:request=>updateLive(request),
  onCompile:async({source,root,files,filesRev,revision,reason})=>{
    if(source.length>500000)throw Error('This browser edition supports source files up to 500,000 characters.');
-   fullReason=null;
+   const fallback=fullReason;fullReason=null;
    if(reason==='zoom'&&snapshot?.root===root&&snapshot.filesRev===filesRev&&snapshot.source===source){
-     try{if(ui.setLivePages({canvases:await drawLivePages(snapshot.drawnPages.map(page=>[page.page,page])),revision}))return;}
+     try{const drawn=await drawLivePages(snapshot.drawnPages.map(page=>[page.page,page]));if(ui.setLivePages({...drawn,revision})){snapshot.flows=drawn.flows;syncMarker(false);return;}}
      catch(error){fullReason=error.message;}
    }
-   if(reason==='auto'&&snapshot?.root===root&&snapshot.filesRev===filesRev&&await updateLive(source,revision))return;
    let result;
    try{result=await background.compile(source,{root,files});}
    catch(error){
+     if(ui.getState().revision!==revision)return;
      ui.setProblems(parseTexLog(error.log??error.message,{root}));
      // Nothing to typeset yet is not a failure: show an empty page.
      if(!error.empty)throw error;
      if(ui.getState().revision===revision){generation++;snapshot=null;liveStart=null;ui.setLiveStatus({state:'ready'});ui.setMarker(null);}
      return {empty:true};
    }
-   if(ui.getState().revision===revision){
+   if(ui.getState().revision!==revision)return;
+   {
      const capture=result.capture,preamble=splitPreamble(source)?.preamble??'',support=supportFiles(preamble,files);
-     snapshot={source,root,filesRev,capture,pages:result.pages,drawnPages:result.pages,pdf:result.pdf,baseCanvases:new Map(),inkBounds:new Map(),liveUnits:new Set(),aux:result.aux,proofs:new Map(),spans:captureSpans(source,capture,root),
+     const documents=new Map([{path:root,data:source},...files].filter(file=>typeof file.data==='string').map(file=>[file.path,{source:file.data,spans:captureSpans(file.data,capture,file.path)}]));
+     snapshot={source,root,files,filesRev,documents,capture,pages:result.pages,drawnPages:result.pages,pdf:result.pdf,baseCanvases:new Map(),inkBounds:new Map(),liveUnits:new Set(),edits:new Map(),flows:new Map(),reflow:false,aux:result.aux,proofs:new Map(),
        support,packageMisses:result.packageMisses,macros:parseMacros([preamble,...support.map(file=>file.data)].join('\n')),context:previewContext(capture)};
      for(const[k,v]of Object.entries(result.fonts))fonts.set(k,v);
      prepareLive(snapshot);syncMarker(false);
    }
    ui.setProblems(parseTexLog(result.log,{root}));
-   ui.setLiveStatus(fullReason?{state:'full',reason:fullReason}:{state:'ready'});
+   ui.setLiveStatus(fallback?{state:'full',reason:fallback}:{state:'ready'});
    ui.log(`Full LuaLaTeX: ${result.pages.length} page(s), ${result.durationMs.toFixed(0)} ms (${result.passes} pass${result.passes===1?'':'es'}).`);
    if(/undefined references|Rerun to get cross-references|Label\(s\) may have changed/i.test(result.log))ui.log('References may need another document pass; automatic compilation runs at most two passes per update.','warning');
    return {...result,pages:result.pages.length,revision};
@@ -86,7 +89,7 @@ function prepareLive(state){
  void liveStart.then(()=>{if(gen===generation)ui.refreshMath();},error=>{if(gen===generation)ui.setLiveStatus({state:'off',reason:error.message});});
 }
 async function drawLivePages(pages,units=snapshot.liveUnits){
- const state=snapshot,canvases=new Map();let pdfTask,pdf;
+ const state=snapshot,canvases=new Map(),flows=new Map();let pdfTask,pdf;
  try{for(const [number,page] of pages){
    const target=document.querySelector(`[data-id="preview-viewport"] canvas[data-page="${number}"]`);
    if(!target)throw Error('Full page is not ready');
@@ -100,36 +103,56 @@ async function drawLivePages(pages,units=snapshot.liveUnits){
      base=document.createElement('canvas');base.width=Math.ceil(view.width);base.height=Math.ceil(view.height);
      await sheet.render({canvasContext:base.getContext('2d'),viewport:view}).promise;sheet.cleanup();state.baseCanvases.set(number,base);
    }
-   const canvas=document.createElement('canvas');canvas.width=base.width;canvas.height=base.height;canvas.style.width=width+'px';
-   const ctx=canvas.getContext('2d'),scale=width/page.page_width,options={zoom:scale/CSS_PX_PER_SP,devicePixelRatio:ratio,padding:0,background:'transparent'},layers=[];
+   const canvas=document.createElement('canvas');canvas.width=base.width;canvas.style.width=width+'px';
+   const original=state.pages.find(page=>page.page===number),scale=width/page.page_width,options={zoom:scale/CSS_PX_PER_SP,devicePixelRatio:ratio,padding:0,background:'transparent'},layers=new Map(),patches=[];
    for(const uid of units){
-     const rows=page.lines.filter(line=>line.unit===uid);if(!rows.length)continue;
+     const rows=page.lines.filter(line=>line.unit===uid),oldRows=original.lines.filter(line=>line.unit===uid);if(!oldRows.length)continue;
      const layer=document.createElement('canvas'),local={...page,flags:{},other:[],lines:rows};
-     const painted=await renderer.render(layer,local,options),key=number+':'+uid;
+     const painted=await renderer.render(layer,local,{...options,viewport:{x:0,y:0,w:page.page_width,h:Math.max(page.page_height,...rows.map(row=>row.y+row.d+655360))}}),key=number+':'+uid;
      let before=state.inkBounds.get(key);
      if(!before){
-       const original=state.pages.find(page=>page.page===number),scratch=document.createElement('canvas');
-       before=(await renderer.render(scratch,{...original,flags:{},other:[],lines:original.lines.filter(line=>line.unit===uid)},options)).inkBounds;
+       const scratch=document.createElement('canvas');
+       before=(await renderer.render(scratch,{...original,flags:{},other:[],lines:oldRows},options)).inkBounds;
        state.inkBounds.set(key,before);
      }
-     const region=unitInkRegion(page,uid,before,painted.inkBounds,2/(scale*ratio));
-     layers.push({layer,region});
+     patches.push({uid,before,after:painted.inkBounds,reflow:page.reflowUnits?.includes(uid)});layers.set(uid,layer);
    }
-   ctx.drawImage(base,0,0);ctx.fillStyle='#fff';
-   for(const {region}of layers)ctx.fillRect(region.x*scale*ratio,region.y*scale*ratio,region.w*scale*ratio,region.h*scale*ratio);
-   for(const {layer}of layers)ctx.drawImage(layer,0,0);
+   const flow=pageFlow(original,patches,2/(scale*ratio)),pixel=scale*ratio;
+   const height=Math.ceil(flow.height*pixel);
+   if(canvas.width*height>24e6)throw Error('Reflow preview exceeds canvas size limit');
+   canvas.height=height;
+   const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+   const slice=(top,bottom,shift)=>{if(bottom>top)ctx.drawImage(base,0,top*pixel,base.width,(bottom-top)*pixel,0,(top+shift)*pixel,base.width,(bottom-top)*pixel);};
+   let top=0,shift=0;
+   for(const band of flow.bands){
+     slice(top,band.y,shift);
+     if(!band.delta){slice(band.y,band.y+band.h,shift);ctx.fillRect(band.x*pixel,(band.y+shift)*pixel,band.w*pixel,band.h*pixel);}
+     top=band.y+band.h;shift+=band.delta;
+   }
+   slice(top,original.page_height,shift);
+   for(const band of flow.bands)ctx.drawImage(layers.get(band.uid),0,(band.shift+band.dy)*pixel);
    canvases.set(number,canvas);
- }return canvases;}finally{await pdfTask?.destroy();}
+   flows.set(number,flow);
+ }return {canvases,flows};}finally{await pdfTask?.destroy();}
 }
-async function updateLive(source,revision){
+async function updateLive({source,root,files,filesRev,revision}){
  const state=snapshot,gen=generation;
- if(!state||!liveStart)return false;
- const edit=findLiveEdit(state.source,source,state.capture,state.spans,state.macros);
- if(edit.unchanged){ui.setLivePages({canvases:new Map(),revision,durationMs:0});return true;}
+ fullReason=null;
+ if(!state||!liveStart||state.root!==root||source.length>500000)return false;
+ const incoming=new Map([{path:root,data:source},...files].map(file=>[file.path,file]));
+ if(incoming.size!==state.files.length+1||state.files.some(file=>!incoming.has(file.path)))return false;
+ const changed=[...state.documents].filter(([path,document])=>incoming.get(path)?.data!==document.source);
+ if(state.files.some(file=>typeof file.data!=='string'&&incoming.get(file.path).rev!==file.rev)||changed.length>1)return false;
+ if(!changed.length){state.files=files;state.filesRev=filesRev;ui.setLivePages({canvases:new Map(),revision,durationMs:0});return state.reflow?'reflow':true;}
+ const [path,document]=changed[0],text=incoming.get(path).data;
+ if(typeof text!=='string'||text.length>500000||state.support.some(file=>file.path===path))return false;
+ const edit=findLiveEdit(document.source,text,state.capture,document.spans,state.macros);
  if(edit.incomplete){ui.setLiveStatus({state:'waiting',reason:edit.reason,revision});return true;}
  if(!edit.unit){fullReason=edit.reason;return false;}
- const eligible=liveUnitEligibility(state.capture,edit.unit);
- if(!eligible.ok){fullReason=eligible.reason;return false;}
+ for(const unit of [edit.unit,...edit.removed.map(span=>span.unit)]){
+   const eligible=liveUnitEligibility(state.capture,unit);
+   if(!eligible.ok){fullReason=eligible.reason;return false;}
+ }
  const current=()=>gen===generation&&state===snapshot&&revision===ui.getState().revision;
  const began=performance.now();
  try{
@@ -143,15 +166,28 @@ async function updateLive(source,revision){
      if(!comparison.ok)throw Error('Baseline verification: '+comparison.reason);
      state.proofs.set(edit.unit.uid,proof);
    }
-   const result=await live.compile(ctx,edit.source,expected);
+   // The server restores counters; changed numbering is provisional until the full pass.
+   const result=await live.typeset(ctx,edit.source);
    if(!current())return true;
-   const list=decodeDisplayList(result.binary),pages=replaceUnitRows(state.drawnPages,edit.unit,proof,list),units=new Set([...state.liveUnits,edit.unit.uid]),canvases=await drawLivePages(pages,units);
+   const list=decodeDisplayList(result.binary),edits=new Map(state.edits).set(edit.unit.uid,{unit:edit.unit,proof,list});
+   for(const {unit} of edit.removed)edits.set(unit.uid,{unit,proof:{lines:state.pages.flatMap(page=>page.lines.filter(row=>row.unit===unit.uid)).sort((a,b)=>a.row-b.row)},list:{fonts:{},lines:[]}});
+   const units=new Set(edits.keys());
+   let layout=state.pages;const pages=new Map();
+   for(const item of edits.values()){
+     const updated=replaceUnitRows(layout,item.unit,item.proof,item.list,{allowReflow:true});
+     for(const [number,page] of updated)pages.set(number,page);
+     layout=layout.map(page=>updated.get(page.page)||page);
+   }
+   const affected=new Set([edit.unit,...edit.removed.map(span=>span.unit)].flatMap(unit=>unit.placements.map(row=>row.page)));
+   const {canvases,flows}=await drawLivePages([...pages].filter(([number])=>affected.has(number)),units);
    if(!current())return true;
-   if(!ui.setLivePages({canvases,revision,durationMs:performance.now()-began}))return false;
-   state.drawnPages=state.drawnPages.map(page=>pages.get(page.page)||page);
-   state.liveUnits=units;
-   acceptLiveEdit(state,edit,source);
-   return true;
+   const counters=result.header.counters||{},renumbered=Object.keys(counters).length!==Object.keys(expected).length||Object.entries(counters).some(([key,value])=>value!==expected[key]);
+   state.reflow||=edit.reflow||layout.some(page=>page.reflowUnits?.length)||renumbered;
+   if(!ui.setLivePages({canvases,revision,durationMs:performance.now()-began,reflow:state.reflow}))return false;
+   state.drawnPages=layout;for(const [number,flow] of flows)state.flows.set(number,flow);state.edits=edits;state.liveUnits=units;
+   acceptLiveEdit(document,edit,text);state.source=source;state.files=files;state.filesRev=filesRev;
+   syncMarker(false);
+   return state.reflow?'reflow':true;
  }catch(error){
    if(!current())return true;
    fullReason=error.message;
@@ -183,29 +219,35 @@ function syncMarker(scroll=true){
  const state=snapshot,position=caret;
  if(!state||!position){ui.setMarker(null);return;}
  const placed=state.capture.units.filter(unit=>unit.placements?.length&&projectPath(unit.file||state.root)===position.path);
- // Spans follow local edits exactly; other files and stale sources fall back to line numbers.
- const span=position.main&&state.source===ui.getSource()?state.spans.find(span=>position.offset>=span.start&&position.offset<=span.end):null;
+ // Spans follow local edits in each source file; stale sources fall back to captured line numbers.
+ const document=state.documents.get(position.path),span=document?.source===ui.project.get(position.path)?.text?document.spans.find(span=>position.offset>=span.start&&position.offset<=span.end):null;
  const unit=span?.unit??placed.findLast(unit=>unit.begin_line<=position.line);
  const first=unit?.placements?.[0],page=first&&state.pages.find(page=>page.page===first.page);
  if(!page){ui.setMarker(null);return;}
- const rows=unit.placements.filter(row=>row.page===first.page);
- ui.setMarker({page:first.page,top:Math.min(...rows.map(row=>row.y-row.h))/page.page_height,bottom:Math.max(...rows.map(row=>row.y+row.d))/page.page_height},{scroll});
+ const rows=state.drawnPages.find(page=>page.page===first.page).lines.filter(row=>row.unit===unit.uid),flow=state.flows.get(first.page),height=flow?.height??page.page_height;
+ if(!rows.length){ui.setMarker(null);return;}
+ const offset=flowOffset(flow,rows[0]);
+ ui.setMarker({page:first.page,top:(Math.min(...rows.map(row=>row.y-row.h))+offset)/height,bottom:(Math.max(...rows.map(row=>row.y+row.d))+offset)/height},{scroll});
+}
+function flowOffset(flow,line){
+ const own=flow?.bands.find(band=>band.uid===line.unit);
+ return own?own.shift+own.dy:(flow?.bands||[]).reduce((sum,band)=>sum+(band.y+band.h<=line.y?band.delta:0),0);
 }
 // Preview -> source: double-click a line to jump to the text that produced it.
 function pick({page,y}){
  const state=snapshot,sheet=state?.drawnPages.find(candidate=>candidate.page===page);
  if(!sheet)return;
- const at=y*sheet.page_height;let best=null,distance=Infinity;
+ const flow=state.flows.get(page),at=y*(flow?.height??sheet.page_height);let best=null,distance=Infinity;
  for(const line of sheet.lines){
    if(line.unit==null)continue;
-   const gap=at<line.y-line.h?line.y-line.h-at:at>line.y+line.d?at-line.y-line.d:0;
+   const baseline=line.y+flowOffset(flow,line),gap=at<baseline-line.h?baseline-line.h-at:at>baseline+line.d?at-baseline-line.d:0;
    if(gap<distance){distance=gap;best=line;}
  }
  const unit=best&&state.capture.units.find(candidate=>candidate.uid===best.unit);
  if(!unit)return;
- const path=projectPath(unit.file||state.root),span=path===state.root&&state.source===ui.getSource()?state.spans.find(candidate=>candidate.unit===unit):null;
+ const path=projectPath(unit.file||state.root),document=state.documents.get(path),span=document?.source===ui.project.get(path)?.text?document.spans.find(candidate=>candidate.unit===unit):null;
  // Within a paragraph, land roughly on the clicked row.
- if(span)ui.reveal({path,offset:span.start+Math.floor((span.end-span.start)*(best.row-1)/Math.max(1,unit.placements.length))});
+ if(span)ui.reveal({path,offset:span.start+Math.floor((span.end-span.start)*(best.row-1)/Math.max(1,state.drawnPages.reduce((count,page)=>count+page.lines.filter(row=>row.unit===unit.uid).length,0)))});
  else ui.reveal({path,line:unit.begin_line});
 }
 async function boot(){try{

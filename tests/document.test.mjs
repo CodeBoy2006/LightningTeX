@@ -14,7 +14,7 @@ test('document markers retain the existing immediate-backslash comment rule and 
  }
  assert.equal(splitPreamble('no marker\n% '+marker),null);
 });
-test('single captured paragraph mapping',()=>{let s='\\documentclass{article}\n\\begin{document}\nHello world.\n\nNext paragraph.\n\\end{document}\n';let c={units:[{kind:'par',file:'./main.tex',uid:1,begin_line:3,end_line:4}]};assert.equal(findLiveEdit(s,s.replace('world','reader'),c).source,'Hello reader.');assert.ok(findLiveEdit(s,s.replace('article','report'),c).reason);assert.ok(findLiveEdit(s,s.replace('world','world\n\nMore'),c).reason)});
+test('single captured paragraph mapping',()=>{let s='\\documentclass{article}\n\\begin{document}\nHello world.\n\nNext paragraph.\n\\end{document}\n';let c={units:[{kind:'par',file:'./main.tex',uid:1,begin_line:3,end_line:4}]};assert.equal(findLiveEdit(s,s.replace('world','reader'),c).source,'Hello reader.');assert.ok(findLiveEdit(s,s.replace('article','report'),c).reason);assert.equal(findLiveEdit(s,s.replace('world','world\n\nMore'),c).reflow,true)});
 test('unchanged preamble definitions allow local edits; body definitions still require a full pass',()=>{
  const source='\\documentclass{article}\n\\newcommand{\\R}{\\mathbb{R}}\n\\begin{document}\nHello world.\n\\end{document}',capture={units:[{kind:'par',uid:1,begin_line:4,end_line:5}]};
  assert.equal(findLiveEdit(source,source.replace('world','reader'),capture).source,'Hello reader.');
@@ -27,7 +27,7 @@ test('math source policy distinguishes unfinished input from structural changes'
  const {liveSourcePolicy}=await import('../core/document.js');
  for(const text of [String.raw`$x^2+\frac{1}{2}$`,String.raw`\[\sqrt{x}+\alpha\]`,String.raw`\begin{align}x&=2\\y&=3\end{align}`])assert.ok(liveSourcePolicy(text).ok,text);
  for(const text of [String.raw`$x^{`,String.raw`\[x`,String.raw`\left(x`,String.raw`\begin{align}x&=2`,String.raw`$\fra$`])assert.ok(liveSourcePolicy(text).incomplete,text);
- for(const text of [String.raw`\input{file}`,String.raw`\def\x{1}`,String.raw`\begin{itemize}\item x\end{itemize}`,String.raw`^^5cinput{x}`,String.raw`\label{a\input{x}}`,String.raw`\tag{\input{x}}`])assert.ok(!liveSourcePolicy(text).ok,text);
+ for(const text of [String.raw`\input{file}`,String.raw`\def\x{1}`,String.raw`\begin{verbatim}raw\end{verbatim}`,String.raw`^^5cinput{x}`,String.raw`\label{a\input{x}}`,String.raw`\tag{\input{x}}`])assert.ok(!liveSourcePolicy(text).ok,text);
 });
 test('standard linear algebra operators remain eligible for local math edits',()=>{
  assert.ok(liveSourcePolicy(String.raw`\begin{align}\det R_\theta &= \cos^2\theta + \sin^2\theta = 1.\end{align}`).ok);
@@ -85,7 +85,7 @@ The claim follows from~\cite[Lemma~2]{known}.
 \end{document}`;
  const capture={units:[{uid:1,kind:'env',name:'proof',begin_line:4,end_line:9}]},macros=parseMacros(splitPreamble(source).preamble);
  for(const [a,b] of [['x^2','x^3'],['claim','result']])assert.equal(findLiveEdit(source,source.replace(a,b),capture,undefined,macros).unit?.uid,1);
- for(const [a,b] of [['\n\nThe','\nThe'],['claim','claim\n\nThen'],['known','other']])assert.ok(findLiveEdit(source,source.replace(a,b),capture,undefined,macros).reason);
+ for(const [a,b] of [['\n\nThe','\nThe'],['claim','claim\n\nThen'],['known','other']])assert.equal(findLiveEdit(source,source.replace(a,b),capture,undefined,macros).reflow,true);
 });
 test('run-in heading titles and preamble macro safety stay structural',()=>{
  const source=String.raw`\paragraph{Approach.} We use $\R$ here.`;
@@ -94,4 +94,37 @@ test('run-in heading titles and preamble macro safety stay structural',()=>{
  assert.notEqual(liveSourcePolicy(source,macros).signature,liveSourcePolicy(source.replace('Approach.','Result.'),macros).signature);
  assert.ok(!liveSourcePolicy(source.replace('\\R','\\bad'),macros).ok);
  assert.ok(!liveSourcePolicy(String.raw`\cite[\directlua{x}]{known}`,macros).ok);
+});
+test('included-file spans ignore line numbers from other files and preserve unfinished input',()=>{
+ const before='First paragraph.\n\nLast paragraph.\n',capture={units:[{uid:1,file:'part.tex',begin_line:1,end_line:2},{uid:2,file:'main.tex',begin_line:2,end_line:3},{uid:3,file:'part.tex',begin_line:3,end_line:4}]};
+ return import('../core/document.js').then(({captureSpans})=>{
+  const spans=captureSpans(before,capture,'part.tex');assert.deepEqual(spans.map(span=>span.original),['First paragraph.','Last paragraph.']);
+  assert.equal(findLiveEdit(before,before.replace('Last','Final'),capture,spans).unit.uid,3);
+  assert.equal(findLiveEdit(before,before.replace('First','First $x^{'),capture,spans).incomplete,true);
+  assert.equal(findLiveEdit(before,before.replace('First paragraph.',''),capture,spans).reflow,true);
+ });
+});
+test('lists and heading formatting are bounded; unsafe commands inside titles stay rejected',()=>{
+ for(const source of [String.raw`\begin{itemize}\item One.\item Two.\end{itemize}`,String.raw`\section{An \emph{important} result}`,String.raw`\section[Short]{An \emph{important} result}`,String.raw`\begin{tabular}{ll}A&B\\C&D\end{tabular}`])assert.equal(liveSourcePolicy(source).ok,true,source);
+ for(const source of [String.raw`\section{\input secret}`,String.raw`\section[\input secret]{Title}`,String.raw`\paragraph{\csname input\endcsname}`,String.raw`\section{\def\x{1}}`])assert.ok(!liveSourcePolicy(source).ok,source);
+});
+test('joining adjacent prose merges spans and preserves later edit routing',async()=>{
+ const {captureSpans,acceptLiveEdit}=await import('../core/document.js');
+ const source='First paragraph.\n\nSecond paragraph.\n\nLast paragraph.',capture={units:[{uid:1,kind:'par',nest:1,begin_line:1,end_line:2},{uid:2,kind:'par',nest:1,begin_line:3,end_line:4},{uid:3,kind:'par',nest:1,begin_line:5,end_line:6}]};
+ const state={source,spans:captureSpans(source,capture)},next=source.replace('paragraph.\n\nSecond','paragraph. Second');
+ const edit=findLiveEdit(source,next,capture,state.spans);assert.equal(edit.source,'First paragraph. Second paragraph.');assert.equal(edit.reflow,true);assert.equal(edit.removed[0].unit.uid,2);
+ acceptLiveEdit(state,edit,next);assert.deepEqual(state.spans.map(span=>span.unit.uid),[1,3]);
+ assert.equal(findLiveEdit(next,next.replace('Second','Merged'),capture,state.spans).unit.uid,1);
+ assert.equal(findLiveEdit(next,next.replace('Last','Final'),capture,state.spans).unit.uid,3);
+ const withCommand=source.replace('\n\nSecond','\n\\newpage\nSecond');
+ assert.equal(findLiveEdit(withCommand,withCommand.replace('First','First updated').replace('Last','Last updated'),capture).unit,undefined);
+});
+test('trailing whitespace insertion and undo after deleting a unit stay live',async()=>{
+ const {captureSpans,acceptLiveEdit}=await import('../core/document.js');
+ const source='First paragraph. \n\nLast paragraph.',capture={units:[{uid:1,kind:'par',nest:1,begin_line:1,end_line:2},{uid:2,kind:'par',nest:1,begin_line:3,end_line:4}]};
+ const state={source,spans:captureSpans(source,capture)};
+ assert.equal(findLiveEdit(source,source.replace('. \n','. More text.\n'),capture,state.spans).unit.uid,1);
+ const empty=source.replace('First paragraph.',''),edit=findLiveEdit(source,empty,capture,state.spans);
+ acceptLiveEdit(state,edit,empty);
+ assert.equal(findLiveEdit(empty,source,capture,state.spans).unit.uid,1);
 });

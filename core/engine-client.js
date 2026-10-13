@@ -156,7 +156,7 @@ export class LiveEngine {
    return Object.keys(counters).length!==Object.keys(expectedCounters).length||Object.entries(counters).some(([key,value])=>value!==expectedCounters[key]);
   });
  }
- // A standalone preview never reaches a page; the server restores counters after every unit.
+ // Standalone and provisional previews allow changed counters; the server restores them after every unit.
  typeset(ctx,source){return this.unit(ctx,source,()=>false)}
  fail(error,generation=this.generation){
   if(generation!==this.generation)return;

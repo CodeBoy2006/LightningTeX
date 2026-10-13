@@ -77,7 +77,7 @@ try {
  const fresh=await bg.compile(state.source);
  assert.deepEqual(pages.map(ink),fresh.pages.map(ink),'incremental glyph positions and identities must equal a fresh full compile');
  const incomplete=findLiveEdit(state.source,state.source.replace('\\alpha^3','\\alpha^{'),capture,state.spans);assert.equal(incomplete.incomplete,true);
- const label=findLiveEdit(state.source,state.source.replace('eq:value','eq:other'),capture,state.spans);assert.equal(label.unit,undefined);
+ const label=findLiveEdit(state.source,state.source.replace('eq:value','eq:other'),capture,state.spans);assert.equal(label.reflow,true);
  const report={runtime:'actual WASM, PDF.js Type1 conversion, OpenType outline renderer',localEdits:26,fullCompilesDuringEdits:1,engineRestartsDuringEdits:0,exactFinalLayout:true,firstEditMs:times[0],warmMedianMs:times.slice(6).sort((a,b)=>a-b)[10],times};
  await fs.writeFile(new URL('qa/incremental-math.json',root),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
 }finally{bg.stop();live.stop();}
