@@ -114,8 +114,10 @@ local EVERYPAR_PATTERNS = {
   ["{\\setbox \\z@ \\lastbox }\\everypar {}\\@endpefalse "] = true,
   ["\\@minipagefalse \\everypar {}"] = true,
 }
-local function everypar_allowed(ep)
+local function everypar_allowed(ep, noskipsec)
   local e = ep:gsub("^\\leftprotrusion ", ""):gsub("\\leftprotrusion $", "")
+  -- A completed run-in heading leaves this kernel hook behind; its inactive branch only resets paragraph state.
+  if not noskipsec and e == "\\if@noskipsec \\global \\@noskipsecfalse {\\setbox \\z@ \\lastbox }\\clubpenalty \\@M \\begingroup \\@svsechd \\endgroup \\unskip \\@tempskipa -1em\\relax \\hskip -\\@tempskipa \\else \\clubpenalty \\@clubpenalty \\everypar {}\\fi " then return true end
   return EVERYPAR_PATTERNS[e] or false
 end
 local FLOAT_ENVS = { figure = "columnwidth", table = "columnwidth", ["figure*"] = "textwidth", ["table*"] = "textwidth" }
@@ -248,7 +250,7 @@ local function install_context(id, ctx)
   end
   ctx.color = b and b.color
   if ctx.color == "0 g 0 G" or ctx.color == "" then ctx.color = nil end
-  ctx.everypar_ok = everypar_allowed(ctx.everypar or "")
+  ctx.everypar_ok = everypar_allowed(ctx.everypar or "", ctx.noskipsec)
   S.contexts[id] = ctx
 end
 

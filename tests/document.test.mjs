@@ -33,6 +33,11 @@ test('standard linear algebra operators remain eligible for local math edits',()
  assert.ok(liveSourcePolicy(String.raw`\begin{align}\det R_\theta &= \cos^2\theta + \sin^2\theta = 1.\end{align}`).ok);
  assert.ok(liveSourcePolicy(String.raw`For $T\colon V\to W$, $\dim V=\dim\ker T+\dim\operatorname{im}T$.`).ok);
 });
+test('theorem text and roman list labels are bounded and require complete arguments',()=>{
+ assert.equal(liveSourcePolicy(String.raw`\begin{theorem}[Control]\begin{enumerate}[label=\textup{(\roman*)},nosep]\item A claim.\end{enumerate}\end{theorem}`).ok,true);
+ for(const source of [String.raw`\textup`,String.raw`\roman`,String.raw`\textup{`,String.raw`\begin{lemma}A claim.`])assert.equal(liveSourcePolicy(source).incomplete,true);
+ for(const source of [String.raw`\begin{customtheorem}A claim.\end{customtheorem}`,String.raw`\textup{\input{other}}`,String.raw`\roman{\def\x{1}}`])assert.ok(!liveSourcePolicy(source).ok);
+});
 test('row-break stars and spacing change the structural signature',()=>{
  const a=String.raw`\begin{align}x&=44\\y&=45\end{align}`;
  for(const modifier of [String.raw`\\*`,String.raw`\\[2pt]`,String.raw`\\*[2pt]`]){

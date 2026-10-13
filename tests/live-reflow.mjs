@@ -16,7 +16,13 @@ const bg=new BackgroundEngine({base,files}),live=new LiveEngine({base,files,onFo
 const renderer=createDisplayListRenderer({resolveFont:async name=>fonts.get(name),parseFont:(bytes,desc)=>parseEngineFont(bytes,desc,pdfjs)});
 const longParagraph='This long paragraph crosses a captured page boundary. '.repeat(120);
 const source=String.raw`\documentclass{article}
-\usepackage{amsmath,amssymb}
+\usepackage{amsmath,amssymb,amsthm,hyperref}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
 \begin{document}
 \section{Introduction}
 First short paragraph with $x=1$ and room to grow.
@@ -41,6 +47,32 @@ z=3
 A quotation with ordinary text.
 \end{quote}
 
+\paragraph{Results.} The next statements follow a run-in heading.
+
+\begin{theorem}[A bound]\label{thm:bound}
+Every simple polygon has a bound $u=6$.
+\begin{enumerate}
+\item The first part uses \textup{upright} text.
+\item The next part follows.
+\end{enumerate}
+\end{theorem}
+
+\begin{lemma}
+The second statement holds.
+\end{lemma}
+
+\begin{proposition}
+The third statement holds.
+\end{proposition}
+
+\begin{corollary}
+The fourth statement holds.
+\end{corollary}
+
+\begin{remark}
+The fifth statement holds.
+\end{remark}
+
 ${longParagraph}
 
 \input{part}
@@ -58,6 +90,13 @@ const edits=[
  ['quotation','ordinary text','more words and an inline formula $a^2+b^2=c^2$'],
  ['included file','v=4','v=5',true],
  ['cross-page',longParagraph,longParagraph+'Additional lines extend the final captured fragment. '.repeat(25)],
+ ['theorem text','simple polygon','named polygon'],
+ ['theorem math','u=6',String.raw`u=\frac{1}{\sum_{k=1}^n k}`],
+ ['theorem list','The next part follows.','The next part follows.\n\\item Another consequence follows.'],
+ ['lemma','second statement','second conclusion'],
+ ['proposition','third statement','third conclusion'],
+ ['corollary','fourth statement','fourth conclusion'],
+ ['remark','fifth statement','fifth conclusion'],
 ];
 try{
  const full=await bg.compile(source,{files:[{path:'part.tex',data:part,rev:1}]});
@@ -87,6 +126,10 @@ try{
   results.push({name,oldRows:proof.lines.length,newRows:list.lines.length,ms:Math.round(performance.now()-began)});
   scenarios.push({name,source:included?source:after,part:included?after:part,pages:full.pages.map(page=>changed.get(page.page)||page)});
  }
+ const theoremSpan=captureSpans(source,full.capture).find(span=>span.unit.name==='theorem'),theoremContext=unitContext(full.capture,theoremSpan.unit);
+ assert.match(theoremContext.everypar,/\\if@noskipsec/,'exercise the actual retained run-in-heading hook');
+ await assert.rejects(live.typeset({...theoremContext,noskipsec:true},theoremSpan.original),/non-replayable/);
+ await assert.rejects(live.typeset({...theoremContext,everypar:'\\def\\unexpected{1}'},theoremSpan.original),/non-replayable/);
  assert.equal(bg.next,1);assert.equal(live.generation,generation);
  // Provisional pagination may move ink; glyph identities, sizes, advances and rules must remain real TeX output.
  const ink=pages=>pages.flatMap(page=>page.lines.flatMap(line=>line.items.filter(item=>item[0]==='g'||item[0]==='r').map(item=>JSON.stringify(item[0]==='g'?['g',fontKey(page.fonts[item[1]]),...item.slice(2,4),...item.slice(6)]:['r',...item.slice(3)])))).sort();

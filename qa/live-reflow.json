@@ -1,19 +1,19 @@
 {
   "fullCompilesDuringLocalEdits": 1,
   "restarts": 0,
-  "independentFullComparisons": 11,
+  "independentFullComparisons": 18,
   "results": [
     {
       "name": "wrap",
       "oldRows": 1,
       "newRows": 4,
-      "ms": 89
+      "ms": 88
     },
     {
       "name": "split",
       "oldRows": 1,
       "newRows": 2,
-      "ms": 6
+      "ms": 5
     },
     {
       "name": "delete",
@@ -25,19 +25,19 @@
       "name": "join",
       "oldRows": 1,
       "newRows": 2,
-      "ms": 11
+      "ms": 10
     },
     {
       "name": "taller math",
       "oldRows": 2,
       "newRows": 2,
-      "ms": 21
+      "ms": 20
     },
     {
       "name": "list item",
       "oldRows": 2,
       "newRows": 3,
-      "ms": 6
+      "ms": 5
     },
     {
       "name": "numbered item",
@@ -49,13 +49,13 @@
       "name": "heading",
       "oldRows": 1,
       "newRows": 1,
-      "ms": 6
+      "ms": 8
     },
     {
       "name": "quotation",
       "oldRows": 1,
       "newRows": 1,
-      "ms": 5
+      "ms": 4
     },
     {
       "name": "included file",
@@ -67,7 +67,49 @@
       "name": "cross-page",
       "oldRows": 86,
       "newRows": 103,
-      "ms": 232
+      "ms": 235
+    },
+    {
+      "name": "theorem text",
+      "oldRows": 3,
+      "newRows": 3,
+      "ms": 12
+    },
+    {
+      "name": "theorem math",
+      "oldRows": 3,
+      "newRows": 3,
+      "ms": 23
+    },
+    {
+      "name": "theorem list",
+      "oldRows": 3,
+      "newRows": 4,
+      "ms": 10
+    },
+    {
+      "name": "lemma",
+      "oldRows": 1,
+      "newRows": 1,
+      "ms": 5
+    },
+    {
+      "name": "proposition",
+      "oldRows": 1,
+      "newRows": 1,
+      "ms": 5
+    },
+    {
+      "name": "corollary",
+      "oldRows": 1,
+      "newRows": 1,
+      "ms": 5
+    },
+    {
+      "name": "remark",
+      "oldRows": 1,
+      "newRows": 1,
+      "ms": 5
     }
   ]
 }

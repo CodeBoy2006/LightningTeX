@@ -6,6 +6,7 @@ const clone = value => structuredClone(value);
 const map = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 const fail = reason => ({ok:false, reason});
 const nonempty = value => Object.keys(map(value)).length > 0;
+const theoremNames=new Set(['theorem','lemma','proposition','corollary','remark']);
 
 function resolveUnit(capture, unitOrId) {
   const uid = typeof unitOrId==='object' ? unitOrId?.uid : unitOrId;
@@ -47,7 +48,8 @@ export function unitContext(capture, unitOrId) {
 export function liveUnitEligibility(capture, unitOrId) {
   let unit; try {unit=resolveUnit(capture,unitOrId);} catch(e) {return fail(e.message);}
   const math=unit.kind==='env'&&/^(equation|align|gather|multline|displaymath)\*?$/.test(unit.name);
-  const composite=unit.kind==='env'&&['proof','abstract','itemize','enumerate','description','quote','quotation','verse','center','flushleft','flushright'].includes(unit.name)
+  const theorem=unit.kind==='env'&&theoremNames.has(unit.name);
+  const composite=theorem||unit.kind==='env'&&['proof','abstract','itemize','enumerate','description','quote','quotation','verse','center','flushleft','flushright'].includes(unit.name)
     ||unit.kind==='heading'&&['section','subsection','subsubsection','paragraph','subparagraph'].includes(unit.name);
   if (!math&&!composite&&(unit.kind!=='par' || unit.nest!==1)) return fail('Only top-level text and math units are live');
   if (!math&&!composite&&unit.seqs?.length!==1) return fail('Composite or nested paragraphs require full layout');
@@ -58,11 +60,15 @@ export function liveUnitEligibility(capture, unitOrId) {
   if (!unit.placements?.length) return fail('No captured row placements');
   // The server validates/replays kernel everypar (including paragraphs after headings).
   if (unit.noskipsec) return fail('Run-in headings require full layout');
-  if (Object.keys(map(unit.advanced)).some(key=>key!=='equation'&&!(unit.kind==='heading'&&['section','subsection','subsubsection','paragraph','subparagraph','bookmark@seq@number','section@level'].includes(key))&&!(unit.kind==='env'&&unit.name==='enumerate'&&/^enum[iv]+$/.test(key)))) return fail('Counter changes require full layout');
+  if (Object.keys(map(unit.advanced)).some(key=>key!=='equation'
+    &&!(unit.kind==='heading'&&['section','subsection','subsubsection','paragraph','subparagraph','bookmark@seq@number','section@level'].includes(key))
+    &&!(theorem&&theoremNames.has(key))
+    &&!(unit.kind==='env'&&(unit.name==='enumerate'||theorem)&&/^(?:enum[iv]+|Item)$/.test(key)))) return fail('Counter changes require full layout');
   // capture.lua::scan_flags reports node COUNTS, not only degradation flags.
   // Ordinary prose has glyphs and an indentation hlist. Accept structural counts;
-  // inserts, marks, adjustments, direction changes and whatsits still fall back.
-  const structural = new Set(['glyphs','hlist','vlist','rule','math','whatsit_pdf_start_link','whatsit_pdf_end_link','whatsit_write']);
+  // Inserts, marks, adjustments, direction changes and unrecognized whatsits still fall back.
+  // Color values and stack balance are checked on the captured and replayed display lists.
+  const structural = new Set(['glyphs','hlist','vlist','rule','math','whatsit_pdf_start_link','whatsit_pdf_end_link','whatsit_write','whatsit_pdf_colorstack']);
   if (unit.kind==='env'&&unit.name==='abstract')structural.add('adjust');
   if ((capture.paragraphs||[]).some(paragraph=>unit.seqs?.includes(paragraph.seq)&&Object.entries(map(paragraph.flags)).some(([key,value]) =>
     !Number.isSafeInteger(value) || value < 0 || (value !== 0 && !structural.has(key)))))

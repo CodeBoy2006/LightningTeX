@@ -1,0 +1,1886 @@
+{
+  "date": "2026-10-14",
+  "browser": "Codex in-app browser, real trusted sequential keyboard events",
+  "source": {
+    "bytes": 46485,
+    "sha256": "f5f81fae06a13691844c7560302ffe30d531e155ba10f1dfd9811b78ff01f070",
+    "originalAndRestoredPages": 13,
+    "figures": [
+      {
+        "name": "fig_area_centroid_pursuit.pdf",
+        "bytes": 14840,
+        "sha256": "45648b6188c70c4bfe74681b792619e64ee0a5759dfd2b15710a62135f996b02"
+      },
+      {
+        "name": "fig_one_sided_executions.pdf",
+        "bytes": 14840,
+        "sha256": "7d019e15eb8cd37ccba43b2e11fa47b28cf49a7da9f75df94a58d1f6a4969eb2"
+      }
+    ]
+  },
+  "timingNotes": [
+    "Live processing excludes the 60 ms input scheduler; firstLiveFromFirstInputMs includes scheduling and first-use work.",
+    "Automated native key events, not physical typing or IME. Chinese IME testing was cancelled by the user.",
+    "Warm local observations on one machine, no latency guarantees. Formula recovery includes an intentional pause on incomplete input.",
+    "Extra keydowns without input can be editor bracket completion. Live Worker starts after full settlement are not necessarily failures."
+  ],
+  "runs": [
+    {
+      "name": "theorem-typing-before",
+      "sourceLines": [
+        140,
+        152
+      ],
+      "capturedPages": [
+        2
+      ],
+      "keydownCount": 22,
+      "inputCount": 21,
+      "allKeyboardAndInputEventsTrusted": true,
+      "typingDurationMs": 1449,
+      "firstLiveFromFirstInputMs": null,
+      "liveUpdates": 0,
+      "processingMs": {
+        "min": null,
+        "median": null,
+        "p95": null,
+        "max": null
+      },
+      "fullRequests": 2,
+      "fullRequestsDuringTyping": 1,
+      "idleToFirstFullMs": -1378,
+      "liveWorkerStarts": 0,
+      "keydownTimesMs": [
+        363,
+        425,
+        495,
+        556,
+        616,
+        682,
+        748,
+        808,
+        874,
+        940,
+        1006,
+        1066,
+        1131,
+        1196,
+        1308,
+        1428,
+        1487,
+        1560,
+        1627,
+        1692,
+        1752,
+        1813
+      ],
+      "inputTimesMs": [
+        365,
+        426,
+        496,
+        557,
+        617,
+        683,
+        749,
+        809,
+        875,
+        941,
+        1007,
+        1068,
+        1133,
+        1198,
+        1309,
+        1488,
+        1562,
+        1628,
+        1693,
+        1754,
+        1814
+      ],
+      "fullRequestTimesMs": [
+        436,
+        2825
+      ],
+      "previewEvents": [
+        {
+          "ms": 5224,
+          "type": "preview",
+          "state": "Compiling…",
+          "live": "Full pass",
+          "reason": "Command needs full layout: textup"
+        }
+      ]
+    },
+    {
+      "name": "theorem-continuous",
+      "sourceLines": [
+        140,
+        152
+      ],
+      "capturedPages": [
+        2
+      ],
+      "keydownCount": 20,
+      "inputCount": 20,
+      "allKeyboardAndInputEventsTrusted": true,
+      "typingDurationMs": 1301,
+      "firstLiveFromFirstInputMs": 98,
+      "liveUpdates": 11,
+      "processingMs": {
+        "min": 9.9,
+        "median": 11,
+        "p95": 17,
+        "max": 17
+      },
+      "fullRequests": 0,
+      "fullRequestsDuringTyping": 0,
+      "idleToFirstFullMs": null,
+      "liveWorkerStarts": 0,
+      "keydownTimesMs": [
+        572,
+        643,
+        710,
+        776,
+        843,
+        910,
+        976,
+        1045,
+        1112,
+        1179,
+        1247,
+        1315,
+        1382,
+        1451,
+        1518,
+        1587,
+        1656,
+        1723,
+        1791,
+        1872
+      ],
+      "inputTimesMs": [
+        573,
+        644,
+        711,
+        777,
+        845,
+        911,
+        978,
+        1046,
+        1113,
+        1180,
+        1248,
+        1316,
+        1384,
+        1452,
+        1519,
+        1588,
+        1658,
+        1724,
+        1793,
+        1874
+      ],
+      "fullRequestTimesMs": [],
+      "previewEvents": [
+        {
+          "ms": 671,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 17 ms",
+          "reason": ""
+        },
+        {
+          "ms": 807,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 9.9 ms",
+          "reason": ""
+        },
+        {
+          "ms": 930,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 10 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1074,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 11 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1213,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 17 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1341,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 16 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1474,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 13 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1614,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 10 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1747,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 13 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1866,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 10 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1947,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 11 ms",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "name": "long-proof-continuous",
+      "sourceLines": [
+        244,
+        323
+      ],
+      "capturedPages": [
+        4
+      ],
+      "keydownCount": 63,
+      "inputCount": 63,
+      "allKeyboardAndInputEventsTrusted": true,
+      "typingDurationMs": 4153,
+      "firstLiveFromFirstInputMs": 266,
+      "liveUpdates": 31,
+      "processingMs": {
+        "min": 29,
+        "median": 32,
+        "p95": 34,
+        "max": 38
+      },
+      "fullRequests": 0,
+      "fullRequestsDuringTyping": 0,
+      "idleToFirstFullMs": null,
+      "liveWorkerStarts": 0,
+      "keydownTimesMs": [
+        573,
+        643,
+        716,
+        792,
+        860,
+        926,
+        992,
+        1058,
+        1124,
+        1189,
+        1256,
+        1316,
+        1382,
+        1447,
+        1519,
+        1584,
+        1650,
+        1717,
+        1783,
+        1850,
+        1917,
+        1983,
+        2049,
+        2115,
+        2181,
+        2242,
+        2308,
+        2374,
+        2440,
+        2507,
+        2574,
+        2640,
+        2706,
+        2768,
+        2834,
+        2901,
+        2966,
+        3064,
+        3126,
+        3193,
+        3261,
+        3331,
+        3399,
+        3465,
+        3531,
+        3598,
+        3664,
+        3731,
+        3797,
+        3864,
+        3929,
+        3994,
+        4060,
+        4126,
+        4193,
+        4261,
+        4327,
+        4399,
+        4466,
+        4533,
+        4594,
+        4660,
+        4727
+      ],
+      "inputTimesMs": [
+        575,
+        645,
+        717,
+        793,
+        861,
+        927,
+        993,
+        1060,
+        1125,
+        1191,
+        1257,
+        1317,
+        1383,
+        1448,
+        1520,
+        1586,
+        1652,
+        1718,
+        1785,
+        1851,
+        1918,
+        1984,
+        2051,
+        2117,
+        2182,
+        2243,
+        2309,
+        2375,
+        2441,
+        2508,
+        2576,
+        2642,
+        2707,
+        2769,
+        2836,
+        2902,
+        2968,
+        3065,
+        3127,
+        3194,
+        3262,
+        3333,
+        3401,
+        3467,
+        3533,
+        3600,
+        3666,
+        3732,
+        3798,
+        3865,
+        3931,
+        3995,
+        4062,
+        4128,
+        4194,
+        4262,
+        4328,
+        4401,
+        4468,
+        4535,
+        4595,
+        4662,
+        4728
+      ],
+      "fullRequestTimesMs": [],
+      "previewEvents": [
+        {
+          "ms": 841,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 38 ms",
+          "reason": ""
+        },
+        {
+          "ms": 969,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 30 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1105,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 33 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1237,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 32 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1359,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 33 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1493,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 31 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1627,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 30 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1761,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 31 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1892,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 31 ms",
+          "reason": ""
+        },
+        {
+          "ms": 2027,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 30 ms",
+          "reason": ""
+        },
+        {
+          "ms": 2161,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 31 ms",
+          "reason": ""
+        },
+        {
+          "ms": 2284,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 32 ms",
+          "reason": ""
+        },
+        {
+          "ms": 2417,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 34 ms",
+          "reason": ""
+        },
+        {
+          "ms": 2551,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 33 ms",
+          "reason": ""
+        },
+        {
+          "ms": 2685,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 30 ms",
+          "reason": ""
+        },
+        {
+          "ms": 2810,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 32 ms",
+          "reason": ""
+        },
+        {
+          "ms": 2947,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 34 ms",
+          "reason": ""
+        },
+        {
+          "ms": 3063,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 32 ms",
+          "reason": ""
+        },
+        {
+          "ms": 3167,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 32 ms",
+          "reason": ""
+        },
+        {
+          "ms": 3314,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 34 ms",
+          "reason": ""
+        },
+        {
+          "ms": 3441,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 30 ms",
+          "reason": ""
+        },
+        {
+          "ms": 3580,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 29 ms",
+          "reason": ""
+        },
+        {
+          "ms": 3704,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 29 ms",
+          "reason": ""
+        },
+        {
+          "ms": 3836,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 29 ms",
+          "reason": ""
+        },
+        {
+          "ms": 3971,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 32 ms",
+          "reason": ""
+        },
+        {
+          "ms": 4104,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 33 ms",
+          "reason": ""
+        },
+        {
+          "ms": 4237,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 33 ms",
+          "reason": ""
+        },
+        {
+          "ms": 4380,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 30 ms",
+          "reason": ""
+        },
+        {
+          "ms": 4514,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 30 ms",
+          "reason": ""
+        },
+        {
+          "ms": 4637,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 33 ms",
+          "reason": ""
+        },
+        {
+          "ms": 4770,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 33 ms",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "name": "pages-5-6-continuous",
+      "sourceLines": [
+        383,
+        409
+      ],
+      "capturedPages": [
+        5,
+        6
+      ],
+      "keydownCount": 61,
+      "inputCount": 61,
+      "allKeyboardAndInputEventsTrusted": true,
+      "typingDurationMs": 4076,
+      "firstLiveFromFirstInputMs": 136,
+      "liveUpdates": 32,
+      "processingMs": {
+        "min": 16,
+        "median": 20,
+        "p95": 24,
+        "max": 39
+      },
+      "fullRequests": 1,
+      "fullRequestsDuringTyping": 0,
+      "idleToFirstFullMs": 530,
+      "liveWorkerStarts": 0,
+      "keydownTimesMs": [
+        577,
+        651,
+        732,
+        817,
+        885,
+        950,
+        1018,
+        1085,
+        1151,
+        1217,
+        1283,
+        1350,
+        1417,
+        1484,
+        1551,
+        1618,
+        1685,
+        1755,
+        1821,
+        1888,
+        1953,
+        2019,
+        2086,
+        2152,
+        2219,
+        2286,
+        2353,
+        2420,
+        2485,
+        2552,
+        2618,
+        2685,
+        2752,
+        2820,
+        2886,
+        2952,
+        3019,
+        3085,
+        3151,
+        3218,
+        3304,
+        3370,
+        3437,
+        3503,
+        3570,
+        3637,
+        3704,
+        3770,
+        3837,
+        3904,
+        3970,
+        4038,
+        4104,
+        4171,
+        4238,
+        4304,
+        4370,
+        4456,
+        4522,
+        4588,
+        4654
+      ],
+      "inputTimesMs": [
+        579,
+        652,
+        733,
+        818,
+        886,
+        951,
+        1019,
+        1086,
+        1152,
+        1218,
+        1285,
+        1351,
+        1418,
+        1485,
+        1552,
+        1619,
+        1686,
+        1756,
+        1823,
+        1889,
+        1954,
+        2021,
+        2087,
+        2153,
+        2221,
+        2287,
+        2354,
+        2421,
+        2486,
+        2553,
+        2619,
+        2686,
+        2753,
+        2821,
+        2887,
+        2954,
+        3020,
+        3087,
+        3153,
+        3220,
+        3305,
+        3372,
+        3438,
+        3504,
+        3572,
+        3638,
+        3705,
+        3772,
+        3838,
+        3905,
+        3972,
+        4039,
+        4105,
+        4172,
+        4239,
+        4305,
+        4372,
+        4458,
+        4523,
+        4589,
+        4655
+      ],
+      "fullRequestTimesMs": [
+        5185
+      ],
+      "previewEvents": [
+        {
+          "ms": 715,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 39 ms",
+          "reason": ""
+        },
+        {
+          "ms": 814,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 19 ms",
+          "reason": ""
+        },
+        {
+          "ms": 914,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 19 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1051,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 24 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1180,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 20 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1318,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 17 ms",
+          "reason": ""
+        },
+        {
+          "ms": 1456,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 22 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 1585,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 18 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 1718,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 19 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 1852,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 21 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 1983,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 20 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 2116,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 20 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 2250,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 21 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 2384,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 21 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 2518,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 16 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 2651,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 16 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 2784,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 22 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 2917,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 21 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 3051,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 22 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 3184,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 22 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 3298,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 16 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 3400,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 20 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 3533,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 20 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 3667,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 20 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 3802,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 22 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 3934,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 21 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 4067,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 19 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 4200,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 19 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 4332,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 17 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 4453,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 19 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 4550,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 18 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 4684,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 21 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 7674,
+          "type": "preview",
+          "state": "Compiling…",
+          "live": "",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "name": "cross-page-insert-paragraph",
+      "sourceLines": [
+        383,
+        409
+      ],
+      "capturedPages": [
+        5,
+        6
+      ],
+      "keydownCount": 48,
+      "inputCount": 48,
+      "allKeyboardAndInputEventsTrusted": true,
+      "typingDurationMs": 3183,
+      "firstLiveFromFirstInputMs": 174,
+      "liveUpdates": 24,
+      "processingMs": {
+        "min": 13,
+        "median": 17,
+        "p95": 24,
+        "max": 31
+      },
+      "fullRequests": 1,
+      "fullRequestsDuringTyping": 0,
+      "idleToFirstFullMs": 528,
+      "liveWorkerStarts": 0,
+      "keydownTimesMs": [
+        574,
+        639,
+        707,
+        776,
+        843,
+        908,
+        975,
+        1042,
+        1108,
+        1175,
+        1243,
+        1311,
+        1379,
+        1445,
+        1513,
+        1581,
+        1648,
+        1716,
+        1800,
+        1867,
+        1935,
+        2003,
+        2071,
+        2139,
+        2205,
+        2271,
+        2339,
+        2409,
+        2479,
+        2548,
+        2615,
+        2681,
+        2748,
+        2816,
+        2884,
+        2951,
+        3017,
+        3083,
+        3150,
+        3216,
+        3283,
+        3355,
+        3422,
+        3490,
+        3556,
+        3623,
+        3690,
+        3757
+      ],
+      "inputTimesMs": [
+        576,
+        640,
+        709,
+        778,
+        844,
+        909,
+        976,
+        1043,
+        1109,
+        1176,
+        1245,
+        1312,
+        1380,
+        1447,
+        1515,
+        1582,
+        1649,
+        1717,
+        1801,
+        1869,
+        1937,
+        2005,
+        2073,
+        2140,
+        2206,
+        2273,
+        2340,
+        2411,
+        2481,
+        2549,
+        2616,
+        2683,
+        2749,
+        2818,
+        2885,
+        2952,
+        3018,
+        3084,
+        3151,
+        3218,
+        3284,
+        3356,
+        3424,
+        3491,
+        3558,
+        3624,
+        3691,
+        3759
+      ],
+      "fullRequestTimesMs": [
+        4287
+      ],
+      "previewEvents": [
+        {
+          "ms": 750,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 31 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 872,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 19 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 1002,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 17 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 1139,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 20 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 1270,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 16 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 1411,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 14 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 1544,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 14 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 1677,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 18 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 1796,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 16 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 1894,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 15 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 2035,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 13 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 2168,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 13 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 2302,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 13 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 2445,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 15 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 2577,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 18 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 2710,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 19 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 2844,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 17 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 2977,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 16 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 3114,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 20 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 3250,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 24 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 3392,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 20 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 3527,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 21 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 3655,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 16 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 3785,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 18 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 6708,
+          "type": "preview",
+          "state": "Compiling…",
+          "live": "",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "name": "cross-page-delete-paragraph",
+      "sourceLines": [
+        383,
+        409
+      ],
+      "capturedPages": [
+        5,
+        6
+      ],
+      "keydownCount": 1,
+      "inputCount": 1,
+      "allKeyboardAndInputEventsTrusted": true,
+      "typingDurationMs": 0,
+      "firstLiveFromFirstInputMs": 98,
+      "liveUpdates": 1,
+      "processingMs": {
+        "min": 35,
+        "median": 35,
+        "p95": 35,
+        "max": 35
+      },
+      "fullRequests": 1,
+      "fullRequestsDuringTyping": 0,
+      "idleToFirstFullMs": 600,
+      "liveWorkerStarts": 0,
+      "keydownTimesMs": [
+        568
+      ],
+      "inputTimesMs": [
+        570
+      ],
+      "fullRequestTimesMs": [
+        1170
+      ],
+      "previewEvents": [
+        {
+          "ms": 668,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 35 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 3810,
+          "type": "preview",
+          "state": "Compiling…",
+          "live": "",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "name": "formula-incomplete",
+      "sourceLines": [
+        970,
+        975
+      ],
+      "capturedPages": [
+        13
+      ],
+      "keydownCount": 5,
+      "inputCount": 5,
+      "allKeyboardAndInputEventsTrusted": true,
+      "typingDurationMs": 274,
+      "firstLiveFromFirstInputMs": null,
+      "liveUpdates": 0,
+      "processingMs": {
+        "min": null,
+        "median": null,
+        "p95": null,
+        "max": null
+      },
+      "fullRequests": 0,
+      "fullRequestsDuringTyping": 0,
+      "idleToFirstFullMs": null,
+      "liveWorkerStarts": 1,
+      "keydownTimesMs": [
+        447,
+        520,
+        589,
+        660,
+        721
+      ],
+      "inputTimesMs": [
+        449,
+        522,
+        591,
+        661,
+        723
+      ],
+      "fullRequestTimesMs": [],
+      "previewEvents": [
+        {
+          "ms": 510,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Unbalanced environment"
+        },
+        {
+          "ms": 584,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for a command"
+        },
+        {
+          "ms": 652,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for a command"
+        }
+      ]
+    },
+    {
+      "name": "formula-taller-recovered",
+      "sourceLines": [
+        970,
+        975
+      ],
+      "capturedPages": [
+        13
+      ],
+      "keydownCount": 19,
+      "inputCount": 19,
+      "allKeyboardAndInputEventsTrusted": true,
+      "typingDurationMs": 11726,
+      "firstLiveFromFirstInputMs": 11815,
+      "liveUpdates": 1,
+      "processingMs": {
+        "min": 27,
+        "median": 27,
+        "p95": 27,
+        "max": 27
+      },
+      "fullRequests": 0,
+      "fullRequestsDuringTyping": 0,
+      "idleToFirstFullMs": null,
+      "liveWorkerStarts": 1,
+      "keydownTimesMs": [
+        447,
+        520,
+        589,
+        660,
+        721,
+        11285,
+        11355,
+        11426,
+        11493,
+        11563,
+        11631,
+        11699,
+        11767,
+        11836,
+        11905,
+        11967,
+        12035,
+        12106,
+        12173
+      ],
+      "inputTimesMs": [
+        449,
+        522,
+        591,
+        661,
+        723,
+        11287,
+        11357,
+        11427,
+        11495,
+        11565,
+        11632,
+        11701,
+        11768,
+        11838,
+        11907,
+        11968,
+        12037,
+        12107,
+        12175
+      ],
+      "fullRequestTimesMs": [],
+      "previewEvents": [
+        {
+          "ms": 510,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Unbalanced environment"
+        },
+        {
+          "ms": 584,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for a command"
+        },
+        {
+          "ms": 652,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for a command"
+        },
+        {
+          "ms": 11349,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for an argument"
+        },
+        {
+          "ms": 11423,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for an argument"
+        },
+        {
+          "ms": 11590,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for an argument"
+        },
+        {
+          "ms": 11696,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for an argument"
+        },
+        {
+          "ms": 11764,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for an argument"
+        },
+        {
+          "ms": 11830,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for an argument"
+        },
+        {
+          "ms": 11900,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for an argument"
+        },
+        {
+          "ms": 11977,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for an argument"
+        },
+        {
+          "ms": 12099,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for an argument"
+        },
+        {
+          "ms": 12170,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for an argument"
+        },
+        {
+          "ms": 12264,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 27 ms",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "name": "cross-page-taller-formula",
+      "sourceLines": [
+        383,
+        409
+      ],
+      "capturedPages": [
+        5,
+        6
+      ],
+      "keydownCount": 28,
+      "inputCount": 26,
+      "allKeyboardAndInputEventsTrusted": true,
+      "typingDurationMs": 1791,
+      "firstLiveFromFirstInputMs": 1356,
+      "liveUpdates": 4,
+      "processingMs": {
+        "min": 18,
+        "median": 18,
+        "p95": 32,
+        "max": 32
+      },
+      "fullRequests": 1,
+      "fullRequestsDuringTyping": 0,
+      "idleToFirstFullMs": 582,
+      "liveWorkerStarts": 1,
+      "keydownTimesMs": [
+        13437,
+        13505,
+        13571,
+        13639,
+        13718,
+        13779,
+        13846,
+        13912,
+        13980,
+        14046,
+        14113,
+        14180,
+        14248,
+        14316,
+        14378,
+        14439,
+        14501,
+        14562,
+        14624,
+        14687,
+        14750,
+        14814,
+        14902,
+        14962,
+        15030,
+        15099,
+        15169,
+        15229
+      ],
+      "inputTimesMs": [
+        13439,
+        13507,
+        13573,
+        13641,
+        13719,
+        13780,
+        13848,
+        13914,
+        13981,
+        14047,
+        14114,
+        14181,
+        14249,
+        14318,
+        14379,
+        14440,
+        14502,
+        14563,
+        14625,
+        14689,
+        14751,
+        14816,
+        14963,
+        15032,
+        15101,
+        15230
+      ],
+      "fullRequestTimesMs": [
+        15812
+      ],
+      "previewEvents": [
+        {
+          "ms": 13503,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for an argument"
+        },
+        {
+          "ms": 13569,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for a command"
+        },
+        {
+          "ms": 13634,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for a command"
+        },
+        {
+          "ms": 13702,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for a command"
+        },
+        {
+          "ms": 13788,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for a command"
+        },
+        {
+          "ms": 13911,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for a command"
+        },
+        {
+          "ms": 13975,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for a command"
+        },
+        {
+          "ms": 14044,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for a command"
+        },
+        {
+          "ms": 14108,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for a command"
+        },
+        {
+          "ms": 14175,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for a command"
+        },
+        {
+          "ms": 14243,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for a command"
+        },
+        {
+          "ms": 14331,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for an argument"
+        },
+        {
+          "ms": 14496,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for a command"
+        },
+        {
+          "ms": 14618,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for a script"
+        },
+        {
+          "ms": 14795,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 32 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 14898,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 20 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 15024,
+          "type": "preview",
+          "state": "Out of date",
+          "live": "Waiting for input",
+          "reason": "Waiting for a script"
+        },
+        {
+          "ms": 15137,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 18 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 15310,
+          "type": "preview",
+          "state": "Live",
+          "live": "Live 18 ms · pagination pending",
+          "reason": ""
+        },
+        {
+          "ms": 18380,
+          "type": "preview",
+          "state": "Compiling…",
+          "live": "",
+          "reason": ""
+        }
+      ]
+    }
+  ],
+  "downloadedPdf": {
+    "pages": 13,
+    "bytes": 374235,
+    "sha256": "d392fc00e655e4e8fbbd74355dace2c692b6ee575fd3cae3e02045bece72590e",
+    "textAssertionsPassed": true,
+    "figuresVisuallyCheckedPages": [
+      2,
+      8
+    ]
+  },
+  "restoration": {
+    "browserSourceEqualsOriginal": true,
+    "fullCompileReady": true,
+    "pages": 13,
+    "pdfBytes": 373845,
+    "fullMs": 2720,
+    "attachmentAndFiguresHashesUnchanged": true
+  },
+  "checks": {
+    "unitTests": 150,
+    "reflowScenarios": 18,
+    "independentReflowFullComparisons": 18,
+    "reflowEngineRestarts": 0,
+    "incrementalEdits": 26,
+    "sequenceAcceptedEdits": 112,
+    "sequenceIncompletePrefixes": 17,
+    "sequenceFullComparisons": 15,
+    "project": true,
+    "build": true
+  },
+  "limitations": [
+    "No physical keyboard, IME, Safari, Firefox, mobile, memory profiling or pixel-by-pixel paper comparison.",
+    "Unsupported environments, body macro state and non-replayable hooks still use full layout; provisional pagination and numbering settle through full TeX."
+  ]
+}

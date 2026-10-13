@@ -30,7 +30,7 @@ Ctrl / Command + Enter 完整编译。可以取消正在进行的编译。草稿
 ## 本版的准确范围
 
 - 真正增量：首次完整编译捕获布局；首次编辑某个单元时校验原文字形与坐标，之后只向常驻引擎发送修改的单元。几何不变时沿用精确行替换；换行、公式增高、段落拆分/删除、相邻普通段落合并时，使用真实 TeX 字形即时重排受影响页面
-- 局部路径还支持已捕获的 itemize/enumerate/description、quote/quotation、section 等标题，以及原有 proof、abstract、行内/独立公式、equation、align、gather、multline。主文件和被引用的文本子文件按各自源位置跟踪。标题、标签/引用、编号变化会标记待校准；不完整输入保留上一张成功预览
+- 局部路径还支持已捕获的 itemize/enumerate/description、quote/quotation、section 等标题，以及 proof、abstract、theorem/lemma/proposition/corollary/remark、行内/独立公式、equation、align、gather、multline。定理环境保留标题、共享编号和内部列表。主文件和被引用的文本子文件按各自源位置跟踪。标题、标签/引用、编号变化会标记待校准；不完整输入保留上一张成功预览
 - 即时重排暂时伸缩页面并移动下方的 PDF 底图，保留正文、插图和页脚；跨页单元暂沿用已捕获的分页位置。停顿后由原有全文引擎恢复精确分页、页码、引用和辅助文件。没有新增分页引擎，也不把临时预览作为导出的 PDF
 - 常驻 LuaTeX 和 PDF.js Worker 复用。完整排版复用同一前言下上次成功的 aux；稳定时执行一遍，引用变化或目录等辅助文件需要时执行两遍
 - 绘制使用真实字体与整数 scaled-point 坐标。OpenType/TrueType 使用引擎 glyph index；Type 1 字体使用已安装的 PDF.js 转换原 PFB 轮廓，支持直接映射和静态 256 字符重编码（包括 Latin Modern 的 T1 与数学字体），按字体文件及编码缓存，没有新增依赖或另一套公式排版器
@@ -57,7 +57,9 @@ Ctrl / Command + Enter 完整编译。可以取消正在进行的编译。草稿
 
 后续累计 benchmark 通过 147 项测试：112 次有效局部修改和 17 次未完成公式输入，覆盖连续输入/退格、段落增删与恢复、跨页增长/缩短、公式增高和整块删除/撤销；15 个检查点与独立全文编译核对字形和规则。首段前插入、连同空行删除公式现在也能即时更新；恢复已删除内容会复用原单元，避免误用后续段落的公式计数器。运行 `npm run test:sequence` 复现，结果写入 `qa/live-sequence.json`。Node 本机一次运行中位 5.95 ms、P95 102.88 ms（含局部排版、字形绘制和检查，不含浏览器输入计时器）。浏览器另验证连续输入期间 Live 更新、跨页校准及最新 PDF 内容；详见 QA.md。
 
-浏览器验证限定桌面 Codex 内置浏览器。最新重排改动使用合成文档验收，未重跑上述完整论文；Safari、Firefox、移动端及更大文档的性能尚未验收。局部绘制要求白色纸面，不能解释的全页绘制仍回退。不能据这些样例声称任意 LaTeX 操作都即时完成。
+2026-10-14 重新使用上述完整 13 页论文与两张原始 PDF 插图验收，改为浏览器实际逐键输入（可信 keydown/beforeinput/input 事件）。定理连续输入 20 键产生 11 次 Live 更新（9.9–17 ms）；跨第 5、6 页的证明连续输入 61 键产生 32 次 Live 更新（16–39 ms），输入期间没有全文编译，停下后约 0.5 秒校准。另验证段落增删、未完成公式保留预览、根式与跨页求和分式恢复；下载 PDF 包含最新修改，测试页已恢复原稿。150 项测试和扩展后的 18 类真实 WASM 重排检查通过，记录见 `qa/full-paper-input.json` 与 QA.md。
+
+浏览器验证限定桌面 Codex 内置浏览器。中文输入法按用户要求未测试；Safari、Firefox、移动端、物理键盘及更大文档的性能尚未验收。局部绘制要求白色纸面，不能解释的全页绘制仍回退。不能据这些样例声称任意 LaTeX 操作都即时完成。
 
 ## 开发
 
@@ -79,6 +81,8 @@ npm run test:sequence
 npm run preview 使用本机静态服务器提供 dist。Worker 位于 public/runtime，原项目 Lua/TeX 文件在 public/rtex，压缩 WASM/数据在 public/busytex。Vite 只负责前端构建，不运行原生 TeX。
 
 Node 回归测试使用 `tests/fixtures/tex-packages.json.gz` 中的少量已下载宏包运行离线检查；这些测试夹具不会打包到网页。浏览器运行时仍按需获取缺失文件，包含 microtype 的 Lua 模块和字体配置。
+
+浏览器输入 benchmark：运行开发服务器后打开 `/tests/browser-input.html`，通过项目 ZIP 导入完整论文及插图；待全文编译完成，展开 `Input benchmark`，点击 `Reset measurements`，再用键盘连续编辑。面板统计真实输入事件、Live 状态、全文请求及 Live Worker 启动次数，`Download trace` 导出记录。恢复基准原稿后可重复同一操作；面板只在该测试页面加载。
 
 `tests/runtime-helpers.mjs` 统一提供 Node 的浏览器 Worker 适配和支持文件读取；支持文件清单复用 `core/engine-client.js` 的 `TEX_FILES`，添加 Lua/TeX 支持文件时只需更新这一处。
 

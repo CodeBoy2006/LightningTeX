@@ -56,6 +56,17 @@ test('strict paragraph eligibility declines side effects and complex contexts',(
  c.units[0].advanced={section:1};assert.match(liveUnitEligibility(c,1).reason,/Counter/);
  delete c.units[0].advanced;c.paragraphs[0].flags={dir:1};assert.equal(liveUnitEligibility(c,1).ok,false);
 });
+test('captured theorem families replay shared numbering and nested hyperref lists without allowing unrelated counters',()=>{
+ const c=capture(),unit=c.units[0];unit.kind='env';unit.seqs.push(21);
+ for(const name of ['theorem','lemma','proposition','corollary','remark']){
+  unit.name=name;unit.advanced={theorem:2,equation:1,Item:3,enumi:3};c.paragraphs[0].flags={glyphs:10,whatsit_pdf_colorstack:2};
+  assert.equal(liveUnitEligibility(c,unit).ok,true,name);
+ }
+ unit.advanced.section=4;assert.match(liveUnitEligibility(c,unit).reason,/Counter/);delete unit.advanced.section;
+ c.paragraphs[2].flags={ins:1};assert.equal(liveUnitEligibility(c,unit).ok,false);
+ delete c.paragraphs[2].flags;unit.name='customtheorem';assert.equal(liveUnitEligibility(c,unit).ok,false);
+ unit.name='enumerate';unit.advanced={enumi:3,Item:3};assert.equal(liveUnitEligibility(c,unit).ok,true);
+});
 test('baseline compares relative origins with stable font identity and rules',()=>{
  const {unit,page,live}=drawing();assert.deepEqual(compareUnitBaseline(unit,[page],live),{ok:true,rows:1,glyphs:1});
  const baseline=extractUnitRows(new Map([[1,page]]),unit);page.lines[0].x=900;assert.equal(baseline.rows[0].line.x,100);

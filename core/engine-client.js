@@ -153,7 +153,9 @@ export class LiveEngine {
  compile(ctx,source,expectedCounters={}){
   return this.unit(ctx,source,header=>{
    const counters=header.counters||{};
-   return Object.keys(counters).length!==Object.keys(expectedCounters).length||Object.entries(counters).some(([key,value])=>value!==expectedCounters[key]);
+   // Hyperref can create this PDF-only bookmark counter after the capture's initial census.
+   const keys=new Set([...Object.keys(counters),...Object.keys(expectedCounters)]);
+   return [...keys].some(key=>(ctx.kind!=='heading'||key!=='bookmark@seq@number')&&counters[key]!==expectedCounters[key]);
   });
  }
  // Standalone and provisional previews allow changed counters; the server restores them after every unit.

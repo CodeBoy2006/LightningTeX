@@ -8,9 +8,9 @@ export function splitPreamble(source) {
     offset+=line.length+1;
   }return null;
 }
-const liveEnvironments=new Set('equation equation* align align* gather gather* multline multline* displaymath aligned gathered split cases matrix pmatrix bmatrix Bmatrix vmatrix Vmatrix smallmatrix proof abstract itemize enumerate description quote quotation verse center flushleft flushright tabular tabular*'.split(' '));
+const liveEnvironments=new Set('equation equation* align align* gather gather* multline multline* displaymath aligned gathered split cases matrix pmatrix bmatrix Bmatrix vmatrix Vmatrix smallmatrix proof abstract itemize enumerate description quote quotation verse center flushleft flushright tabular tabular* theorem lemma proposition corollary remark'.split(' '));
 // A bounded vocabulary keeps state-changing TeX out of the persistent worker.
-export const liveCommands=new Set(('text textbf textit textrm textsf texttt emph mathrm mathit mathbf mathsf mathtt mathcal mathbb mathfrak mathnormal boldsymbol operatorname '+
+export const liveCommands=new Set(('text textbf textit textup textrm textsf texttt emph roman mathrm mathit mathbf mathsf mathtt mathcal mathbb mathfrak mathnormal boldsymbol operatorname '+
  'frac dfrac tfrac cfrac binom dbinom tbinom sqrt sum prod coprod int iint iiint oint lim limsup liminf min max sup inf log ln exp sin cos tan cot sec csc arcsin arccos arctan sinh cosh tanh det dim ker deg arg Pr hom gcd colon '+
  'alpha beta gamma delta epsilon varepsilon zeta eta theta vartheta iota kappa lambda mu nu xi pi varpi rho varrho sigma varsigma tau upsilon phi varphi chi psi omega Gamma Delta Theta Lambda Xi Pi Sigma Upsilon Phi Psi Omega '+
  'infty partial nabla ell hbar imath jmath Re Im aleph emptyset varnothing forall exists neg in notin ni subset supset subseteq supseteq cup cap setminus land lor perp '+
@@ -20,7 +20,7 @@ export const liveCommands=new Set(('text textbf textit textrm textsf texttt emph
 // Mandatory arguments. A command typed before its arguments would otherwise swallow the
 // tokens that close the persistent engine's unit group.
 export const liveArity=Object.assign(Object.create(null),{frac:2,dfrac:2,tfrac:2,cfrac:2,binom:2,dbinom:2,tbinom:2,overset:2,underset:2,stackrel:2,multicolumn:3});
-for(const name of 'text textbf textit textrm textsf texttt emph mathrm mathit mathbf mathsf mathtt mathcal mathbb mathfrak mathnormal boldsymbol operatorname sqrt overline underline bar hat widehat tilde widetilde vec dot ddot overbrace underbrace phantom hphantom vphantom smash left right middle big Big bigg Bigg bigl bigr Bigl Bigr biggl biggr Biggl Biggr'.split(' '))liveArity[name]=1;
+for(const name of 'text textbf textit textup textrm textsf texttt emph roman mathrm mathit mathbf mathsf mathtt mathcal mathbb mathfrak mathnormal boldsymbol operatorname sqrt overline underline bar hat widehat tilde widetilde vec dot ddot overbrace underbrace phantom hphantom vphantom smash left right middle big Big bigg Bigg bigl bigr Bigl Bigr biggl biggr Biggl Biggr'.split(' '))liveArity[name]=1;
 /** Index just past one plausible macro argument starting at i, or -1 when none has been typed yet. */
 export function skipArgument(text,i){
   for(;;){const c=text[i];if(c===' '||c==='\t'||c==='\n')i++;else if(c==='%'){while(i<text.length&&text[i]!=='\n')i++;}else break;}

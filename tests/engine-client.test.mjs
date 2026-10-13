@@ -91,6 +91,14 @@ test('known equation counter advancement is accepted; changed numbering discards
  counters={equation:4};await assert.rejects(live.compile({},'changed equation',{equation:3}),/state changed/);
  assert.equal(worker.terminated,true);
 }));
+test('heading proof ignores only the PDF bookmark sequence and still enforces visible counters',()=>withWorkers(async()=>{
+ const {live,worker}=await liveStarted();let last,counters={section:1,'bookmark@seq@number':2};
+ live.send=async object=>{last=object;};
+ live.read=async()=>({header:last.op==='context'?{op:'ok',id:1}:{op:'result',req:last.req,ctx:1,status:'ok',counters}});
+ await live.compile({kind:'heading'},'heading',{section:1});assert.equal(live.worker,worker);
+ counters={section:1};await live.compile({kind:'heading'},'heading',{section:1,'bookmark@seq@number':1});
+ counters={section:2,'bookmark@seq@number':3};await assert.rejects(live.compile({kind:'heading'},'heading',{section:1}),/state changed/);
+}));
 
 test('background sends only changed project files, removes dropped ones and resets when the root or worker changes',()=>withWorkers(async()=>{
  const engine=new BackgroundEngine(options),ready=engine.start(),worker=MockWorker.all.at(-1);worker.emit({type:'ready'});await ready;

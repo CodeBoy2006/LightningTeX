@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LightningTeX input benchmark</title>
+<link rel="stylesheet" href="../ui/styles.css">
+<div id="app"></div>
+<details style="position:fixed;right:8px;bottom:28px;z-index:300;background:white;color:black;border:1px solid #888;padding:6px;font:12px monospace">
+ <summary>Input benchmark</summary>
+ <button id="reset-benchmark">Reset measurements</button>
+ <button id="download-benchmark">Download trace</button>
+ <p id="input-summary"></p>
+ <pre id="input-benchmark" style="max-height:260px;max-width:600px;overflow:auto"></pre>
+ <pre id="unit-coverage" hidden></pre>
+</details>
+<script type="module">
+// Observe the real app; source changes still come through native keyboard events.
+const events=[],counts={},workers={fullRequests:0,liveStarts:0};
+let began=performance.now();
+const output=document.querySelector('#input-benchmark');
+const show=()=>{output.textContent=JSON.stringify({elapsedMs:Math.round(performance.now()-began),counts,workers,events},null,2);document.querySelector('#input-summary').textContent=`Inputs ${counts.input||0}; full ${workers.fullRequests}; last ${events.at(-1)?.type||''} ${events.at(-1)?.data||events.at(-1)?.key||''}`;};
+const record=(type,data={})=>{counts[type]=(counts[type]||0)+1;events.push({ms:Math.round(performance.now()-began),type,...data});if(events.length>400)events.shift();show();};
+const WorkerClass=window.Worker;
+window.Worker=class extends WorkerClass{
+ constructor(url,options){super(url,options);this.full=String(url).includes('background-worker.js');if(String(url).includes('live-worker.js')){workers.liveStarts++;show();}
+  if(this.full)this.addEventListener('message',({data})=>{if(data.capture)document.querySelector('#unit-coverage').textContent=JSON.stringify(data.capture.units.filter(unit=>unit.placements?.length).map(({uid,kind,name,nest,begin_line,end_line,advanced,placements,seqs,everypar,noskipsec})=>({uid,kind,name,nest,begin_line,end_line,advanced,everypar,noskipsec,flags:data.capture.paragraphs.filter(p=>seqs.includes(p.seq)).map(p=>p.flags),pages:[...new Set(placements.map(row=>row.page))]})));});
+ }
+ postMessage(data,...rest){if(this.full&&data.type==='compile'){workers.fullRequests++;record('full-request',{id:data.id});}return super.postMessage(data,...rest);}
+};
+for(const type of ['keydown','beforeinput','input'])document.addEventListener(type,event=>{
+ if(!event.target.matches?.('.code-input'))return;
+ record(type,{trusted:event.isTrusted,key:event.key,data:event.data,inputType:event.inputType,composing:event.isComposing,start:event.target.selectionStart,end:event.target.selectionEnd});
+},true);
+await import('../main.js');
+const status=document.querySelector('[data-id="stat-live"]'),preview=document.querySelector('[data-id="preview-status-text"]');
+new MutationObserver(()=>record('preview',{state:preview.textContent,live:status.textContent,reason:status.title})).observe(status,{subtree:true,childList:true,characterData:true,attributes:true});
+document.querySelector('#reset-benchmark').onclick=()=>{events.length=0;for(const key in counts)delete counts[key];workers.fullRequests=workers.liveStarts=0;began=performance.now();show();};
+document.querySelector('#download-benchmark').onclick=()=>{const a=document.createElement('a'),url=URL.createObjectURL(new Blob([output.textContent],{type:'application/json'}));a.href=url;a.download='lightningtex-input-'+Date.now()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+show();
+</script>
+</html>

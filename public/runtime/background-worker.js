@@ -3,7 +3,7 @@ importScripts('./raw-loader.js');
 let engine,snapshot,lastPreamble,lastAux;const decoder=new TextDecoder();
 function removeTree(fs,path){if(!fs.analyzePath(path).exists)return;for(const name of fs.readdir(path)){if(name==='.'||name==='..')continue;const p=path+'/'+name;fs.isDir(fs.stat(p).mode)?removeTree(fs,p):fs.unlink(p)}if(path!=='/project'&&path!=='/out')fs.rmdir(path)}
 async function init(data){
- engine=await loadRtexEngine({base:data.base||'../busytex/',env:{TEXINPUTS:'/rtex/latex//:',LUAINPUTS:'/rtex//:',RTEX_CAPTURE_DIR:'/out',RTEX_UNIT_ENVS:'equation,equation*,align,align*,gather,gather*,multline,multline*,displaymath',openout_any:'a',max_print_line:'100000',shell_escape:'f'},print:t=>postMessage({type:'log',text:t}),printErr:t=>postMessage({type:'log',text:t})});
+ engine=await loadRtexEngine({base:data.base||'../busytex/',env:{TEXINPUTS:'/rtex/latex//:',LUAINPUTS:'/rtex//:',RTEX_CAPTURE_DIR:'/out',RTEX_UNIT_ENVS:'equation,equation*,align,align*,gather,gather*,multline,multline*,displaymath,theorem,lemma,proposition,corollary,remark',openout_any:'a',max_print_line:'100000',shell_escape:'f'},print:t=>postMessage({type:'log',text:t}),printErr:t=>postMessage({type:'log',text:t})});
  const fs=engine.FS;fs.mkdirTree('/rtex/latex');fs.mkdirTree('/out');
  for(const [name,contents] of Object.entries(data.files))writeEngineFile(fs,'/rtex/'+name,contents);
  const cut=2**26;const tail=engine.HEAPU8.subarray(cut);snapshot=engine.HEAPU8.slice(0,tail.some(x=>x)?engine.HEAPU8.length:cut);
