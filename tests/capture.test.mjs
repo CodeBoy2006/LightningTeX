@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {finalizeCapture,firstParagraph,unitContext,liveUnitEligibility,extractUnitRows,compareBaseline,compareUnitBaseline} from '../core/capture.js';
+import {firstParagraph,unitContext,liveUnitEligibility,extractUnitRows,compareBaseline,compareUnitBaseline} from '../core/capture.js';
 const copy=structuredClone;
 function capture(){return {units:[
  {uid:1,kind:'par',nest:1,seqs:[10],counters:{section:1},thefmt:{section:'arabic'},macros:{},everypar:'',ints:{tolerance:2},dims:{hsize:2},nfss:{family:'unit'},color:'unit-color',placements:[{page:1,row:1,x:100,y:200}]},
@@ -15,12 +15,24 @@ function drawing(){
  const live={kind:'paragraph',unit:'sp',fonts:{99:{...font,id:99}},flags:{},other:[],lines:[{...copy(row),x:0,y:20,items:[['g',99,65,4,10,20,30,0],['r',20,10,5,2]]}]};
  return {unit:capture().units[0],page,live};
 }
-test('finalize is immutable, cumulative, typed and independently cloned',()=>{
- const c=capture(),before=copy(c),f=finalizeCapture(c);
- assert.deepEqual(c,before);assert.deepEqual(f.units[1].abs_counters,{section:1,equation:2});
- assert.deepEqual(f.units[1].abs_thefmt,{section:'arabic'});
- f.units[0].abs_counters.section=42;assert.equal(f.units[1].abs_counters.section,1);
- assert.deepEqual(finalizeCapture(finalizeCapture(c)),finalizeCapture(c));
+test('contexts replay cumulative state only through the requested unit and remain independent',()=>{
+ const c=capture(),before=copy(c),first=unitContext(c,1),second=unitContext(c,2);
+ assert.deepEqual(c,before);assert.deepEqual(first.counters,{section:1});assert.deepEqual(first.macros,{});
+ assert.deepEqual(second.counters,{section:1,equation:2});assert.deepEqual(second.thefmt,{section:'arabic'});assert.deepEqual(second.macros,{x:'->x'});
+ first.counters.section=42;assert.equal(second.counters.section,1);
+ assert.deepEqual(unitContext(c,2),second);assert.deepEqual(unitContext(c,1).counters,{section:1});
+});
+test('context deltas retain typed values and own prototype-like keys without trusting derived fields',()=>{
+ const c=capture();
+ c.units[0].macros=JSON.parse('{"__proto__":"->safe","x":"->x"}');
+ c.units[1].counters={section:1.5,equation:2,unsafe:Number.MAX_SAFE_INTEGER+1};
+ c.units[1].thefmt={section:null};c.units[1].macros={x:42};
+ c.units[1].abs_counters={section:99};c.units[1].abs_macros={x:'->wrong'};
+ c.units.push({uid:3,counters:{section:3},macros:{x:'->later'}});
+ const before=copy(c),ctx=unitContext(c,{uid:2});
+ assert.deepEqual(ctx.counters,{section:1,equation:2});assert.deepEqual(ctx.thefmt,{section:'arabic'});
+ assert.equal(ctx.macros.x,'->x');assert.equal(Object.hasOwn(ctx.macros,'__proto__'),true);assert.equal(ctx.macros.__proto__,'->safe');
+ assert.deepEqual(c,before);assert.throws(()=>unitContext(c,999),/not found/);
 });
 test('context uses first body paragraph parameters and NFSS with unit state',()=>{
  const c=capture();c.units[0].nobreak=true;c.units[0].afterindent=true;

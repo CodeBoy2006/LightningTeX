@@ -7,20 +7,6 @@ const map = value => value && typeof value === 'object' && !Array.isArray(value)
 const fail = reason => ({ok:false, reason});
 const nonempty = value => Object.keys(map(value)).length > 0;
 
-export function finalizeCapture(capture) {
-  const result = clone(capture), counters = {}, thefmt = {}, macros = {};
-  const merge = (target, delta, valid) => { for (const [key,value] of Object.entries(map(delta))) {
-    if (valid(value)) Object.defineProperty(target,key,{value,enumerable:true,writable:true,configurable:true});
-  }};
-  for (const unit of result.units || []) {
-    merge(counters,unit.counters,Number.isSafeInteger);
-    merge(thefmt,unit.thefmt,v=>typeof v==='string');
-    merge(macros,unit.macros,v=>typeof v==='string');
-    unit.abs_counters = clone(counters); unit.abs_thefmt = clone(thefmt); unit.abs_macros = clone(macros);
-  }
-  return result;
-}
-
 function resolveUnit(capture, unitOrId) {
   const uid = typeof unitOrId==='object' ? unitOrId?.uid : unitOrId;
   const unit = (capture.units || []).find(u=>u.uid===uid);
@@ -36,14 +22,24 @@ export function firstParagraph(capture, unitOrId) {
     || members.find(p=>p.begin != null) || paragraphs.get(unit.seqs?.[0]) || null;
 }
 export function unitContext(capture, unitOrId) {
-  const finalized = finalizeCapture(capture), unit = resolveUnit(finalized,unitOrId);
-  const first = firstParagraph(finalized,unit), params = unit.kind==='par' && first ? first : unit;
+  const unit = resolveUnit(capture,unitOrId), counters = {}, thefmt = {}, macros = {};
+  const merge = (target, delta, valid) => { for (const [key,value] of Object.entries(map(delta))) {
+    if (valid(value)) Object.defineProperty(target,key,{value,enumerable:true,writable:true,configurable:true});
+  }};
+  // Replay deltas through this unit; later units cannot affect its context.
+  for (const current of capture.units) {
+    merge(counters,current.counters,Number.isSafeInteger);
+    merge(thefmt,current.thefmt,v=>typeof v==='string');
+    merge(macros,current.macros,v=>typeof v==='string');
+    if(current===unit)break;
+  }
+  const first = firstParagraph(capture,unit), params = unit.kind==='par' && first ? first : unit;
   const start = unit.kind==='par' && first?.begin != null ? first.begin : unit;
   return clone({kind:unit.kind,name:unit.name??null,
     ints:map(params.ints),dims:map(params.dims),glues:map(params.glues),parshape:params.parshape??null,
     // A captured heading includes its own command, which installs its own everypar.
     everypar:unit.kind==='heading'?'':unit.everypar??'',nobreak:unit.nobreak??false,afterindent:unit.afterindent??false,noskipsec:unit.noskipsec??false,
-    counters:unit.abs_counters,thefmt:unit.abs_thefmt,macros:unit.abs_macros,
+    counters,thefmt,macros,
     begin:{nfss:map(start.nfss),color:start.color??null}});
 }
 
