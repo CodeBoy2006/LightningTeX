@@ -3,7 +3,7 @@ import {createReadStream,statSync,existsSync} from 'node:fs';
 import {resolve,extname,sep} from 'node:path';
 const root=resolve(process.argv[2]||'dist');
 const port=Number(process.env.PORT||4173);
-const types={'.html':'text/html; charset=utf-8','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.wasm':'application/wasm','.json':'application/json','.svg':'image/svg+xml','.pdf':'application/pdf','.data':'application/octet-stream','.otf':'font/otf','.ttf':'font/ttf'};
+const types={'.html':'text/html; charset=utf-8','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.wasm':'application/wasm','.json':'application/json','.svg':'image/svg+xml','.pdf':'application/pdf','.data':'application/octet-stream','.otf':'font/otf','.ttf':'font/ttf','.woff2':'font/woff2'};
 http.createServer((req,res)=>{
   res.setHeader('Cross-Origin-Opener-Policy','same-origin');
   res.setHeader('Cross-Origin-Embedder-Policy','require-corp');

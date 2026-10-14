@@ -190,7 +190,7 @@ async function updateLive({source,root,files,filesRev,revision}){
    const {canvases,flows}=await drawLivePages([...pages].filter(([number])=>affected.has(number)),units);
    if(!current())return true;
    reflow||=layout.some(page=>page.reflowUnits?.length);
-   const regions=[...flows].flatMap(([page,flow])=>flow.bands.filter(band=>affectedUnits.has(band.uid)).map(band=>({page,top:(band.y+band.shift)/flow.height,bottom:(band.y+band.shift+Math.max(0,band.h+band.delta))/flow.height})));
+   const regions=[...flows].flatMap(([page,flow])=>flow.bands.filter(band=>affectedUnits.has(band.uid)).map(band=>({page,uid:band.uid,top:(band.y+band.shift)/flow.height,bottom:(band.y+band.shift+Math.max(0,band.h+band.delta))/flow.height,...column(layout.find(sheet=>sheet.page===page),band.uid)})));
    if(!ui.setLivePages({canvases,revision,durationMs:performance.now()-began,reflow,regions}))return false;
    state.drawnPages=layout;for(const [number,flow] of flows)state.flows.set(number,flow);state.edits=edits;state.liveUnits=units;
    for(const {document,edit,text} of pending)acceptLiveEdit(document,edit,text);
@@ -237,6 +237,11 @@ function syncMarker(scroll=true){
  if(!rows.length){ui.setMarker(null);return;}
  const offset=flowOffset(flow,rows[0]);
  ui.setMarker({page:first.page,top:(Math.min(...rows.map(row=>row.y-row.h))+offset)/height,bottom:(Math.max(...rows.map(row=>row.y+row.d))+offset)/height},{scroll});
+}
+// The horizontal extent of a unit's rows on its page, as fractions of the page width.
+function column(sheet,uid){
+ const rows=sheet?.lines.filter(row=>row.unit===uid&&Number.isFinite(row.x)&&Number.isFinite(row.w))||[];
+ return rows.length?{left:Math.min(...rows.map(row=>row.x))/sheet.page_width,right:Math.max(...rows.map(row=>row.x+row.w))/sheet.page_width}:{};
 }
 function flowOffset(flow,line){
  const own=flow?.bands.find(band=>band.uid===line.unit);

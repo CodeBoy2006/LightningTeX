@@ -9,10 +9,10 @@ export function fuzzyMatch(query,text){
 }
 export function openPalette({host,t,items,onClose}){
   const content=document.createElement('div');content.className='palette-body';
-  content.innerHTML='<div class="palette-input"><input type="text" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="true"></div><div class="palette-list" role="listbox" id="command-results"></div><footer></footer>';
-  const input=content.firstChild.firstChild,list=content.children[1];input.placeholder=input.ariaLabel=t('palette.placeholder');input.setAttribute('aria-controls',list.id);content.lastChild.textContent=t('palette.hint');
+  content.innerHTML='<div class="palette-input">'+icon('search')+'<input type="text" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="true"></div><div class="palette-list" role="listbox" id="command-results"></div><footer></footer>';
+  const input=content.firstChild.lastChild,list=content.children[1];input.placeholder=input.ariaLabel=t('palette.placeholder');input.setAttribute('aria-controls',list.id);content.lastChild.textContent=t('palette.hint');
   let results=[],selected=0;
-  const dialog=openDialog(host,{title:t('palette.open'),content,className:'palette-dialog',onClose});
+  const dialog=openDialog(host,{title:t('palette.open'),content,className:'palette-dialog',onClose,hideTitle:true});
   function choose(index){const item=results[index];if(!item)return;dialog.close();item.run();}
   function paint(){
     list.replaceChildren();

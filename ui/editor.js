@@ -21,6 +21,10 @@ import {openTemplateGallery} from './template-gallery.js';
 import {createCompletion} from './complete.js';
 import {openSymbols} from './symbols.js';
 import {openHistory} from './history.js';
+import {createLabels} from './labels.js';
+import {watchEdges} from './edges.js';
+import {explainReason} from '../core/live-reasons.js';
+import {referenceCounts} from '../core/references.js';
 
 const LEGACY_DRAFT='realtime-tex-web:draft:v1',LEGACY_CONSENT='realtime-tex-web:save-draft:v1';
 const MAX_UPLOAD=20*1024*1024,ZOOMS=[0.5,0.67,0.8,0.9,1,1.1,1.25,1.5,1.75,2,2.5,3];
@@ -55,14 +59,19 @@ const shell=()=>`<div class="app">
   </header>
   <div class="main" data-id="main">
     <aside class="sidebar" data-id="sidebar"><div class="sidebar-in">
-      <div class="side-head"><span class="side-title" data-i18n="app.files"></span>
-        <button type="button" class="icon-btn" data-action="new-file" data-i18n-title="file.new">${icon('fileAdd')}</button>
-        <button type="button" class="icon-btn" data-action="new-folder" data-i18n-title="folder.new">${icon('folderAdd')}</button>
-        <button type="button" class="icon-btn" data-action="upload" data-i18n-title="file.upload">${icon('upload')}</button>
+      <div class="side-switch" data-id="side-switch" role="tablist"><i class="seg-thumb"></i>${['files','outline','labels'].map(view=>`<button type="button" role="tab" data-side="${view}" data-i18n="side.${view}"></button>`).join('')}</div>
+      <div class="side-view" data-view="files" role="tabpanel">
+        <div class="side-head"><span class="spacer"></span>
+          <button type="button" class="icon-btn" data-action="new-file" data-i18n-title="file.new">${icon('fileAdd')}</button>
+          <button type="button" class="icon-btn" data-action="new-folder" data-i18n-title="folder.new">${icon('folderAdd')}</button>
+          <button type="button" class="icon-btn" data-action="upload" data-i18n-title="file.upload">${icon('upload')}</button>
+        </div>
+        <div class="side-scroll"><div class="tree" data-id="tree" role="tree"></div></div>
+        <div class="tree-empty" data-id="tree-empty" hidden><strong data-i18n="empty.files"></strong><p data-i18n="empty.hint"></p><button class="btn" data-action="empty-new" data-i18n="file.new"></button><button class="btn" data-action="new-project" data-i18n="project.template"></button><button class="text-btn" data-action="empty-import" data-i18n="project.import"></button></div>
+        <div class="side-now" data-id="side-now" hidden></div>
       </div>
-      <div class="tree" data-id="tree" role="tree"></div>
-      <div class="tree-empty" data-id="tree-empty" hidden><strong data-i18n="empty.files"></strong><p data-i18n="empty.hint"></p><button class="btn" data-action="empty-new" data-i18n="file.new"></button><button class="btn" data-action="new-project" data-i18n="project.template"></button><button class="text-btn" data-action="empty-import" data-i18n="project.import"></button></div>
-      <div class="side-head outline-head"><span class="side-title" data-i18n="outline.title"></span></div><nav class="outline" data-id="outline" data-i18n-title="outline.title"></nav>
+      <div class="side-view" data-view="outline" role="tabpanel" hidden><div class="side-scroll"><nav class="outline" data-id="outline" data-i18n-title="outline.title"></nav></div></div>
+      <div class="side-view" data-view="labels" role="tabpanel" hidden><div class="side-scroll"><div class="labels" data-id="labels"></div></div></div>
       <div class="side-foot"><button class="text-btn" data-action="history" data-i18n-title="history.open">${icon('history',14)}<span data-i18n="history.open"></span></button></div>
       <input data-id="file-input" type="file" multiple hidden><input data-id="zip-input" type="file" accept=".zip,application/zip" hidden>
     </div></aside>
@@ -81,8 +90,8 @@ const shell=()=>`<div class="app">
           <button type="button" class="icon-btn" data-action="clear-log" data-i18n-title="common.clear">${icon('trash')}</button>
           <button type="button" class="icon-btn" data-action="close-panel" data-i18n-title="common.close">${icon('close')}</button>
         </header>
-        <div class="problems" data-id="problems"></div>
-        <pre class="logs" data-id="logs" tabindex="0" hidden></pre>
+        <div class="panel-body"><div class="problems" data-id="problems"></div>
+        <pre class="logs" data-id="logs" tabindex="0" hidden></pre></div>
       </section>
     </section>
     <div class="splitter" data-split="preview" role="separator" aria-orientation="vertical" tabindex="0" data-i18n-title="splitter.help"></div>
@@ -105,7 +114,7 @@ const shell=()=>`<div class="app">
     <button type="button" class="stat" data-action="word-count" data-id="word-count" data-i18n-title="words.title"></button><span class="stat" data-id="stat-doc"></span><span class="stat" data-id="cursor-status"></span><span class="stat" data-id="save-status"></span>
   </footer>
   <div class="settings" data-id="settings" role="dialog" hidden></div>
-  <div class="toast" data-id="toast" role="status" hidden></div>
+  <div class="toasts" data-id="toast" hidden></div>
   <div class="drop-veil" data-id="drop-veil" hidden>${icon('upload',28)}</div>
 </div>`;
 
@@ -143,18 +152,20 @@ export function mountEditor(options={}){
   const views=new Map(),removers=[];
   let structure={headings:[],labels:[],paths:[]},wordTotal=0,wordSections=[],historyId=globalThis.crypto.randomUUID();
   let tabs=[],active=null,compileTimer,settleTimer,busyTimer,zoomTimer,saveTimer,metaTimer,barTimer,hoverFrame,hoverPoint,rendererAbort,pdfSequence=0,previewRun=0,store=null,saving=false,restoring=false,storageWarned=false;
-  let pending=emptyPending(),panelAuto=false;
+  let pending=emptyPending(),panelAuto=false,lastPulse=0,panelMotion=null,inkTimer;const inks=new Map();
   root.innerHTML=shell();
   const app=root.firstElementChild;
   const $=id=>root.querySelector(`[data-id="${id}"]`);
   const action=name=>root.querySelector(`[data-action="${name}"]`);
   const listen=(element,type,handler,config)=>{element.addEventListener(type,handler,config);removers.push(()=>element.removeEventListener(type,handler,config));};
   const viewport=$('preview-viewport'),marker=Object.assign(document.createElement('div'),{className:'sync-marker'});
-  const toaster=createToast($('toast')),toast=(text,undo)=>toaster.show(text,undo),tips=createTooltips(app);
+  const toaster=createToast($('toast')),toast=(text,undo,group)=>toaster.show(text,undo,group),tips=createTooltips(app);
   const notify=(key,values)=>toast(t(key,values));
   const download=(data,name,type)=>{const url=URL.createObjectURL(new Blob([data],{type})),link=document.createElement('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);};
   const mainText=()=>project.get(project.main)?.text??'';
-  const outline=createOutline($('outline'),t,reveal);
+  const outline=createOutline($('outline'),t,reveal),labelsView=createLabels($('labels'),t,reveal);
+  const motion=()=>!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches&&app.classList.contains('ready');
+  for(const id of ['tree','outline','labels','problems','logs'])removers.push(watchEdges($(id),$(id).parentElement).destroy);
   const activeEditor=()=>views.get(active)?.editor;
   const focusEditor=()=>activeEditor()?.focus();
   function commands(){return [
@@ -171,7 +182,8 @@ export function mountEditor(options={}){
     {label:'project.import',icon:'upload',run:()=>$('zip-input').click()},
     {label:'export.open',icon:'download',run:exportMenu},
     {label:'compile.auto',icon:'bolt',run:()=>set('autoCompile',!settings.autoCompile)},
-    {label:'outline.title',icon:'outline',run:()=>{toggleSidebar(true);$('outline').querySelector('button')?.focus();}},
+    {label:'outline.title',icon:'outline',run:()=>showSide('outline',true)},
+    {label:'labels.title',icon:'hash',run:()=>showSide('labels',true)},
     {label:'words.title',icon:'hash',run:wordDetails},
     {label:'symbols.open',icon:'sigma',run:symbols,disabled:!activeEditor()},
     {label:'history.open',icon:'history',run:history},
@@ -194,20 +206,46 @@ export function mountEditor(options={}){
   // On a narrow screen the file list is a drawer over the editor: closed by default, never persisted.
   let drawer=false;
   const sidebarOpen=()=>narrowQuery?.matches?drawer:settings.sidebarOpen;
-  function toggleSidebar(open=!sidebarOpen()){if(narrowQuery?.matches){drawer=open;applyLayout();}else set('sidebarOpen',open);}
+  function toggleSidebar(open=!sidebarOpen()){
+    if(narrowQuery?.matches){drawer=open;applyLayout();return;}
+    if(open===settings.sidebarOpen)return;
+    settings.sidebarOpen=open;saveSettings(settings);slideSidebar(open);
+  }
+  // The panes take their new widths once, at the start; then only transforms move until the sidebar is in place.
+  let sidebarMotion=[];
+  function slideSidebar(open){
+    for(const animation of sidebarMotion)animation.cancel();sidebarMotion=[];
+    const side=$('sidebar'),width=settings.sidebar;
+    if(!motion()||!side.animate){applyLayout();return;}
+    app.dataset.sidebar=open?'open':'closing';applyLayout();
+    const rest=[...$('main').children].filter(node=>node!==side&&node.getClientRects().length),timing={duration:open?200:150,easing:open?'cubic-bezier(.2,0,0,1)':'cubic-bezier(.4,0,1,1)'};
+    const from=open?`translateX(${-width}px)`:`translateX(${width}px)`;
+    sidebarMotion=[side.animate(open?[{transform:from},{transform:'none'}]:[{transform:'none'},{transform:`translateX(${-width}px)`}],timing),...rest.map(node=>node.animate([{transform:from},{transform:'none'}],timing))];
+    if(!open)sidebarMotion[0].finished.then(()=>{if(app.dataset.sidebar==='closing'){app.dataset.sidebar='closed';}},()=>{});
+  }
+  function showSide(view,focus=false){
+    toggleSidebar(true);set('sideView',view);
+    if(focus)$(view==='files'?'tree':view).querySelector('[aria-current="true"],[aria-selected="true"],button,[tabindex="0"]')?.focus();
+  }
+  function applySide(){
+    const switcher=$('side-switch');
+    for(const button of switcher.querySelectorAll('button')){const on=button.dataset.side===settings.sideView;button.setAttribute('aria-selected',String(on));button.tabIndex=on?0:-1;}
+    for(const view of root.querySelectorAll('.side-view'))view.hidden=view.dataset.view!==settings.sideView;
+    placeThumb(switcher);
+  }
   function applyAppearance(){
     const theme=settings.theme==='system'?(darkQuery?.matches?'dark':'light'):settings.theme;
     for(const target of [app,document.documentElement]){target.dataset.theme=theme;target.dataset.accent=settings.accent;}
     app.dataset.darkPages=String(settings.darkPages);document.documentElement.lang=i18n.lang==='zh'?'zh-CN':'en';
   }
   const placeThumb=control=>{
-    const thumb=control.querySelector('.seg-thumb'),on=control.querySelector('[aria-checked="true"]');
+    const thumb=control.querySelector('.seg-thumb'),on=control.querySelector('[aria-checked="true"],[aria-selected="true"]');
     if(thumb){thumb.style.width=(on?.offsetWidth||0)+'px';thumb.style.transform=`translateX(${on?.offsetLeft||0}px)`;}
   };
   const shownLayout=()=>narrowQuery?.matches?(app.dataset.view==='preview'?'preview':'source'):settings.layout;
   function applyLayout(){
     app.style.setProperty('--sidebar-w',settings.sidebar+'px');app.style.setProperty('--split',String(settings.split));
-    app.dataset.sidebar=sidebarOpen()?'open':'closed';app.dataset.layout=settings.layout;
+    const side=sidebarOpen()?'open':'closed';if(!(side==='closed'&&app.dataset.sidebar==='closing'))app.dataset.sidebar=side;app.dataset.layout=settings.layout;
     for(const button of $('layout').querySelectorAll('button'))button.setAttribute('aria-checked',String(button.dataset.value===shownLayout()));
     placeThumb($('layout'));
   }
@@ -222,6 +260,7 @@ export function mountEditor(options={}){
     if(key==='theme'||key==='accent'||key==='darkPages')applyAppearance();
     else if(key==='lang'){i18n.set(value);applyAppearance();refreshText();}
     else if(key==='sidebar'||key==='split'||key==='sidebarOpen'||key==='layout')applyLayout();
+    else if(key==='sideView')applySide();
     else if(['fontSize','wrap','autoClose','tabSize','spellcheck'].includes(key)){for(const view of views.values())view.editor?.configure(settings);popover?.place();}
     else if(key==='autoCompile'){$('auto-compile').checked=value;$('preview-status').dataset.auto=String(value);clearTimeout(compileTimer);clearTimeout(settleTimer);compileTimer=null;if(value&&state.pdfRevision!==state.revision)scheduleCompile();}
     else if(key==='mathPreview'||key==='mathScale'){popover?.hide();if(value)updateMath();}
@@ -258,8 +297,8 @@ export function mountEditor(options={}){
       }
       panel.append(section);
     }
-    const reset=Object.assign(document.createElement('button'),{type:'button',className:'btn',textContent:t('set.reset')}),shortcuts=Object.assign(document.createElement('button'),{type:'button',className:'btn',innerHTML:icon('keyboard')});
-    shortcuts.append(t('keys.title'));shortcuts.addEventListener('click',()=>{toggleSettings(false);shortcutSheet();});
+    const reset=Object.assign(document.createElement('button'),{type:'button',className:'text-btn',innerHTML:icon('history',14)}),shortcuts=Object.assign(document.createElement('button'),{type:'button',className:'text-btn',innerHTML:icon('keyboard',14)});
+    shortcuts.append(t('keys.short'));reset.append(t('set.reset'));shortcuts.addEventListener('click',()=>{toggleSettings(false);shortcutSheet();});
     reset.addEventListener('click',()=>{for(const key of Object.keys(DEFAULT_SETTINGS))if(!['sidebarOpen','panel','panelTab','persist'].includes(key))set(key,DEFAULT_SETTINGS[key]);layoutPages();});
     const foot=Object.assign(document.createElement('div'),{className:'settings-foot'});foot.append(shortcuts,reset);panel.append(foot);syncSettings();
   }
@@ -294,8 +333,7 @@ export function mountEditor(options={}){
   function updateControls(){
     const run=action('compile'),stop=action('cancel'),idle=state.engine!=='ready'||!state.loaded||!project.main;
     run.disabled=idle||state.compiling;run.hidden=state.busy;stop.hidden=!state.busy;action('capsule').disabled=idle;
-    action('capsule').setAttribute('aria-label',t(state.compiling?'compile.stop':'compile.now'));action('capsule').dataset.tip=t(state.compiling?'compile.stop':'compile.now');
-    updateStatus();
+    paintCapsuleTip();updateStatus();
   }
   function updateEngine(){
     const loading=state.engine==='loading',failed=state.engine==='error',percent=Number.isFinite(state.progress)?Math.round(state.progress*100):null;
@@ -308,12 +346,22 @@ export function mountEditor(options={}){
       $('sheet-note').textContent=text||(state.failed?t('preview.failed'):'');action('show-problems').hidden=!state.failed;
     }
   }
+  /** A fallback reason in the reader's language; reasons this build does not know are shown as written. */
+  function describeReason(reason){const found=explainReason(reason);return !found?'':found.code?t('reason.'+found.code,found.values):found.raw;}
+  // The capsule's tooltip has one source: stopping while compiling, else why the last update was not local, else compiling now.
+  function capsuleTip(){
+    if(state.compiling)return t('compile.stop');
+    const live=state.live,why=live?.reason&&describeReason(live.reason);
+    if(!why)return t('compile.now');
+    const head=live.state==='full'?t('live.full')+(Number.isFinite(state.meta?.durationMs)&&state.pdfRevision===state.revision?` · ${(state.meta.durationMs/1000).toFixed(2)} s`:''):live.state==='waiting'?t('live.wait'):live.state==='off'?t('live.off'):t('status.'+(live.state==='reflow'?'live':'ok'));
+    return head+'\n'+why;
+  }
+  function paintCapsuleTip(){const button=action('capsule');button.dataset.tip=capsuleTip();button.setAttribute('aria-label',t(state.compiling?'compile.stop':'compile.now'));}
   function updateLive(){
     const live=state.live,el=$('stat-live');
     el.textContent=!live?'':live.state==='live'||live.state==='reflow'?t(live.state==='reflow'?'live.reflow':'live.ms',{ms:live.ms<10?live.ms.toFixed(1):Math.round(live.ms)}):live.state==='full'?t('live.full'):live.state==='waiting'?t('live.wait'):live.state==='off'?t('live.off'):'';
     el.dataset.state=live?.state||'';$('preview-status').dataset.live=live?.state||'';
-    // Why a local update fell back says more than the capsule's generic label.
-    action('capsule').dataset.tip=live?.reason?String(live.reason):t('compile.now');
+    paintCapsuleTip();
     const bars=$('cap-bars').children,offset=bars.length-state.latency.length;
     for(let i=0;i<bars.length;i++)bars[i].style.setProperty('--h',String(i<offset?0.12:clamp(state.latency[i-offset]/24,0.12,1)));
   }
@@ -325,9 +373,10 @@ export function mountEditor(options={}){
   function updateProject(){
     $('project-name').textContent=documentTitle(mainText())||(project.main?basename(project.main):t('project.untitled'));
     const files=new Map(project.files().filter(file=>typeof file.text==='string').map(file=>[file.path,file.text]));structure=parseOutline(files,project.main);
-    outline.update(structure.headings,state.problems);outline.cursor(active,views.get(active)?.position?.line||1);
     wordTotal=structure.paths.reduce((n,path)=>n+wordCount(files.get(path)||''),0);
     wordSections=structure.headings.map((h,i)=>({heading:h,n:wordCount((files.get(h.file)||'').slice(h.offset,structure.headings.slice(i+1).find(next=>next.file===h.file)?.offset))}));
+    structure.references=referenceCounts(files);nowKey=null;
+    outline.update(structure.headings,state.problems,wordSections);labelsView.update(structure.labels,structure.references);syncCursorViews();
     $('tree-empty').hidden=project.paths().length>0;$('tree').hidden=!project.paths().length;updateWords();
   }
   function updateWords(){const editor=activeEditor(),selected=editor&&editor.input.selectionStart!==editor.input.selectionEnd;const n=selected?wordCount(editor.getValue().slice(editor.input.selectionStart,editor.input.selectionEnd)):wordTotal;$('word-count').textContent=t(selected?'words.selection':'words.count',{n:n.toLocaleString()});}
@@ -347,10 +396,20 @@ export function mountEditor(options={}){
 
   // ---- panel: problems and log ------------------------------------------------------------------
   function renderPanel(){
-    const panel=$('panel');panel.hidden=!settings.panel;
+    const panel=$('panel'),shown=panel.dataset.motion?panel.dataset.motion==='in':!panel.hidden;
+    if(settings.panel!==shown)slidePanel(settings.panel);
     for(const tab of panel.querySelectorAll('.panel-tab'))tab.setAttribute('aria-selected',String(tab.dataset.panel===settings.panelTab));
     $('problems').hidden=settings.panelTab!=='problems';$('logs').hidden=settings.panelTab!=='log';action('clear-log').hidden=settings.panelTab!=='log';
     action('copy-log').hidden=settings.panelTab!=='log';action('problem-filter').hidden=settings.panelTab!=='problems';panel.inert=!settings.panel;
+  }
+  // The panel slides over the editor and takes its height once it is in place; leaving, it gives the height back first.
+  function slidePanel(open){
+    const panel=$('panel');panelMotion?.cancel();panelMotion=null;delete panel.dataset.motion;
+    if(!motion()||!panel.animate){panel.hidden=!open;return;}
+    panel.hidden=false;panel.dataset.motion=open?'in':'out';
+    const height=panel.offsetHeight,timing={duration:open?200:150,easing:open?'cubic-bezier(.2,0,0,1)':'cubic-bezier(.4,0,1,1)'};
+    const animation=panelMotion=panel.animate(open?[{transform:`translateY(${height}px)`},{transform:'none'}]:[{transform:'none'},{transform:`translateY(${height}px)`}],timing);
+    animation.finished.then(()=>{if(panelMotion!==animation)return;panelMotion=null;delete panel.dataset.motion;panel.hidden=!open;},()=>{});
   }
   function openPanel(tab=settings.panelTab){set('panelTab',tab);set('panel',true);}
   function renderProblems(){
@@ -380,7 +439,20 @@ export function mountEditor(options={}){
       view.editor.setMarkers(marksByFile.get(path)||new Map());
       view.editor.setDiagnostics(state.problems.filter(problem=>problem.file===path));
     }
-    outline.update(structure.headings,state.problems);outline.cursor(active,views.get(active)?.position?.line||1);
+    outline.update(structure.headings,state.problems,wordSections);nowKey=null;syncCursorViews();
+  }
+  // The outline, labels and the files view's "this section" summary all follow the caret.
+  let nowKey=null;
+  function syncCursorViews(){
+    const line=views.get(active)?.position?.line||1,heading=outline.cursor(active,line);labelsView.cursor(active,line);
+    const list=structure.headings,index=list.indexOf(heading),start=Math.max(0,Math.min(index-1,list.length-2)),pair=list.slice(start,start+2),key=pair.map(item=>item.offset+item.file).join()+index;
+    if(key===nowKey)return;nowKey=key;
+    const box=$('side-now');box.hidden=!pair.length;box.replaceChildren(Object.assign(document.createElement('span'),{className:'side-now-title',textContent:t('side.now')}));
+    for(const item of pair){
+      const row=document.createElement('button');row.type='button';row.setAttribute('aria-current',String(item===heading));row.innerHTML='<b></b><span></span><small></small>';
+      row.firstChild.textContent=item.number;row.children[1].textContent=item.title;row.lastChild.textContent=(wordSections.find(entry=>entry.heading===item)?.n??0).toLocaleString();
+      row.dataset.tip=`${item.file}:${item.line}`;row.onclick=()=>reveal({path:item.file,line:item.line});box.append(row);
+    }
   }
   const log=(message,level='info')=>{
     state.logs.push(`${level==='error'?'ERROR · ':level==='warning'?'WARNING · ':''}${String(message)}`);if(state.logs.length>500)state.logs.shift();
@@ -405,7 +477,7 @@ export function mountEditor(options={}){
         onCursor:position=>{
           view.position=position;
           if(active!==path)return;
-          $('cursor-status').textContent=t('cursor',position);updateMath();outline.cursor(path,position.line);updateWords();
+          $('cursor-status').textContent=t('cursor',position);updateMath();syncCursorViews();updateWords();
           options.onCursor?.({path,offset:position.offset,line:position.line,main:path===project.main});
         },
         onEscape:()=>{
@@ -416,7 +488,7 @@ export function mountEditor(options={}){
       view.editor.input.addEventListener('blur',()=>popover?.hide());
       view.find=createFindBar(view.editor,t);
       if(isTex(path))view.complete=createCompletion(view.editor,{t,context:()=>({files:new Map(project.files().map(f=>[f.path,f.text])),labels:structure.labels}),onVisible:visible=>{if(visible)popover?.hide();}});
-      wireInsertion(view.editor,path);
+      wireInsertion(view.editor,path);view.edges=watchEdges(view.editor.scroller,view.editor.el);
       el.append(view.editor.el);return view;
     }
     el.classList.add('viewer');
@@ -428,7 +500,7 @@ export function mountEditor(options={}){
     }
     el.innerHTML=icon('file',28);el.append(Object.assign(document.createElement('span'),{textContent:`${t('binary.note')} · ${size}`}));return view;
   }
-  function dropView(path){const view=views.get(path);if(!view)return;view.complete?.destroy();view.find?.destroy();view.editor?.destroy();if(view.url)URL.revokeObjectURL(view.url);view.el.remove();views.delete(path);}
+  function dropView(path){const view=views.get(path);if(!view)return;view.edges?.destroy();view.complete?.destroy();view.find?.destroy();view.editor?.destroy();if(view.url)URL.revokeObjectURL(view.url);view.el.remove();views.delete(path);}
   function renderTabs(){
     const bar=$('tabs');bar.replaceChildren();
     for(const path of tabs){
@@ -456,7 +528,7 @@ export function mountEditor(options={}){
       if(focus)view.editor?.focus();
     }
     $('cursor-status').textContent=views.get(path)?.position?t('cursor',views.get(path).position):'';
-    renderTabs();tree.setActive(path);updateWords();outline.cursor(path,views.get(path)?.position?.line||1);if(state.loaded)queueSave();
+    renderTabs();tree.setActive(path);updateWords();syncCursorViews();if(state.loaded)queueSave();
   }
   function openFile(path,config){
     if(!project.has(path))return;
@@ -499,7 +571,7 @@ export function mountEditor(options={}){
     }catch(error){if(run===previewRun&&job.revision===state.revision)api.setError(error,{quiet:true});}
     finally{if(run===previewRun){state.previewing=false;if(job.revision!==state.revision)scheduleCompile(0);}}
   }
-  const finishRun=()=>{state.compiling=false;clearTimeout(busyTimer);state.busy=false;updateControls();updateEngine();};
+  const finishRun=()=>{state.compiling=false;clearTimeout(busyTimer);state.busy=false;if(state.calibrating){state.calibrating=false;placePagination();}updateControls();updateEngine();};
   async function compile(reason='manual'){
     clearTimeout(compileTimer);compileTimer=null;
     if(state.engine!=='ready'||!state.loaded||state.destroyed||!project.main)return;
@@ -507,7 +579,7 @@ export function mountEditor(options={}){
     if(state.compiling)return;
     clearTimeout(settleTimer);settleTimer=null;
     const run=++state.run,revision=state.revision,began=performance.now();
-    state.compiling=true;
+    state.compiling=true;state.calibrating=!!viewport.querySelector('canvas.provisional');if(state.calibrating)placePagination();
     // Local updates finish within a frame or two; only a real wait shows the busy state.
     busyTimer=setTimeout(()=>{state.busy=true;updateControls();updateEngine();},250);
     updateControls();
@@ -540,11 +612,33 @@ export function mountEditor(options={}){
     marker.remove();updateDoc();updateStatus();updateEngine();updatePage();
   }
   const pages=()=>[...viewport.querySelectorAll('canvas[data-page]')];
+  // A region of a page: top/bottom (and optionally left/right) as fractions of it.
+  function placeRegion(node,canvas,region,pad=4){
+    const left=Number.isFinite(region.left)?canvas.offsetLeft+region.left*canvas.offsetWidth-pad:canvas.offsetLeft+8,right=Number.isFinite(region.right)?canvas.offsetLeft+region.right*canvas.offsetWidth+pad:canvas.offsetLeft+canvas.offsetWidth-8;
+    node.style.left=left+'px';node.style.width=Math.max(8,right-left)+'px';
+    node.style.top=canvas.offsetTop+region.top*canvas.offsetHeight-pad/2+'px';node.style.height=Math.max(8,(region.bottom-region.top)*canvas.offsetHeight+pad)+'px';
+  }
   function paintRegion(region,className){
     const canvas=pages().find(canvas=>Number(canvas.dataset.page)===region.page);if(!canvas)return;
-    const overlay=document.createElement('div');overlay.className=className;overlay.style.cssText=`left:${canvas.offsetLeft+8}px;top:${canvas.offsetTop+region.top*canvas.offsetHeight}px;width:${canvas.offsetWidth-16}px;height:${Math.max(8,(region.bottom-region.top)*canvas.offsetHeight)}px`;
-    canvas.parentNode.append(overlay);if(className==='ink-region'){overlay.addEventListener('animationend',()=>overlay.remove(),{once:true});setTimeout(()=>overlay.remove(),500);}
+    const overlay=document.createElement('div');overlay.className=className;placeRegion(overlay,canvas,region);canvas.parentNode.append(overlay);
   }
+  // Local updates leave a thin accent edge. Typing on in the same paragraph keeps the same edge lit and only
+  // moves it as the paragraph grows; it fades once the typing stops or moves elsewhere. Nothing restarts per keystroke.
+  function paintInk(regions){
+    const lit=new Set();
+    for(const region of regions){
+      const canvas=pages().find(canvas=>Number(canvas.dataset.page)===region.page);if(!canvas)continue;
+      const key=region.page+':'+(region.uid??Math.round(region.top*1e3));lit.add(key);
+      let ink=inks.get(key);
+      if(!ink||ink.parentNode!==canvas.parentNode){ink?.remove();ink=document.createElement('div');ink.className='ink-region';inks.set(key,ink);placeRegion(ink,canvas,region);canvas.parentNode.append(ink);void ink.offsetWidth;}
+      else placeRegion(ink,canvas,region);
+      ink.dataset.on='';
+    }
+    for(const [key,ink] of inks)if(!lit.has(key))fadeInk(key,ink);
+    clearTimeout(inkTimer);inkTimer=setTimeout(()=>{for(const [key,ink] of inks)fadeInk(key,ink);},700);
+  }
+  function fadeInk(key,ink){inks.delete(key);delete ink.dataset.on;setTimeout(()=>{if(!('on' in ink.dataset))ink.remove();},320);}
+  function clearInk(){clearTimeout(inkTimer);for(const ink of inks.values())ink.remove();inks.clear();}
   const fitWidth=()=>Math.max(240,viewport.clientWidth-48);
   const pageWidth=base=>settings.zoom==='fit'?Math.min(fitWidth(),base*2.5):base*settings.zoom;
   const currentZoom=()=>{const base=parseFloat(pages()[0]?.dataset.base);return settings.zoom==='fit'?(base?pageWidth(base)/base:1):settings.zoom;};
@@ -573,11 +667,34 @@ export function mountEditor(options={}){
   /** Resize pages with CSS at once; refreshPages then redraws them sharp. */
   function layoutPages(){
     for(const canvas of pages()){const base=parseFloat(canvas.dataset.base);if(base)canvas.style.width=pageWidth(base)+'px';}
-    viewport.querySelectorAll('.hover-region,.ink-region').forEach(node=>node.remove());placePagination();updateZoomLabel();updatePage();placeMarker();
+    viewport.querySelectorAll('.hover-region').forEach(node=>node.remove());clearInk();placePagination();updateZoomLabel();updatePage();placeMarker();
   }
+  // Provisional pages carry a corner pill and a dashed lower edge until a full pass settles them. Both persist
+  // across live updates (moved, not rebuilt), show progress while that pass runs, and resolve with a check.
   function placePagination(){
-    viewport.querySelectorAll('.pagination-note').forEach(node=>node.remove());
-    for(const canvas of pages().filter(canvas=>canvas.classList.contains('provisional'))){const note=document.createElement('span');note.className='pagination-note';note.textContent='≈ '+t('preview.pagination');note.style.top=canvas.offsetTop+8+'px';note.style.left=canvas.offsetLeft+Math.max(0,canvas.offsetWidth-160)+'px';canvas.parentNode.append(note);}
+    const provisional=new Map(pages().filter(canvas=>canvas.classList.contains('provisional')).map(canvas=>[canvas.dataset.page,canvas]));
+    for(const node of viewport.querySelectorAll('.pagination-note:not([data-state=done]),.flex-edge:not([data-gone])'))if(provisional.get(node.dataset.page)?.parentNode!==node.parentNode)node.remove();
+    const estimate=Math.round(clamp(state.meta?.durationMs||1500,400,20000));
+    for(const [page,canvas] of provisional){
+      let note=canvas.parentNode.querySelector(`.pagination-note[data-page="${page}"]:not([data-state=done])`),edge=canvas.parentNode.querySelector(`.flex-edge[data-page="${page}"]:not([data-gone])`);
+      if(!note){note=document.createElement('span');note.className='pagination-note';note.dataset.page=page;note.textContent='≈ '+t('preview.pagination');canvas.parentNode.append(note);}
+      if(!edge){edge=document.createElement('i');edge.className='flex-edge';edge.dataset.page=page;canvas.parentNode.append(edge);}
+      note.dataset.state=state.calibrating?'calibrating':'pending';note.style.setProperty('--calibrate',estimate+'ms');
+      note.style.top=canvas.offsetTop+10+'px';note.style.left=canvas.offsetLeft+canvas.offsetWidth-10+'px';
+      edge.style.top=canvas.offsetTop+canvas.offsetHeight+'px';edge.style.left=canvas.offsetLeft+'px';edge.style.width=canvas.offsetWidth+'px';
+    }
+  }
+  /** After a full pass replaced provisional pages: a check where each pill was, and the dashed edge drawn back in. */
+  function settlePagination(numbers){
+    for(const page of numbers){
+      const canvas=viewport.querySelector(`canvas[data-page="${page}"]`);if(!canvas)continue;
+      const note=document.createElement('span');note.className='pagination-note';note.dataset.page=page;note.dataset.state='done';note.innerHTML=icon('check',12);note.append(t('preview.paginated'));
+      note.style.top=canvas.offsetTop+10+'px';note.style.left=canvas.offsetLeft+canvas.offsetWidth-10+'px';
+      const edge=document.createElement('i');edge.className='flex-edge';edge.dataset.page=page;edge.style.cssText=`top:${canvas.offsetTop+canvas.offsetHeight}px;left:${canvas.offsetLeft}px;width:${canvas.offsetWidth}px`;
+      canvas.parentNode.append(note,edge);
+      (globalThis.requestAnimationFrame||setTimeout)(()=>{edge.dataset.gone='';});
+      setTimeout(()=>{note.remove();edge.remove();},1100);
+    }
   }
   function refreshPages(){
     if(!state.pdf||state.compiling||state.destroyed)return;
@@ -615,19 +732,20 @@ export function mountEditor(options={}){
       else{newUrl=URL.createObjectURL(new Blob([data],{type:'application/pdf'}));const frame=document.createElement('iframe');frame.title='Compiled PDF document';frame.src=newUrl;container.append(frame);}
       if(state.destroyed||sequence!==pdfSequence||metadata.revision!==undefined&&metadata.revision!==state.revision){if(newUrl)URL.revokeObjectURL(newUrl);return;}
       if(state.pdfUrl)URL.revokeObjectURL(state.pdfUrl);state.pdfUrl=newUrl;
-      const scroll=viewport.scrollTop,across=viewport.scrollLeft,previous=viewport.firstElementChild;
-      viewport.replaceChildren(container);container.classList.add('page-arrive');
+      const scroll=viewport.scrollTop,across=viewport.scrollLeft,previous=viewport.firstElementChild,settled=[...viewport.querySelectorAll('canvas.provisional[data-page]')].map(canvas=>canvas.dataset.page);
+      clearInk();viewport.replaceChildren(container);container.classList.add('page-arrive');
       if(previous?.querySelector('canvas')&&!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches){
         // Keep the old pixels briefly, but exclude them from page navigation and live hit testing.
         previous.classList.add('page-leave');previous.setAttribute('aria-hidden','true');previous.inert=true;
         previous.querySelectorAll('[data-page]').forEach(canvas=>canvas.removeAttribute('data-page'));
-        previous.querySelectorAll('.ink-region,.hover-region,.pagination-note').forEach(node=>node.remove());
+        previous.querySelectorAll('.ink-region,.hover-region,.pagination-note,.flex-edge').forEach(node=>node.remove());
         viewport.append(previous);setTimeout(()=>previous.remove(),140);
       }
       viewport.scrollTop=scroll;viewport.scrollLeft=across;
       state.pdf=data;state.pdfRevision=metadata.revision??state.revision;state.previewRevision=state.pdfRevision;
       state.meta={pages:metadata.pages??rendered?.pages,durationMs:metadata.durationMs};
       updateDoc();updateStatus();updatePage();updateZoomLabel();placeMarker();
+      if(settled.length&&!state.failed)settlePagination(settled);
     }catch(error){if(newUrl)URL.revokeObjectURL(newUrl);if(sequence===pdfSequence&&!state.destroyed)api.setError(new Error(`PDF preview could not be rendered: ${error.message||error}`));}
   }
 
@@ -699,7 +817,7 @@ export function mountEditor(options={}){
   }
   function remove(path){
     const restore=project.remove(path);
-    if(restore)toast(t('toast.deleted',{name:basename(path)}),{label:t('common.undo'),run:restore});
+    if(restore)toast(t('toast.deleted',{name:basename(path)}),{label:t('common.undo'),run:restore},{key:'deleted',merged:n=>t('toast.deletedMany',{n})});
   }
   function symbols(){const editor=activeEditor();if(!editor)return;const start=editor.input.selectionStart,end=editor.input.selectionEnd;openSymbols({host:app,t,insert:text=>{editor.edit(start,end,text,text.endsWith('{}')?start+text.length-1:start+text.length);views.get(active)?.complete?.hide();}});}
   function takeSnapshot(force=false){
@@ -841,6 +959,12 @@ export function mountEditor(options={}){
   listen($('tabs'),'dragover',event=>{if([...event.dataTransfer.types].includes('text/x-lightningtex-tab'))event.preventDefault();});
   listen($('tabs'),'drop',event=>{const from=event.dataTransfer.getData('text/x-lightningtex-tab'),to=event.target.closest('.tab')?.dataset.path;if(!tabs.includes(from)||!to||from===to)return;event.preventDefault();const index=tabs.indexOf(to);tabs.splice(tabs.indexOf(from),1);tabs.splice(index,0,from);renderTabs();queueSave();});
   listen(action('toggle-sidebar'),'click',()=>toggleSidebar());
+  listen($('side-switch'),'click',event=>{const button=event.target.closest('[data-side]');if(button)set('sideView',button.dataset.side);});
+  listen($('side-switch'),'keydown',event=>{
+    if(event.key!=='ArrowLeft'&&event.key!=='ArrowRight')return;event.preventDefault();
+    const order=['files','outline','labels'],next=order[(order.indexOf(settings.sideView)+(event.key==='ArrowRight'?1:2))%3];
+    set('sideView',next);$('side-switch').querySelector(`[data-side="${next}"]`).focus();
+  });
   listen(action('toggle-panel'),'click',()=>{panelAuto=false;set('panel',!settings.panel);});listen(action('close-panel'),'click',()=>set('panel',false));
   listen(viewport,'click',event=>{if(event.target.closest?.('[data-action="show-problems"]'))openPanel(state.problems.length?'problems':'log');});
   listen(action('clear-log'),'click',()=>api.clearLogs());
@@ -915,7 +1039,7 @@ export function mountEditor(options={}){
   listen(window,'pagehide',()=>{if(saveTimer)void flush();});
   const themeChanged=()=>applyAppearance();darkQuery?.addEventListener?.('change',themeChanged);removers.push(()=>darkQuery?.removeEventListener?.('change',themeChanged));
   narrowQuery?.addEventListener?.('change',applyLayout);removers.push(()=>narrowQuery?.removeEventListener?.('change',applyLayout));
-  const remeasure=()=>{if(state.destroyed)return;applyLayout();syncSettings();placeTabs();};
+  const remeasure=()=>{if(state.destroyed)return;applyLayout();applySide();syncSettings();placeTabs();};
   listen(window,'resize',remeasure);
   if(globalThis.ResizeObserver){
     let width=0;const observer=new ResizeObserver(()=>{
@@ -947,9 +1071,8 @@ export function mountEditor(options={}){
       const targets=[...canvases].map(([page,canvas])=>[viewport.querySelector(`[data-page="${page}"]`),canvas]);
       if(targets.some(([target])=>!target))return false;
       for(const [target,canvas] of targets){for(const key of Object.keys(target.dataset))canvas.dataset[key]=target.dataset[key];canvas.style.cssText=target.style.cssText;canvas.setAttribute('aria-label',target.getAttribute('aria-label'));target.replaceWith(canvas);}
-      viewport.querySelectorAll('.ink-region,.hover-region,.pagination-note').forEach(node=>node.remove());
-      for(const region of regions)paintRegion(region,'ink-region');
-      for(const [,canvas] of targets)canvas.classList.toggle('provisional',reflow);placePagination();
+      for(const [,canvas] of targets)canvas.classList.toggle('provisional',reflow);
+      if(regions.length)paintInk(regions);placePagination();
       if(state.failed){state.failed=false;state.problems=state.problems.filter(problem=>problem.severity!=='error');renderProblems();}
       state.previewRevision=revision;
       if(Number.isFinite(durationMs)&&canvases.size)api.setLiveStatus({state:reflow?'reflow':'live',ms:durationMs,revision});
@@ -973,7 +1096,8 @@ export function mountEditor(options={}){
       state.live={state:mode,ms,reason};
       if((mode==='live'||mode==='reflow')&&Number.isFinite(ms)){
         state.latency.push(ms);if(state.latency.length>12)state.latency.shift();
-        if(!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches)$('preview-status').querySelector('.dot').animate?.([{boxShadow:'0 0 0 0 var(--select)'},{boxShadow:'0 0 0 7px transparent'}],{duration:500,easing:'ease-out'});
+        // One pulse per burst of typing, not one per keystroke.
+        const now=performance.now();if(now-lastPulse>900&&!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches)$('preview-status').querySelector('.dot').animate?.([{boxShadow:'0 0 0 0 var(--select)'},{boxShadow:'0 0 0 7px transparent'}],{duration:500,easing:'ease-out'});lastPulse=now;
       }
       updateLive();
     },
@@ -983,7 +1107,7 @@ export function mountEditor(options={}){
     clearLogs(){state.logs=[];$('logs').textContent='';},
     destroy(){
       state.destroyed=true;state.run++;pdfSequence++;previewRun++;
-      for(const timer of [compileTimer,settleTimer,busyTimer,zoomTimer,saveTimer,metaTimer,barTimer])clearTimeout(timer);
+      for(const timer of [compileTimer,settleTimer,busyTimer,zoomTimer,saveTimer,metaTimer,barTimer,inkTimer])clearTimeout(timer);
       toaster.hide();tips.destroy();rendererAbort?.abort();if(state.pdfUrl)URL.revokeObjectURL(state.pdfUrl);
       if(hoverFrame)cancelAnimationFrame(hoverFrame);
       for(const path of [...views.keys()])dropView(path);
@@ -1015,7 +1139,7 @@ export function mountEditor(options={}){
     if(!saved?.files?.length)queueSave({type:'load'});else if(!saved.historyId)queueSave();
     updateControls();updateEngine();updateSave();updateProject();
   }
-  applyAppearance();applyLayout();i18n.apply(root);renderSettings();renderPanel();renderProblems();updateControls();updateEngine();updateZoomLabel();updateSave();
+  applyAppearance();applyLayout();applySide();i18n.apply(root);renderSettings();renderPanel();renderProblems();updateControls();updateEngine();updateZoomLabel();updateSave();
   $('auto-compile').checked=settings.autoCompile;$('preview-status').dataset.auto=String(settings.autoCompile);updateLive();
   // Sliding thumbs need real boxes; measure once laid out and again when web fonts settle.
   (globalThis.requestAnimationFrame||setTimeout)(()=>{remeasure();if(!state.destroyed)app.classList.add('ready');});

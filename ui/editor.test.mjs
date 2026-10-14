@@ -345,7 +345,7 @@ test('settings apply at once, persist, and reject corrupt stored values',()=>{
     assert.equal(app.dataset.theme,'light');assert.equal(h.ui.getSettings().fontSize,20);assert.equal(h.ui.getSettings().wrap,true);assert.equal(h.q('zoom-label').textContent,'150%');
     assert.equal(h.a('compile').textContent,'编译');assert.equal(h.q('preview-status-text').textContent,'未编译');
     const pick=(key,value)=>h.q('settings').querySelector(`[data-setting="${key}"] [data-value="${value}"]`).click();
-    pick('lang','en');assert.equal(h.a('compile').textContent,'Compile');assert.equal(h.root.querySelector('.side-title').textContent,'Files');
+    pick('lang','en');assert.equal(h.a('compile').textContent,'Compile');assert.equal(h.root.querySelector('[data-side="files"]').textContent,'Files');
     pick('theme','dark');pick('accent','teal');assert.equal(app.dataset.theme,'dark');assert.equal(document.documentElement.dataset.accent,'teal');assert.equal(settings().theme,'dark');
     const wrap=h.q('settings').querySelector('[data-setting="wrap"] input');wrap.checked=false;h.event(wrap,'change');assert.equal(h.root.querySelector('.code').dataset.wrap,'false');
     h.auto(false);assert.equal(settings().autoCompile,false);assert.equal(h.q('settings').querySelector('[data-setting="autoCompile"] input').checked,false);
@@ -413,4 +413,51 @@ test('snapshots are saved after successful compile, scoped to the project and re
 test('full-preview crossfade keeps old pixels outside navigation and live targets',async()=>{
  const h=setup({renderPdf:async({container})=>{const canvas=document.createElement('canvas');canvas.dataset.page='1';canvas.dataset.base='600';container.append(canvas);return {pages:1};}});
  try{await h.ui.setPdf(bytes(1));await h.ui.setPdf(bytes(2));assert.equal(h.q('preview-viewport').querySelectorAll('canvas[data-page]').length,1);assert.ok(h.q('preview-viewport').querySelector('.page-leave canvas'));await tick(150);assert.equal(h.q('preview-viewport').querySelector('.page-leave'),null);}finally{h.cleanup();}
+});
+
+test('the capsule keeps explaining a fallback after the compile that follows it',async()=>{
+  const h=setup({onCompile:async()=>({pdf:bytes(1)})});
+  try {
+    h.auto(false);h.ui.setLiveStatus({state:'full',reason:'Environment needs full layout: tikzpicture'});
+    assert.match(h.a('capsule').dataset.tip,/tikzpicture environment needs a full pass/);
+    await h.ui.compile();
+    assert.match(h.a('capsule').dataset.tip,/tikzpicture environment needs a full pass/,'finishing a compile must not reset the reason');
+    assert.equal(h.a('capsule').getAttribute('aria-label'),'Compile now');
+    h.ui.setLiveStatus({state:'ready'});assert.equal(h.a('capsule').dataset.tip,'Compile now');
+    h.ui.setLiveStatus({state:'full',reason:'An unknown future reason'});assert.match(h.a('capsule').dataset.tip,/An unknown future reason/);
+  }finally{h.cleanup();}
+});
+test('toasts stack, keep their own undo, merge repeats and drop the oldest past three',async()=>{
+  const h=setup();
+  try {
+    h.auto(false);
+    for(const name of ['a.tex','b.tex','c.tex'])h.ui.project.write(name,name);
+    const stack=h.q('toast');
+    await h.ui.upload([upload('one.txt','1')]);
+    // Deletions go through the workspace so they merge; call the tree action the way the menu does.
+    h.root.querySelector('[data-path="b.tex"] .row-more').click();[...h.root.querySelectorAll('[role="menu"] button')].find(b=>/Delete/.test(b.textContent)).click();
+    h.root.querySelector('[data-path="c.tex"] .row-more').click();[...h.root.querySelectorAll('[role="menu"] button')].find(b=>/Delete/.test(b.textContent)).click();
+    assert.equal(stack.querySelectorAll('.toast').length,2);
+    assert.match(stack.firstElementChild.textContent,/Deleted 2 files/);assert.match(stack.lastElementChild.textContent,/Added 1 file/);
+    stack.firstElementChild.querySelector('button').click();
+    assert.equal(h.ui.project.has('b.tex')&&h.ui.project.has('c.tex'),true,'one undo restores every merged deletion');
+    assert.equal(h.ui.project.has('one.txt'),true,'the upload keeps its own undo');
+    for(let i=0;i<4;i++)await h.ui.upload([upload(`f${i}.txt`,'x')]);
+    assert.ok(stack.querySelectorAll('.toast:not(.leaving)').length<=3);
+  }finally{h.cleanup();}
+});
+test('outline rows show words per section, problems replace the count, and labels count references',async()=>{
+  const h=setup();
+  try {
+    h.auto(false);
+    h.ui.setSource('\\documentclass{article}\n\\begin{document}\n\\section{One}\nalpha beta gamma\n\\begin{equation}\\label{eq:a}x\\end{equation}\n\\section{Two}\ndelta \\eqref{eq:a} and \\ref{eq:a}\n\\label{sec:two}\n\\end{document}\n');
+    await tick(350);
+    const rows=[...h.q('outline').querySelectorAll('.outline-item')];
+    assert.equal(rows.length,2);assert.equal(rows[0].querySelector('.outline-words').textContent,'4','the heading title counts with its section');
+    h.ui.setProblems([{severity:'warning',message:'Overfull',file:'main.tex',line:7}]);
+    assert.equal(h.q('outline').querySelectorAll('.outline-item')[1].querySelector('.outline-words').textContent,'! 1');
+    const labels=[...h.q('labels').querySelectorAll('.label-item')];
+    assert.deepEqual(labels.map(row=>[row.children[1].textContent,row.dataset.unused]),[['eq:a','false'],['sec:two','true']]);
+    assert.match(labels[0].textContent,/2×/);
+  }finally{h.cleanup();}
 });

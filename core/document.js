@@ -70,7 +70,7 @@ export function liveSourcePolicy(text,macros=new Map()){
         if(['label','ref','eqref','pageref'].includes(command)&&!/^[A-Za-z0-9:_.-]+$/.test(name))return {reason:'Complex label needs full layout'};
         if(command==='cite'&&!/^[A-Za-z0-9:_,. -]+$/.test(name))return {reason:'Complex citation needs full layout'};
         if(command==='tag'&&!/^[A-Za-z0-9 .()+*/=-]+$/.test(name))return {reason:'Complex tag needs full layout'};
-        if(command==='begin'){if(!liveEnvironments.has(name))return {reason:'Environment needs full layout'};stack.push(name);}
+        if(command==='begin'){if(!liveEnvironments.has(name))return {reason:'Environment needs full layout: '+name};stack.push(name);}
         if(command==='end'&&stack.pop()!==name)return {incomplete:true,reason:'Unbalanced environment'};
       }else if(command==='\\'){
         // A star changes page-break penalties even when every row has the same size.

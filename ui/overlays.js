@@ -45,15 +45,16 @@ export function openMenu(host,at,items){
   (buttons()[0]||menu).focus({preventScroll:true});
 }
 
-/** A modal surface around `content` (a Node). Returns {el, close}; onClose runs once however it closes. */
-export function openDialog(host,{title,content,className='',onClose}){
+/** A modal surface around `content` (a Node). Returns {el, close}; onClose runs once however it closes.
+ *  hideTitle keeps the title as the accessible name only, for surfaces whose content already says what they are. */
+export function openDialog(host,{title,content,className='',onClose,hideTitle=false}){
   dismissMenu?.();
   const backdrop=document.createElement('div');backdrop.className='dialog-backdrop';
   backdrop.innerHTML='<div class="dialog" role="dialog" aria-modal="true"><h2></h2></div>';
   const dialog=backdrop.firstChild,previous=document.activeElement,background=[...host.children].map(node=>[node,node.inert]);let closed=false;
   for(const [node] of background)node.inert=true;
   if(className)dialog.classList.add(className);
-  dialog.firstChild.textContent=title;dialog.setAttribute('aria-label',title);dialog.append(content);
+  if(hideTitle)dialog.firstChild.remove();else dialog.firstChild.textContent=title;dialog.setAttribute('aria-label',title);dialog.append(content);
   const close=()=>{if(closed)return;closed=true;for(const [node,inert] of background)node.inert=inert;dialog.removeAttribute('role');leave(backdrop,140);previous?.focus?.({preventScroll:true});onClose?.();};
   backdrop.addEventListener('pointerdown',event=>{if(event.target===backdrop)close();});
   backdrop.addEventListener('keydown',event=>{
@@ -81,19 +82,56 @@ export function confirmDialog(host,{title,message,confirm,cancel,danger=false}){
   });
 }
 
-export function createToast(el){
-  let timer;
-  const hide=()=>{clearTimeout(timer);el.hidden=true;};
-  /** action: {label, run} adds a button, e.g. Undo. A thin line counts down the time left. */
-  const show=(text,action)=>{
-    const life=action?7000:4000,bar=Object.assign(document.createElement('i'),{className:'toast-life'});
-    clearTimeout(timer);el.replaceChildren(Object.assign(document.createElement('span'),{textContent:text}));
-    if(action){
-      const button=Object.assign(document.createElement('button'),{type:'button',className:'toast-action',textContent:action.label});
-      button.addEventListener('click',()=>{hide();action.run();});el.append(button);
+/** A stack of at most three notices in el (the container). Each keeps its own action and countdown;
+ *  hovering or focusing the stack pauses every countdown. */
+export function createToast(el,{limit=3}={}){
+  const items=[];let paused=false;
+  const motion=()=>!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  // Older notices glide to their new places instead of jumping when one arrives or leaves.
+  function settle(change){
+    const before=new Map(items.map(item=>[item,item.el.getBoundingClientRect?.().top]));
+    change();
+    if(!motion())return;
+    for(const [item,top] of before){
+      const now=item.el.isConnected&&item.el.getBoundingClientRect?.().top;
+      if(Number.isFinite(top)&&Number.isFinite(now)&&Math.abs(top-now)>.5)item.el.animate?.([{transform:`translateY(${top-now}px)`},{transform:'none'}],{duration:240,easing:'cubic-bezier(.2,0,0,1)'});
     }
-    bar.style.animationDuration=life+'ms';el.append(bar);
-    el.hidden=false;timer=setTimeout(hide,life);
-  };
+  }
+  function arm(item){clearTimeout(item.timer);item.deadline=Date.now()+item.left;if(!paused)item.timer=setTimeout(()=>dismiss(item),item.left);}
+  function dismiss(item){
+    const index=items.indexOf(item);if(index<0)return;
+    clearTimeout(item.timer);items.splice(index,1);
+    item.el.removeAttribute('role');item.el.classList.add('leaving');item.el.inert=true;
+    const gone=()=>{if(item.el.isConnected)settle(()=>item.el.remove());if(!items.length)el.hidden=true;};
+    if(motion()&&item.el.animate)setTimeout(gone,140);else gone();
+  }
+  function paint(item){
+    item.text.textContent=item.label;
+    item.button.hidden=!item.undo.length;
+    item.bar.style.animation='none';void item.bar.offsetWidth;item.bar.style.animation='';item.bar.style.animationDuration=item.life+'ms';
+  }
+  /** action: {label, run} adds a button, e.g. Undo. options.key merges repeated notices of one kind:
+   *  options.merged(count) gives the combined text, and the action then undoes every merged step. */
+  function show(text,action,{key,merged}={}){
+    const life=action?7000:4000,same=key&&items.find(item=>item.key===key&&item.action?.label===action?.label);
+    if(same){
+      same.count++;same.label=merged?merged(same.count):text;if(action)same.undo.push(action.run);
+      same.left=same.life=life;paint(same);arm(same);return;
+    }
+    const node=document.createElement('div');node.className='toast';node.setAttribute('role','status');
+    const item={key,action,life,left:life,count:1,label:text,undo:action?[action.run]:[],el:node,
+      text:Object.assign(document.createElement('span'),{className:'toast-text'}),
+      button:Object.assign(document.createElement('button'),{type:'button',className:'toast-action',textContent:action?.label||''}),
+      bar:Object.assign(document.createElement('i'),{className:'toast-life'})};
+    item.button.addEventListener('click',()=>{const steps=[...item.undo].reverse();dismiss(item);for(const step of steps)step();});
+    node.append(item.text);if(action)node.append(item.button);node.append(item.bar);paint(item);
+    // Newest first in reading order; the stack is drawn bottom-up, so it also sits lowest on screen.
+    settle(()=>{el.prepend(node);items.push(item);while(items.length>limit)dismiss(items[0]);});
+    el.hidden=false;arm(item);
+  }
+  const pause=()=>{if(paused)return;paused=true;el.dataset.paused='';for(const item of items){clearTimeout(item.timer);item.left=Math.max(600,item.deadline-Date.now());}};
+  const resume=()=>{if(!paused||el.matches?.(':hover,:focus-within'))return;paused=false;delete el.dataset.paused;for(const item of items)arm(item);};
+  el.addEventListener('pointerenter',pause);el.addEventListener('pointerleave',resume);el.addEventListener('focusin',pause);el.addEventListener('focusout',()=>setTimeout(resume));
+  const hide=()=>{for(const item of items){clearTimeout(item.timer);}items.length=0;el.replaceChildren();el.hidden=true;};
   return {show,hide};
 }

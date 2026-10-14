@@ -22,4 +22,7 @@ Exact package versions are pinned in package-lock.json:
 - jsdom: MIT (DOM tests only)
 - @napi-rs/canvas: MIT (Node verification only, not shipped browser code)
 
+## Interface font
+`public/fonts/inter-latin-wght-normal.woff2` is the Latin subset of Inter (variable weight axis) by Rasmus Andersson and the Inter project authors, taken unmodified from @fontsource-variable/inter 5.2.5. SIL Open Font License 1.1; the license text is in licenses/Inter-OFL-1.1.txt. It is served from the application itself; no font is fetched from a third-party host. CJK text falls back to the platform's system font.
+
 Copies of shipped JavaScript library licenses are in licenses/. The application's source and modification details are provided in the source package. No proprietary font or paid TeX package was added.
