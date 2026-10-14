@@ -3,9 +3,9 @@ export const DEFAULT_SETTINGS=Object.freeze({
   theme:'system',accent:'bolt',lang:'auto',darkPages:false,
   fontSize:13,wrap:true,autoClose:true,tabSize:2,spellcheck:false,
   autoCompile:true,mathPreview:true,mathScale:'m',follow:true,persist:true,
-  sidebar:232,sidebarOpen:true,sideView:'files',split:0.5,layout:'split',panel:false,panelTab:'problems',zoom:'fit',
+  sidebar:232,sidebarOpen:true,sideView:'files',split:0.5,layout:'split',panel:false,panelTab:'problems',zoom:'fit',thumbs:true,
 });
-const choices={theme:['system','light','dark'],accent:['bolt','indigo','teal','rose'],lang:['auto','en','zh'],mathScale:['s','m','l'],tabSize:[2,4],panelTab:['problems','log'],sideView:['files','outline','labels'],layout:['source','split','preview']};
+const choices={theme:['system','light','dark'],accent:['bolt','indigo','teal','rose'],lang:['auto','en','zh'],mathScale:['s','m','l'],tabSize:[2,4],panelTab:['problems','log','refs'],sideView:['files','outline','labels'],layout:['source','split','preview']};
 const ranges={fontSize:[11,20],sidebar:[160,420],split:[0.2,0.8]};
 /** Stored values are untrusted: anything of the wrong type or range falls back to its default. */
 export function sanitizeSettings(stored){

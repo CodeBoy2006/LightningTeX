@@ -9,7 +9,7 @@ import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 pdfjs.GlobalWorkerOptions.workerSrc=pdfWorkerUrl;
 const base=new URL('../',document.baseURI),fonts=new Map(),blocked=new Set(),MATH_ZOOM={s:1.25,m:1.6,l:2.1};
 const pixelRatio=()=>Math.min(devicePixelRatio||1,2),projectPath=file=>String(file).replace(/^\.\//,'');
-let background,live,snapshot,pdfRenderWorker,generation=0,liveStart,fullReason,caret=null;
+let background,live,snapshot,pdfRenderWorker,generation=0,liveStart,fullReason,caret=null,restarts=0;
 
 // Page widths here and in the UI's zoom layout must agree: natural width is CSS px at 100%.
 async function renderPdf({bytes,container,signal,zoom,viewport}){
@@ -45,8 +45,8 @@ function previewContext(capture){
 const ui=mountEditor({renderPdf,typesetMath,
  onCursor:position=>{caret=position;if(snapshot)syncMarker();},
  onPreviewPick:pick,
- onPreviewHover:hit,
- onCancel:()=>{generation++;background?.stop();live?.stop();liveStart=null;snapshot=null;ui.setLiveStatus({state:'ready'});ui.setMarker(null);},
+ onPreviewHover:point=>hit({...point,x:undefined}),
+ onCancel:()=>{generation++;background?.stop();live?.stop();liveStart=null;snapshot=null;ui.setEngineInfo({live:'off'});ui.setLiveStatus({state:'ready'});ui.setMarker(null);},
  onPreview:request=>updateLive(request),
  onCompile:async({source,root,files,filesRev,revision,reason})=>{
    if(source.length>500000)throw Error('This browser edition supports source files up to 500,000 characters.');
@@ -80,11 +80,13 @@ const ui=mountEditor({renderPdf,typesetMath,
    if(/undefined references|Rerun to get cross-references|Label\(s\) may have changed/i.test(result.log))ui.log('References may need another document pass; automatic compilation runs at most two passes per update.','warning');
    return {...result,pages:result.pages.length,revision};
  }});
-function prepareLive(state){
+function prepareLive(state,{restart=false}={}){
  const gen=++generation;
- if(!crossOriginIsolated||typeof SharedArrayBuffer==='undefined'){liveStart=null;ui.setLiveStatus({state:'off',reason:'Incremental mode requires COOP/COEP headers.'});return;}
+ if(!crossOriginIsolated||typeof SharedArrayBuffer==='undefined'){liveStart=null;ui.setEngineInfo({live:'off'});ui.setLiveStatus({state:'off',reason:'Incremental mode requires COOP/COEP headers.'});return;}
+ if(restart)restarts++;
+ ui.setEngineInfo({live:'warming',restarts});
  liveStart=live.start(splitPreamble(state.source).preamble+'\n\\RequirePackage{luatexbase}\n',state.aux,state.support,state.packageMisses);
- void liveStart.then(()=>{if(gen===generation)ui.refreshMath();},error=>{if(gen===generation)ui.setLiveStatus({state:'off',reason:error.message});});
+ void liveStart.then(()=>{if(gen===generation){ui.setEngineInfo({live:'ready'});ui.refreshMath();}},error=>{if(gen===generation){ui.setEngineInfo({live:'off'});ui.setLiveStatus({state:'off',reason:error.message});}});
 }
 async function drawLivePages(pages,units=snapshot.liveUnits){
  const state=snapshot,canvases=new Map(),flows=new Map();let pdfTask,pdf;
@@ -199,7 +201,7 @@ async function updateLive({source,root,files,filesRev,revision}){
    return state.reflow?'reflow':true;
  }catch(error){
    if(!current())return true;
-   fullReason=error.message;
+   fullReason=error.message;if(/^Live engine (?:restarted|ended)/.test(error.message)){restarts++;ui.setEngineInfo({live:'off',restarts});}
    return false;
  }
 }
@@ -219,7 +221,7 @@ async function typesetMath({found,source,scale,maxWidth}){
    return {canvas};
  }catch(error){
    // The server exits when a unit corrupts its state: never send that formula again, and warm a new engine.
-   if(!live.worker){blocked.add(prepared.tex);if(snapshot===state)prepareLive(state);return {state:'unsupported'};}
+   if(!live.worker){blocked.add(prepared.tex);if(snapshot===state)prepareLive(state,{restart:true});return {state:'unsupported'};}
    return {state:'error',message:String(error.message||error).split('\n')[0]};
  }
 }
@@ -236,7 +238,7 @@ function syncMarker(scroll=true){
  const rows=state.drawnPages.find(page=>page.page===first.page).lines.filter(row=>row.unit===unit.uid),flow=state.flows.get(first.page),height=flow?.height??page.page_height;
  if(!rows.length){ui.setMarker(null);return;}
  const offset=flowOffset(flow,rows[0]);
- ui.setMarker({page:first.page,top:(Math.min(...rows.map(row=>row.y-row.h))+offset)/height,bottom:(Math.max(...rows.map(row=>row.y+row.d))+offset)/height},{scroll});
+ ui.setMarker({page:first.page,uid:unit.uid,top:(Math.min(...rows.map(row=>row.y-row.h))+offset)/height,bottom:(Math.max(...rows.map(row=>row.y+row.d))+offset)/height,...column(state.drawnPages.find(sheet=>sheet.page===first.page),unit.uid)},{scroll});
 }
 // The horizontal extent of a unit's rows on its page, as fractions of the page width.
 function column(sheet,uid){
@@ -247,8 +249,8 @@ function flowOffset(flow,line){
  const own=flow?.bands.find(band=>band.uid===line.unit);
  return own?own.shift+own.dy:(flow?.bands||[]).reduce((sum,band)=>sum+(band.y+band.h<=line.y?band.delta:0),0);
 }
-// Preview -> source: double-click a line to jump to the text that produced it.
-function hit({page,y}){
+// Preview -> source: click a line to jump to the text that produced it.
+function hit({page,x,y}){
  const state=snapshot,sheet=state?.drawnPages.find(candidate=>candidate.page===page);
  if(!sheet)return;
  const flow=state.flows.get(page),at=y*(flow?.height??sheet.page_height);let best=null,distance=Infinity;
@@ -260,10 +262,49 @@ function hit({page,y}){
  const unit=best&&state.capture.units.find(candidate=>candidate.uid===best.unit);
  if(!unit||distance>sheet.page_height*.025)return null;
  const path=projectPath(unit.file||state.root),document=state.documents.get(path),span=document?.source===ui.project.get(path)?.text?document.spans.find(candidate=>candidate.unit===unit):null;
- // Within a paragraph, land roughly on the clicked row.
  const rows=sheet.lines.filter(line=>line.unit===unit.uid),height=flow?.height??sheet.page_height;
- return {path,line:unit.begin_line,offset:span?span.start+Math.floor((span.end-span.start)*(best.row-1)/Math.max(1,state.drawnPages.reduce((count,page)=>count+page.lines.filter(row=>row.unit===unit.uid).length,0))):undefined,
-   page,top:Math.min(...rows.map(line=>line.y-line.h+flowOffset(flow,line)))/height,bottom:Math.max(...rows.map(line=>line.y+line.d+flowOffset(flow,line)))/height};
+ let offset;
+ if(span){
+   const ordered=state.drawnPages.flatMap(other=>other.lines.filter(line=>line.unit===unit.uid)).sort((a,b)=>a.row-b.row);
+   offset=Number.isFinite(x)?alignGlyph(document.source,span,ordered,best,x*sheet.page_width):null;
+   // Without glyphs to match, land roughly on the clicked row.
+   offset??=span.start+Math.floor((span.end-span.start)*(best.row-1)/Math.max(1,ordered.length));
+ }
+ return {path,line:unit.begin_line,offset,page,top:Math.min(...rows.map(line=>line.y-line.h+flowOffset(flow,line)))/height,bottom:Math.max(...rows.map(line=>line.y+line.d+flowOffset(flow,line)))/height};
+}
+// The glyph under the click, with its neighbours, matched against the letters of the source paragraph.
+// Glyph codes normalise to letters (ligatures and math italics included); commands and comments are skipped.
+const LETTER=/[\p{L}\p{N}]/u;
+function alignGlyph(source,span,rows,row,x){
+ const glyphs=[];let clicked=-1,nearest=Infinity;
+ for(const line of rows){
+   for(const item of line.items.filter(item=>item[0]==='g').sort((a,b)=>a[4]-b[4])){
+     let text='';try{text=String.fromCodePoint(item[2]).normalize('NFKC');}catch{continue;}
+     const first=glyphs.length;for(const char of text)if(LETTER.test(char))glyphs.push(char.toLowerCase());
+     if(line===row&&glyphs.length>first&&Math.abs(item[4]-x)<nearest){nearest=Math.abs(item[4]-x);clicked=first;}
+   }
+ }
+ if(clicked<0||!glyphs.length)return null;
+ const letters=[],text=source.slice(span.start,span.end);
+ for(let i=0;i<text.length;i++){
+   const c=text[i];
+   if(c==='%'){while(i<text.length&&text[i]!=='\n')i++;continue;}
+   if(c==='\\'){const name=/^\\[A-Za-z@]+/.exec(text.slice(i,i+40));i+=name?name[0].length-1:1;continue;}
+   for(const char of c.normalize('NFKC'))if(LETTER.test(char))letters.push({char:char.toLowerCase(),offset:span.start+i});
+ }
+ if(!letters.length)return null;
+ const haystack=letters.map(letter=>letter.char).join(''),expected=clicked/glyphs.length*letters.length;
+ for(const radius of [8,5,3,1]){
+   const from=Math.max(0,clicked-radius),needle=glyphs.slice(from,clicked+radius+1).join('');let best=-1;
+   for(let at=haystack.indexOf(needle);at>=0;at=haystack.indexOf(needle,at+1))if(best<0||Math.abs(at-expected)<Math.abs(best-expected))best=at;
+   if(best>=0){
+     let offset=letters[Math.min(letters.length-1,best+clicked-from)].offset;
+     // Land on the start of the word, where a caret is most useful.
+     while(offset>span.start&&LETTER.test(source[offset-1]))offset--;
+     return offset;
+   }
+ }
+ return null;
 }
 function pick(point){const target=hit(point);if(target)ui.reveal(target);}
 async function boot(){try{

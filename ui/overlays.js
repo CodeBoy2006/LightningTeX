@@ -45,6 +45,24 @@ export function openMenu(host,at,items){
   (buttons()[0]||menu).focus({preventScroll:true});
 }
 
+/** A non-modal surface anchored below `at` (a DOMRect). It closes on Escape, an outside press, or close().
+ *  Returns {el, close}; onClose runs once. */
+export function openPopover(host,at,content,{className='',label='',onClose}={}){
+  dismissMenu?.();
+  const el=document.createElement('div');el.className='popover '+className;el.setAttribute('role','dialog');if(label)el.setAttribute('aria-label',label);el.tabIndex=-1;el.append(content);
+  let closed=false;const previous=document.activeElement;
+  const close=(restore=true)=>{if(closed)return;closed=true;dismissMenu=null;document.removeEventListener('pointerdown',outside,true);document.removeEventListener('keydown',keys,true);leave(el);if(restore&&el.contains(document.activeElement))previous?.focus?.({preventScroll:true});onClose?.();};
+  const outside=event=>{if(!el.contains(event.target)&&!event.target.closest?.('[data-popover-anchor]'))close(false);};
+  const keys=event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();close();}};
+  host.append(el);
+  const bounds=host.getBoundingClientRect?.()||{left:0,top:0,width:1e4,height:1e4},width=el.offsetWidth;
+  const left=Math.max(8,Math.min(at.right!=null?at.right-width-bounds.left:at.left-bounds.left,bounds.width-width-8));
+  el.style.left=left+'px';el.style.top=(at.bottom-bounds.top+6)+'px';el.style.transformOrigin=`${at.right!=null?'right':'left'} top`;
+  document.addEventListener('pointerdown',outside,true);document.addEventListener('keydown',keys,true);
+  dismissMenu=()=>close(false);
+  return {el,close};
+}
+
 /** A modal surface around `content` (a Node). Returns {el, close}; onClose runs once however it closes.
  *  hideTitle keeps the title as the accessible name only, for surfaces whose content already says what they are. */
 export function openDialog(host,{title,content,className='',onClose,hideTitle=false}){

@@ -44,6 +44,7 @@ const shapes={
   outline:stroke('M5.75 4h7.75M5.75 8h7.75M5.75 12h7.75')+dot(2.9,4,.9)+dot(2.9,8,.9)+dot(2.9,12,.9),
   sigma:stroke('M11.5 3.5h-7L8.5 8l-4 4.5h7'),
   keyboard:stroke('M1.75 4.25h12.5v7.5H1.75zM4.25 6.9h.4M6.6 6.9h.4M9 6.9h.4M11.35 6.9h.4M5 9.4h6'),
+  pages:stroke('M5.25 2.25h7.5v9.5h-7.5zM3.25 4.75v9h6.5'),
   hash:stroke('M6 2.5 5 13.5M11 2.5l-1 11M2.8 6h10.7M2.5 10h10.7'),
 };
 export const icon=(name,size=16)=>`<svg class="icon icon-${name}" viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true">${shapes[name]||''}</svg>`;

@@ -1,10 +1,12 @@
 // A native textarea (caret, selection, IME, undo) over a highlighted mirror of the same text.
 // Both layers share one grid cell and identical metrics; the outer element is the only scroller.
 import {tokenizeLine} from './highlight.js';
+import {matchBracket,environmentAt,unbalanced} from '../core/brackets.js';
 const pairs={'{':'}','[':']','(':')','$':'$'},closers=new Set(Object.values(pairs));
 const count=(text,needle)=>text.split(needle).length-1;
 
-export function createCodeEditor({value='',settings,label='',describedBy,onChange,onCursor,onEscape}={}){
+/** structure: highlight bracket pairs and the enclosing environment at the caret, and unbalanced ones after a pause. */
+export function createCodeEditor({value='',settings,label='',describedBy,onChange,onCursor,onEscape,structure=false}={}){
   const el=document.createElement('div');el.className='code';
   el.innerHTML='<div class="code-scroll"><div class="code-body"><div class="code-lines" aria-hidden="true"></div><textarea class="code-input" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea></div></div>';
   const scroller=el.firstChild,body=scroller.firstChild,layer=body.firstChild,input=body.lastChild;
@@ -12,6 +14,9 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
   const style=()=>document.defaultView.getComputedStyle(layer);
   let text=null,lines=[],states=[],nodes=[],starts=null,active=-1,markers=new Map(),diagnostics=[],options={...settings},flashTimer,editing=false,pinned=0;
   const lenses=Object.assign(document.createElement('div'),{className:'code-diagnostics'});body.append(lenses);
+  // Decorations are boxes over the text, in content coordinates, grouped by owner so each can be replaced alone.
+  const decor=Object.assign(document.createElement('div'),{className:'code-decor'});decor.setAttribute('aria-hidden','true');body.prepend(decor);
+  const decorations=new Map();let decorFrame=0,idleTimer;
 
   const lineNode=tokens=>{
     const node=document.createElement('div');node.className='cl';
@@ -77,6 +82,54 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
       return {x:x-origin.left,top:box.top-origin.top,bottom:box.bottom-origin.top};
     }catch{return null;}
   }
+  // A DOM position for a text offset inside the mirror, or null for an empty line.
+  function point(offset){
+    const {line,col}=locate(offset),node=nodes[line];if(!node)return null;
+    const walker=document.createTreeWalker(node,4);let remaining=col,last=null;
+    while(walker.nextNode()){last=walker.currentNode;if(remaining<=last.data.length)return {node:last,offset:remaining};remaining-=last.data.length;}
+    return last?{node:last,offset:last.data.length}:null;
+  }
+  /** Line boxes covering [start, end) in content coordinates. */
+  function rangeRects(start,end){
+    const a=point(start),b=point(Math.max(start,end));if(!a||!b||!body.getBoundingClientRect)return [];
+    try{
+      const range=document.createRange(),origin=body.getBoundingClientRect();range.setStart(a.node,a.offset);range.setEnd(b.node,b.offset);
+      return [...range.getClientRects()].filter(box=>box.width>0||start===end).map(box=>({x:box.left-origin.left,top:box.top-origin.top,width:box.width,height:box.height}));
+    }catch{return [];}
+  }
+  function paintDecorations(){
+    decorFrame=0;decor.replaceChildren();
+    for(const list of decorations.values())for(const item of list){
+      if(item.start>text.length||item.end>text.length)continue;
+      for(const box of rangeRects(item.start,item.end)){
+        const node=document.createElement('i');node.className='deco '+item.className;
+        const wave=item.className.includes('deco-wave'),top=wave?box.top+box.height-3:box.top;
+        node.style.cssText=`left:${box.x}px;top:${top}px;width:${Math.max(2,box.width)}px;height:${wave?3:box.height}px`;
+        if(item.title)node.title=item.title;decor.append(node);
+      }
+    }
+  }
+  const queueDecorations=()=>{if(!decorFrame)decorFrame=(globalThis.requestAnimationFrame||setTimeout)(paintDecorations);};
+  /** list: [{start, end, className}] replaces the group's decorations; an empty list removes them. */
+  function setDecorations(group,list){if(list?.length)decorations.set(group,list);else decorations.delete(group);queueDecorations();}
+  // Caret structure: the bracket pair it touches and the environment around it.
+  function structureAtCaret(){
+    if(!structure)return;
+    const list=[],caret=input.selectionEnd;
+    if(input.selectionStart===caret){
+      const pair=matchBracket(text,caret);
+      if(pair?.close!=null)list.push({start:pair.open,end:pair.open+1,className:'deco-pair'},{start:pair.close,end:pair.close+1,className:'deco-pair'});
+      const environment=environmentAt(text,caret);
+      if(environment&&environment.name!=='document')list.push({start:environment.begin.start,end:environment.begin.end,className:'deco-env'},{start:environment.end.start,end:environment.end.end,className:'deco-env'});
+    }
+    setDecorations('caret',list);
+  }
+  // Unbalanced structure waits for a pause, so a brace that is about to be closed is never flagged.
+  function checkBalance(){
+    clearTimeout(idleTimer);setDecorations('balance',[]);
+    if(!structure)return;
+    idleTimer=setTimeout(()=>setDecorations('balance',unbalanced(text).map(item=>({start:item.start,end:item.kind==='brace'?item.end:item.end,className:'deco-wave'}))),600);
+  }
   function reveal(offset=input.selectionEnd,center=false){
     const box=rectAt(offset);if(!box)return;
     const pad=28,top=scroller.scrollTop,height=scroller.clientHeight;
@@ -90,11 +143,12 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
   function cursor(){
     const offset=input.selectionEnd,{line,col}=locate(offset);
     if(line!==active){const previous=active;active=line;decorate(previous);decorate(line);}
+    structureAtCaret();
     onCursor?.({offset,line:line+1,col:col+1});
   }
   function sync(silent=false){
     const current=input.value;
-    if(current!==text){text=current;render(current.split('\n'));if(!silent)onChange?.(current);}
+    if(current!==text){text=current;render(current.split('\n'));checkBalance();queueDecorations();if(!silent)onChange?.(current);}
     cursor();placeDiagnostics();
     el.dispatchEvent(new document.defaultView.Event('editor-change'));
   }
@@ -196,7 +250,7 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
     options={...options,...next};
     el.dataset.wrap=String(!!options.wrap);input.wrap=options.wrap?'soft':'off';input.spellcheck=!!options.spellcheck;
     el.style.setProperty('--code-size',options.fontSize+'px');el.style.setProperty('--tab',String(options.tabSize));
-    placeDiagnostics();
+    placeDiagnostics();queueDecorations();
   }
   function offsetAtPoint(x,y){
     // Temporarily hit-test the text mirror; the transparent textarea normally owns the pointer.
@@ -210,7 +264,10 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
   }
   configure({});input.value=value;sync(true);
   return {
-    el,input,body,scroller,rectAt,configure,edit,offsetAtPoint,
+    el,input,body,scroller,rectAt,rangeRects,configure,edit,offsetAtPoint,setDecorations,
+    /** 1-based line at a content y coordinate (for the line at the top of the view, pass scrollTop). */
+    lineAtY(y){let low=0,high=nodes.length-1;while(low<high){const middle=(low+high+1)>>1;if(nodes[middle].offsetTop<=y)low=middle;else high=middle-1;}return low+1;},
+    lineTop:line=>nodes[line-1]?.offsetTop??0,
     getValue:()=>text,
     setValue(next){input.value=next;sync(true);},
     focus(){input.focus({preventScroll:true});placeDiagnostics();},
@@ -230,6 +287,6 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
       for(const index of new Set([...previous.keys(),...markers.keys()]))decorate(index);
     },
     setDiagnostics(problems){diagnostics=problems;placeDiagnostics();},
-    destroy(){clearTimeout(flashTimer);for(const [target,type,handler] of listeners)target.removeEventListener(type,handler);el.remove();},
+    destroy(){clearTimeout(flashTimer);clearTimeout(idleTimer);if(decorFrame)(globalThis.cancelAnimationFrame||clearTimeout)(decorFrame);for(const [target,type,handler] of listeners)target.removeEventListener(type,handler);el.remove();},
   };
 }

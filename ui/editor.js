@@ -8,7 +8,9 @@ import {TEMPLATES,templateProject} from './templates.js';
 import {createCodeEditor} from './code-editor.js';
 import {createMathPopover} from './math-popover.js';
 import {createFileTree} from './file-tree.js';
-import {openMenu,openDialog,confirmDialog,createToast} from './overlays.js';
+import {openMenu,openDialog,openPopover,confirmDialog,createToast} from './overlays.js';
+import {createInspector} from './inspector.js';
+import {createThumbnails} from './thumbnails.js';
 import {createTooltips} from './tooltip.js';
 import {mathAt} from '../core/math-preview.js';
 import {zip,unzip} from '../core/zip.js';
@@ -19,18 +21,22 @@ import {createFindBar} from './find-bar.js';
 import {openPalette} from './palette.js';
 import {openTemplateGallery} from './template-gallery.js';
 import {createCompletion} from './complete.js';
-import {openSymbols} from './symbols.js';
+import {openSymbols,SYMBOLS} from './symbols.js';
 import {openHistory} from './history.js';
 import {createLabels} from './labels.js';
 import {watchEdges} from './edges.js';
 import {explainReason} from '../core/live-reasons.js';
-import {referenceCounts} from '../core/references.js';
+import {referenceCounts,targetAt,findLabels,findReferences,findDefinition,nearest} from '../core/references.js';
+import {environmentAt} from '../core/brackets.js';
+import {parseBib,byline,plainField} from '../core/bib.js';
+import {createBreadcrumbs} from './breadcrumbs.js';
+import {createHoverCard} from './hovercard.js';
 
 const LEGACY_DRAFT='realtime-tex-web:draft:v1',LEGACY_CONSENT='realtime-tex-web:save-draft:v1';
 const MAX_UPLOAD=20*1024*1024,ZOOMS=[0.5,0.67,0.8,0.9,1,1.1,1.25,1.5,1.75,2,2.5,3];
 const ACCENTS={bolt:'#f5b800',indigo:'#6366f1',teal:'#0d9488',rose:'#e5487d'};
 const mac=/Mac|iPhone|iPad/.test(globalThis.navigator?.platform||globalThis.navigator?.userAgent||'');
-const keys=combo=>mac?combo.replace('Mod+','⌘').replace('Shift+','⇧').replace('Enter','↵'):combo.replace('Mod+','Ctrl+');
+const keys=combo=>mac?combo.replace('Mod+','⌘').replace('Alt+','⌥').replace('Shift+','⇧').replace('Enter','↵').replace(/\bUp\b/,'↑').replace(/\bDown\b/,'↓'):combo.replace('Mod+','Ctrl+');
 const clamp=(value,low,high)=>Math.min(high,Math.max(low,value));
 
 // Stand-in page shown until there is a PDF: skeleton while working, blank for an empty document.
@@ -53,7 +59,7 @@ const shell=()=>`<div class="app">
         <button type="button" class="icon-btn cap-more" data-action="capsule-menu" data-i18n-title="capsule.menu" aria-haspopup="menu">${icon('chevronDown',12)}</button>
         <input type="checkbox" class="sr-only" data-id="auto-compile" tabindex="-1" aria-hidden="true">
       </div>
-      <button type="button" class="btn export-btn" data-action="export-menu" data-i18n-title="export.open" aria-haspopup="menu">${icon('download')}<span data-i18n="export.open"></span>${icon('chevronDown',12)}</button>
+      <button type="button" class="btn export-btn" data-action="export-menu" data-i18n-title="export.open" aria-haspopup="menu"><span class="export-icon">${icon('download')}${icon('check')}</span><span data-i18n="export.open"></span>${icon('chevronDown',12)}</button>
       <button type="button" class="icon-btn" data-action="settings" data-i18n-title="settings.open" data-keys="${keys('Mod+,')}">${icon('settings')}</button>
     </div>
   </header>
@@ -78,12 +84,14 @@ const shell=()=>`<div class="app">
     <div class="splitter" data-split="sidebar" role="separator" aria-orientation="vertical" tabindex="0" data-i18n-title="splitter.help"></div>
     <section class="editor-pane">
       <header class="pane-head"><div class="tabs" data-id="tabs" role="tablist"></div></header>
+      <nav class="crumbs" data-id="crumbs" hidden></nav>
       <span class="sr-only" id="editor-keyboard-help" data-i18n="editor.help"></span>
       <div class="editor-host" data-id="editor-host"><div class="editor-empty" data-id="editor-empty" hidden>${icon('file',28)}<span data-i18n="editor.empty"></span><button class="btn" data-action="editor-new" data-i18n="file.new"></button><button class="text-btn" data-action="editor-palette"><span data-i18n="palette.open"></span><kbd>${keys('Mod+K')}</kbd></button></div></div>
       <section class="panel" data-id="panel" hidden>
         <header class="panel-head">
           <button type="button" class="panel-tab" data-panel="problems"><span data-i18n="panel.problems"></span><span class="count" data-id="problem-count"></span></button>
           <button type="button" class="panel-tab" data-panel="log" data-i18n="panel.log"></button>
+          <button type="button" class="panel-tab" data-panel="refs" data-id="refs-tab" hidden><span data-i18n="panel.refs"></span><span class="count" data-id="refs-count"></span></button>
           <span class="spacer"></span>
           <button type="button" class="icon-btn" data-action="problem-filter" data-i18n-title="panel.filter">${icon('filter')}</button>
           <button type="button" class="icon-btn" data-action="copy-log" data-i18n-title="panel.copy">${icon('copy')}</button>
@@ -91,18 +99,20 @@ const shell=()=>`<div class="app">
           <button type="button" class="icon-btn" data-action="close-panel" data-i18n-title="common.close">${icon('close')}</button>
         </header>
         <div class="panel-body"><div class="problems" data-id="problems"></div>
-        <pre class="logs" data-id="logs" tabindex="0" hidden></pre></div>
+        <pre class="logs" data-id="logs" tabindex="0" hidden></pre><div class="problems refs" data-id="refs" hidden></div></div>
       </section>
     </section>
     <div class="splitter" data-split="preview" role="separator" aria-orientation="vertical" tabindex="0" data-i18n-title="splitter.help"></div>
     <section class="preview-pane">
       <button type="button" class="preview-error" data-id="preview-error" hidden></button>
-      <div class="preview" data-id="preview-viewport" tabindex="0" data-i18n-title="preview.locate">${SHEET}</div>
+      <div class="preview-body"><nav class="thumbs" data-id="thumbs" data-i18n-title="thumbs.title" hidden></nav><div class="preview" data-id="preview-viewport" tabindex="0" data-i18n-title="preview.locate">${SHEET}</div></div>
+      <button type="button" class="marker-chip" data-id="marker-chip" hidden></button>
       <div class="zoombar" data-id="zoombar">
         <button type="button" class="icon-btn" data-action="zoom-out" data-i18n-title="zoom.out">${icon('minus')}</button>
         <button type="button" class="zoom-label" data-action="zoom-menu" data-id="zoom-label" data-i18n-title="zoom.menu" aria-haspopup="menu"></button>
         <button type="button" class="icon-btn" data-action="zoom-in" data-i18n-title="zoom.in">${icon('plus')}</button>
         <button type="button" class="icon-btn" data-action="zoom-fit" data-i18n-title="zoom.fit">${icon('fit')}</button>
+        <button type="button" class="icon-btn" data-action="toggle-thumbs" data-i18n-title="thumbs.toggle" data-keys="${keys('Mod+Alt+T')}">${icon('pages')}</button>
         <label class="page-nav" data-id="page-nav" hidden><input class="page-input" data-id="page-input" type="text" inputmode="numeric" autocomplete="off" data-i18n-title="page.jump"><span data-id="page-indicator"></span></label>
       </div>
     </section>
@@ -110,6 +120,7 @@ const shell=()=>`<div class="app">
   <footer class="statusbar">
     <button type="button" class="stat" data-action="toggle-panel" data-id="stat-problems" data-i18n-title="panel.toggle" data-keys="${keys('Mod+J')}"></button>
     <span class="stat" data-id="stat-engine"></span>
+    <button type="button" class="stat pdf-sync" data-action="pdf-sync" data-id="pdf-sync" hidden></button>
     <span class="spacer"></span>
     <button type="button" class="stat" data-action="word-count" data-id="word-count" data-i18n-title="words.title"></button><span class="stat" data-id="stat-doc"></span><span class="stat" data-id="cursor-status"></span><span class="stat" data-id="save-status"></span>
   </footer>
@@ -148,7 +159,8 @@ export function mountEditor(options={}){
   const settings=loadSettings(),i18n=createI18n(settings.lang),t=i18n.t,project=createProject();
   settings.panel=false; // The problems panel opens on demand; it never starts open.
   const state={revision:0,filesRev:0,pdfRevision:-1,previewRevision:-1,engine:'loading',progress:null,loaded:false,
-    compiling:false,previewing:false,busy:false,pdf:null,meta:null,run:0,logs:[],problems:[],problemFilter:'all',failed:false,live:null,latency:[],marker:null,dirty:false,save:'off',destroyed:false};
+    compiling:false,previewing:false,busy:false,pdf:null,meta:null,run:0,logs:[],problems:[],problemFilter:'all',failed:false,live:null,latency:[],marker:null,dirty:false,save:'off',destroyed:false,
+    timeline:[],timelineId:0,livePages:[],engineInfo:{live:'off',restarts:0},lastFullMs:null};
   const views=new Map(),removers=[];
   let structure={headings:[],labels:[],paths:[]},wordTotal=0,wordSections=[],historyId=globalThis.crypto.randomUUID();
   let tabs=[],active=null,compileTimer,settleTimer,busyTimer,zoomTimer,saveTimer,metaTimer,barTimer,hoverFrame,hoverPoint,rendererAbort,pdfSequence=0,previewRun=0,store=null,saving=false,restoring=false,storageWarned=false;
@@ -159,6 +171,7 @@ export function mountEditor(options={}){
   const action=name=>root.querySelector(`[data-action="${name}"]`);
   const listen=(element,type,handler,config)=>{element.addEventListener(type,handler,config);removers.push(()=>element.removeEventListener(type,handler,config));};
   const viewport=$('preview-viewport'),marker=Object.assign(document.createElement('div'),{className:'sync-marker'});
+  const thumbs=createThumbnails($('thumbs'),{t,pages:()=>[...viewport.querySelectorAll('canvas[data-page]')],goTo:number=>goToPage(number)});
   const toaster=createToast($('toast')),toast=(text,undo,group)=>toaster.show(text,undo,group),tips=createTooltips(app);
   const notify=(key,values)=>toast(t(key,values));
   const download=(data,name,type)=>{const url=URL.createObjectURL(new Blob([data],{type})),link=document.createElement('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);};
@@ -187,17 +200,26 @@ export function mountEditor(options={}){
     {label:'words.title',icon:'hash',run:wordDetails},
     {label:'symbols.open',icon:'sigma',run:symbols,disabled:!activeEditor()},
     {label:'history.open',icon:'history',run:history},
+    {label:'insp.title',icon:'bolt',run:openInspector},
+    {label:'thumbs.toggle',key:'Mod+Alt+T',icon:'pages',run:()=>set('thumbs',!settings.thumbs)},
     {label:'keys.title',icon:'keyboard',run:shortcutSheet},
     ...['source','split','preview'].map(value=>({label:'view.'+value,icon:'sidebar',run:()=>setLayout(value)})),
     ...['system','light','dark'].map(value=>({label:'set.theme.'+value,icon:'settings',run:()=>set('theme',value)})),
   ];}
   function palette(){
     popover?.hide();updateProject();
-    openPalette({host:app,t,onClose:focusEditor,items:(prefix,term)=>{
-      if(prefix===':')return /^\d+$/.test(term)&&active?[{label:t('palette.line',{n:term}),icon:'hash',run:()=>reveal({path:active,line:Number(term)})}]:[];
-      if(prefix==='@')return [...structure.headings.map(h=>({label:h.title,detail:`${h.file}:${h.line}`,icon:'outline',run:()=>reveal({path:h.file,line:h.line})})),...structure.labels.map(l=>({label:l.name,detail:`${l.file}:${l.line}`,icon:'hash',run:()=>reveal({path:l.file,line:l.line})}))];
-      const actions=commands().filter(c=>c.label!=='palette.open').map(c=>({...c,label:t(c.label),hint:c.key?keys(c.key):''}));
-      return prefix==='>'?actions:[...project.paths().map(path=>({label:path,icon:isImagePath(path)?'image':'file',run:()=>openFile(path,{focus:true})})),...actions];
+    const lines=(text,from,count)=>text.split('\n').slice(from,from+count).join('\n');
+    openPalette({host:app,t,onClose:focusEditor,sources:{
+      files:()=>project.paths().map(path=>({id:'file:'+path,label:path,icon:isImagePath(path)?'image':'file',run:()=>openFile(path,{focus:true}),
+        preview:()=>{const file=project.get(path);return {title:path,text:typeof file?.text==='string'?lines(file.text,0,40):`${t('binary.note')} · ${(file.data.length/1024).toFixed(1)} KB`};}})),
+      sections:()=>[
+        ...structure.headings.map(h=>({id:`section:${h.file}:${h.title}`,label:[h.number,h.title].filter(Boolean).join(' '),detail:`${h.file}:${h.line}`,icon:'outline',run:()=>reveal({path:h.file,line:h.line}),
+          preview:()=>({title:`${h.file}:${h.line}`,text:lines(project.get(h.file)?.text||'',h.line-1,30)})})),
+        ...structure.labels.map(l=>({id:'label:'+l.name,label:l.name,detail:`${l.file}:${l.line}`,icon:'hash',keywords:l.text,run:()=>reveal({path:l.file,line:l.line}),
+          preview:()=>({title:`${l.file}:${l.line}`,text:lines(project.get(l.file)?.text||'',Math.max(0,l.line-4),24)})}))],
+      commands:()=>commands().filter(c=>c.label!=='palette.open').map(c=>({...c,id:'cmd:'+c.label,label:t(c.label),hint:c.key?keys(c.key):''})),
+      symbols:()=>activeEditor()?SYMBOLS.map(symbol=>({id:'sym:'+symbol.name,label:'\\'+symbol.name,glyph:symbol.glyph,detail:t('symbols.'+symbol.group),run:()=>{const editor=activeEditor();if(!editor)return;const at=editor.input.selectionStart;editor.edit(at,editor.input.selectionEnd,'\\'+symbol.name+(symbol.name==='sqrt'?'{}':' '),symbol.name==='sqrt'?at+6:undefined);}})):[],
+      line:n=>active&&views.get(active)?.editor?{label:t('palette.line',{n}),icon:'hash',run:()=>reveal({path:active,line:n})}:null,
     }});
   }
 
@@ -251,8 +273,33 @@ export function mountEditor(options={}){
   }
   /** 'source' | 'split' | 'preview'. A narrow screen shows one pane at a time and does not keep the choice. */
   function setLayout(value){
-    if(narrowQuery?.matches){app.dataset.view=value==='preview'?'preview':'source';applyLayout();}else set('layout',value);
+    if(narrowQuery?.matches){app.dataset.view=value==='preview'?'preview':'source';applyLayout();}else transitionLayout(()=>set('layout',value));
     layoutPages();popover?.place();placeTabs();
+  }
+  // Switching layouts lays the panes out once, then moves them from where they were with transforms.
+  // A pane that is going away stays drawn above nothing but the background while it slides out.
+  let layoutMotion=[];
+  function transitionLayout(change){
+    const panes=[root.querySelector('.editor-pane'),root.querySelector('.preview-pane')];
+    for(const animation of layoutMotion)animation.finish();layoutMotion=[];
+    if(!motion()||!panes[0].animate){change();return;}
+    const box=$('main').getBoundingClientRect(),before=panes.map(pane=>pane.getClientRects().length?pane.getBoundingClientRect():null);
+    change();
+    const after=panes.map(pane=>pane.getClientRects().length?pane.getBoundingClientRect():null),timing={duration:300,easing:'cubic-bezier(.2,0,0,1)'};
+    panes.forEach((pane,index)=>{
+      const from=before[index],to=after[index],side=index?1:-1;
+      if(from&&to){
+        const dx=from.left-to.left;
+        if(Math.abs(dx)>.5)layoutMotion.push(pane.animate([{transform:`translateX(${dx}px)`},{transform:'none'}],timing));
+        else if(to.width-from.width>.5)layoutMotion.push(pane.animate([{clipPath:`inset(0 ${to.width-from.width}px 0 0)`},{clipPath:'inset(0)'}],timing));
+      }else if(to)layoutMotion.push(pane.animate([{transform:`translateX(${side*to.width}px)`},{transform:'none'}],timing));
+      else if(from){
+        pane.dataset.leaving='';Object.assign(pane.style,{left:from.left-box.left+'px',top:'0px',width:from.width+'px',height:from.height+'px'});
+        const animation=pane.animate([{transform:'none',opacity:1},{transform:`translateX(${side*from.width*.35}px)`,opacity:0}],{...timing,duration:240});
+        const done=()=>{delete pane.dataset.leaving;for(const key of ['left','top','width','height'])pane.style[key]='';};
+        animation.finished.then(done,done);layoutMotion.push(animation);
+      }
+    });
   }
   function set(key,value){
     if(settings[key]===value)return;
@@ -261,6 +308,7 @@ export function mountEditor(options={}){
     else if(key==='lang'){i18n.set(value);applyAppearance();refreshText();}
     else if(key==='sidebar'||key==='split'||key==='sidebarOpen'||key==='layout')applyLayout();
     else if(key==='sideView')applySide();
+    else if(key==='thumbs'){applyThumbs();action('toggle-thumbs').setAttribute('aria-pressed',String(value));}
     else if(['fontSize','wrap','autoClose','tabSize','spellcheck'].includes(key)){for(const view of views.values())view.editor?.configure(settings);popover?.place();}
     else if(key==='autoCompile'){$('auto-compile').checked=value;$('preview-status').dataset.auto=String(value);clearTimeout(compileTimer);clearTimeout(settleTimer);compileTimer=null;if(value&&state.pdfRevision!==state.revision)scheduleCompile();}
     else if(key==='mathPreview'||key==='mathScale'){popover?.hide();if(value)updateMath();}
@@ -324,9 +372,34 @@ export function mountEditor(options={}){
   }
 
   // ---- status -----------------------------------------------------------------------------------
+  // ---- live inspector and PDF sync -------------------------------------------------------------
+  function record(kind,ms){
+    const last=state.timeline.at(-1);
+    if(kind==='waiting'&&last?.kind==='waiting'){last.at=Date.now();return;}
+    state.timeline.push({id:++state.timelineId,kind,ms,at:Date.now()});if(state.timeline.length>48)state.timeline.shift();
+  }
+  let inspector=null;
+  const lag=()=>state.pdf&&state.pdfRevision>=0?Math.max(0,state.revision-state.pdfRevision):0;
+  function inspectorData(){
+    const explain=reason=>{const found=explainReason(reason);return found&&{...found,text:describeReason(reason)};};
+    return {timeline:state.timeline,live:state.live,explain,pages:state.livePages,engine:state.engineInfo,lag:lag(),settling:!!settleTimer||!!viewport.querySelector('canvas.provisional'),compiling:state.compiling};
+  }
+  function openInspector(){
+    if(inspector){inspector.surface.close();return;}
+    const view=createInspector({t});view.render(inspectorData());
+    const anchor=$('preview-status');anchor.dataset.popoverAnchor='';
+    inspector={view,surface:openPopover(app,anchor.getBoundingClientRect(),view.el,{className:'inspector-pop',label:t('insp.title'),onClose:()=>{inspector=null;delete anchor.dataset.popoverAnchor;}})};
+  }
+  const renderInspector=()=>inspector?.view.render(inspectorData());
+  function updatePdfSync(){
+    const badge=$('pdf-sync'),behind=lag();badge.hidden=!state.pdf;
+    badge.textContent=state.compiling&&behind?t('pdf.updating'):behind?t('pdf.behind',{n:behind}):t('pdf.synced');
+    badge.dataset.state=state.compiling&&behind?'busy':behind?'lag':'ok';badge.dataset.tip=t(behind?'pdf.syncNow':'pdf.syncedTip');
+  }
   function updateStatus(){
     const shown=state.previewRevision>=0,stale=shown&&state.previewRevision!==state.revision,name=state.busy?'busy':!shown?'none':stale?'stale':state.previewRevision!==state.pdfRevision?'live':'ok';
     const capsule=$('preview-status');capsule.dataset.state=name;capsule.dataset.failed=String(state.failed);$('preview-status-text').textContent=t('status.'+name);
+    updatePdfSync();renderInspector();
     const error=state.problems.find(problem=>problem.severity==='error'),banner=$('preview-error');banner.hidden=!state.failed;
     banner.textContent=t(state.pdf?'toast.kept':'toast.failed')+(error?' '+[error.file,error.line].filter(Boolean).join(':')+' · '+error.message:'');
   }
@@ -376,7 +449,7 @@ export function mountEditor(options={}){
     wordTotal=structure.paths.reduce((n,path)=>n+wordCount(files.get(path)||''),0);
     wordSections=structure.headings.map((h,i)=>({heading:h,n:wordCount((files.get(h.file)||'').slice(h.offset,structure.headings.slice(i+1).find(next=>next.file===h.file)?.offset))}));
     structure.references=referenceCounts(files);nowKey=null;
-    outline.update(structure.headings,state.problems,wordSections);labelsView.update(structure.labels,structure.references);syncCursorViews();
+    outline.update(structure.headings,state.problems,wordSections);labelsView.update(structure.labels,structure.references);syncCursorViews();markBroken();crumbs.reset();queueCrumbs();
     $('tree-empty').hidden=project.paths().length>0;$('tree').hidden=!project.paths().length;updateWords();
   }
   function updateWords(){const editor=activeEditor(),selected=editor&&editor.input.selectionStart!==editor.input.selectionEnd;const n=selected?wordCount(editor.getValue().slice(editor.input.selectionStart,editor.input.selectionEnd)):wordTotal;$('word-count').textContent=t(selected?'words.selection':'words.count',{n:n.toLocaleString()});}
@@ -399,7 +472,7 @@ export function mountEditor(options={}){
     const panel=$('panel'),shown=panel.dataset.motion?panel.dataset.motion==='in':!panel.hidden;
     if(settings.panel!==shown)slidePanel(settings.panel);
     for(const tab of panel.querySelectorAll('.panel-tab'))tab.setAttribute('aria-selected',String(tab.dataset.panel===settings.panelTab));
-    $('problems').hidden=settings.panelTab!=='problems';$('logs').hidden=settings.panelTab!=='log';action('clear-log').hidden=settings.panelTab!=='log';
+    $('problems').hidden=settings.panelTab!=='problems';$('logs').hidden=settings.panelTab!=='log';$('refs').hidden=settings.panelTab!=='refs';action('clear-log').hidden=settings.panelTab!=='log';
     action('copy-log').hidden=settings.panelTab!=='log';action('problem-filter').hidden=settings.panelTab!=='problems';panel.inert=!settings.panel;
   }
   // The panel slides over the editor and takes its height once it is in place; leaving, it gives the height back first.
@@ -412,6 +485,19 @@ export function mountEditor(options={}){
     animation.finished.then(()=>{if(panelMotion!==animation)return;panelMotion=null;delete panel.dataset.motion;panel.hidden=!open;},()=>{});
   }
   function openPanel(tab=settings.panelTab){set('panelTab',tab);set('panel',true);}
+  /** Every place that refers to a label, listed in the panel's References tab. */
+  function findAllReferences(name){
+    const files=textFiles(),found=findReferences(files).filter(ref=>ref.name===name),definition=findLabels(files).find(label=>label.name===name),list=$('refs');list.replaceChildren();
+    const head=make('div','refs-head');head.append(make('b','',name),make('span','',found.length?t('labels.refs',{n:found.length}):t('labels.unused')));list.append(head);
+    for(const item of [...(definition?[{...definition,command:'label'}]:[]),...found]){
+      const source=files.get(item.file),from=source.lastIndexOf('\n',item.start-1)+1,to=source.indexOf('\n',item.start),line=source.slice(from,to<0?source.length:to);
+      const row=make('button','problem ref-row');row.type='button';row.innerHTML=icon(item.command==='label'?'target':'hash',14)+'<span class="problem-text"></span><span class="problem-where"></span>';
+      const textNode=row.children[1],before=line.slice(0,item.start-from).trimStart(),after=line.slice(item.end-from);
+      textNode.append(make('span','',before.length>48?'…'+before.slice(-48):before),make('mark','',item.name),make('span','',after.length>64?after.slice(0,64)+'…':after));
+      row.children[2].textContent=`${item.file}:${item.line}`;row.onclick=()=>reveal({path:item.file,offset:item.start});list.append(row);
+    }
+    $('refs-tab').hidden=false;$('refs-count').textContent=String(found.length);openPanel('refs');
+  }
   function renderProblems(){
     const list=$('problems'),counts={error:0,warning:0,info:0},marksByFile=new Map(),rank={error:3,warning:2,info:1};list.replaceChildren();
     for(const problem of state.problems){
@@ -472,12 +558,12 @@ export function mountEditor(options={}){
   function createView(path){
     const file=project.get(path),el=document.createElement('div'),view={el,position:null};el.className='view';el.hidden=true;
     if(typeof file.text==='string'){
-      view.editor=createCodeEditor({value:file.text,settings,label:t('editor.label'),describedBy:'editor-keyboard-help',
+      view.editor=createCodeEditor({value:file.text,settings,label:t('editor.label'),describedBy:'editor-keyboard-help',structure:isTex(path),
         onChange:value=>project.write(path,value,'editor'),
         onCursor:position=>{
           view.position=position;
           if(active!==path)return;
-          $('cursor-status').textContent=t('cursor',position);updateMath();syncCursorViews();updateWords();
+          $('cursor-status').textContent=t('cursor',position);updateMath();syncCursorViews();updateWords();queueCrumbs();
           options.onCursor?.({path,offset:position.offset,line:position.line,main:path===project.main});
         },
         onEscape:()=>{
@@ -489,6 +575,13 @@ export function mountEditor(options={}){
       view.find=createFindBar(view.editor,t);
       if(isTex(path))view.complete=createCompletion(view.editor,{t,context:()=>({files:new Map(project.files().map(f=>[f.path,f.text])),labels:structure.labels}),onVisible:visible=>{if(visible)popover?.hide();}});
       wireInsertion(view.editor,path);view.edges=watchEdges(view.editor.scroller,view.editor.el);
+      if(isTex(path)){
+        view.card=createHoverCard(view.editor,{describe:(offset,config)=>describeTarget(path,offset,config)});
+        // Command/Control-click or F12 follows what the source points to.
+        view.editor.input.addEventListener('click',event=>{if((event.metaKey||event.ctrlKey)&&!event.altKey&&follow(path,view.editor.caret))event.preventDefault();});
+        view.editor.input.addEventListener('keydown',event=>{if(event.key==='F12'&&!event.metaKey&&!event.ctrlKey){event.preventDefault();if(!follow(path,view.editor.caret))notify('follow.none');}});
+      }
+      view.editor.scroller.addEventListener('scroll',()=>{if(active===path)queueCrumbs();},{passive:true});
       el.append(view.editor.el);return view;
     }
     el.classList.add('viewer');
@@ -500,23 +593,35 @@ export function mountEditor(options={}){
     }
     el.innerHTML=icon('file',28);el.append(Object.assign(document.createElement('span'),{textContent:`${t('binary.note')} · ${size}`}));return view;
   }
-  function dropView(path){const view=views.get(path);if(!view)return;view.edges?.destroy();view.complete?.destroy();view.find?.destroy();view.editor?.destroy();if(view.url)URL.revokeObjectURL(view.url);view.el.remove();views.delete(path);}
+  function dropView(path){const view=views.get(path);if(!view)return;view.edges?.destroy();view.card?.destroy();view.complete?.destroy();view.find?.destroy();view.editor?.destroy();if(view.url)URL.revokeObjectURL(view.url);view.el.remove();views.delete(path);}
+  // Tabs are kept by path: only an opened or closed tab enters or leaves, and its neighbours slide to make room.
+  const tabNodes=new Map();
   function renderTabs(){
-    const bar=$('tabs');bar.replaceChildren();
-    for(const path of tabs){
-      const tab=document.createElement('div');tab.className='tab';tab.draggable=true;tab.setAttribute('role','tab');tab.tabIndex=0;tab.dataset.path=path;tab.setAttribute('aria-selected',String(path===active));tab.dataset.tip=path;
+    const bar=$('tabs'),fresh=[];
+    for(const [path,tab] of tabNodes)if(!tabs.includes(path)){tabNodes.delete(path);leaveTab(tab);}
+    tabs.forEach((path,index)=>{
+      let tab=tabNodes.get(path);
+      if(!tab){tab=document.createElement('div');tab.className='tab';tab.draggable=true;tab.setAttribute('role','tab');tab.dataset.path=path;tabNodes.set(path,tab);fresh.push(tab);}
+      tab.tabIndex=0;tab.setAttribute('aria-selected',String(path===active));tab.dataset.tip=path;
       // Same-named files in different folders show their folder.
       const twin=tabs.some(other=>other!==path&&basename(other)===basename(path))&&dirname(path);
       tab.innerHTML=(path===project.main?`<span class="tab-main">${icon('target',12)}</span>`:'')+'<span class="tab-name"></span>'+(twin?'<span class="tab-dir"></span>':'')+`<button type="button" class="icon-btn tab-close" tabindex="-1">${icon('close',12)}</button>`;
       const name=tab.querySelector('.tab-name');name.textContent=basename(path);if(path===active)name.dataset.id='filename';
       if(twin)tab.querySelector('.tab-dir').textContent=twin;
       tab.lastChild.setAttribute('aria-label',t('tab.close'));
-      bar.append(tab);
-    }
+      const placed=[...bar.children].filter(node=>!node.classList.contains('leaving'));
+      if(placed[index]!==tab)bar.insertBefore(tab,placed[index]||null);
+    });
+    if(motion())for(const tab of fresh){const width=tab.offsetWidth;tab.animate?.([{maxWidth:'0px',opacity:0,paddingLeft:'0px',paddingRight:'0px'},{maxWidth:width+'px',opacity:1}],{duration:200,easing:'cubic-bezier(.2,0,0,1)'})?.finished.then(placeTabs,()=>{});}
     $('editor-empty').hidden=!!active;placeTabs();
   }
+  function leaveTab(tab){
+    if(!motion()||!tab.animate||!tab.isConnected){tab.remove();return;}
+    tab.classList.add('leaving');tab.removeAttribute('role');tab.removeAttribute('aria-selected');tab.inert=true;
+    tab.animate([{maxWidth:tab.offsetWidth+'px',opacity:1},{maxWidth:'0px',opacity:0,paddingLeft:'0px',paddingRight:'0px'}],{duration:150,easing:'cubic-bezier(.4,0,1,1)'}).finished.then(()=>{tab.remove();placeTabs();},()=>tab.remove());
+  }
   // The active tab's indicator is one bar that slides; the tab list itself holds nothing but tabs.
-  function placeTabs(){const bar=$('tabs'),on=bar.querySelector('[aria-selected="true"]');bar.style.setProperty('--ind-x',(on?.offsetLeft||0)+'px');bar.style.setProperty('--ind-w',(on?.offsetWidth||0)+'px');bar.dataset.left=String(bar.scrollLeft>2);bar.dataset.right=String(bar.scrollLeft+bar.clientWidth<bar.scrollWidth-2);}
+  function placeTabs(){const bar=$('tabs'),on=bar.querySelector('.tab:not(.leaving)[aria-selected="true"]');bar.style.setProperty('--ind-x',(on?.offsetLeft||0)+'px');bar.style.setProperty('--ind-w',(on?.offsetWidth||0)+'px');bar.dataset.left=String(bar.scrollLeft>2);bar.dataset.right=String(bar.scrollLeft+bar.clientWidth<bar.scrollWidth-2);}
   function activate(path,{focus=false}={}){
     const previous=views.get(active);
     if(previous&&active!==path){previous.el.hidden=true;previous.editor?.input.removeAttribute('data-id');}
@@ -528,7 +633,7 @@ export function mountEditor(options={}){
       if(focus)view.editor?.focus();
     }
     $('cursor-status').textContent=views.get(path)?.position?t('cursor',views.get(path).position):'';
-    renderTabs();tree.setActive(path);updateWords();syncCursorViews();if(state.loaded)queueSave();
+    renderTabs();tree.setActive(path);updateWords();syncCursorViews();markBroken(path);queueCrumbs();if(state.loaded)queueSave();
   }
   function openFile(path,config){
     if(!project.has(path))return;
@@ -550,6 +655,140 @@ export function mountEditor(options={}){
     const editor=views.get(path)?.editor;if(!editor)return;
     const at=offset??editor.offsetOf(line??1);editor.select(at);
     if(flash)editor.flash(editor.getValue().slice(0,at).split('\n').length);
+  }
+
+  // ---- where the source points: jumps, hover cards, breadcrumbs ---------------------------------
+  const textFiles=()=>new Map(project.files().filter(file=>typeof file.text==='string').map(file=>[file.path,file.text]));
+  /** A project file for \input, \includegraphics or \bibliography arguments, as TeX would look it up. */
+  function resolveFile(name,kind){
+    const clean=String(name).trim().replace(/^\.\//,''),extensions=kind==='graphics'?['','.pdf','.png','.jpg','.jpeg']:kind==='bib'?['.bib','']:['','.tex'];
+    for(const dir of [...new Set(['',dirname(project.main||'')])])for(const extension of extensions){
+      try{const path=normalizePath(joinPath(dir,clean+extension));if(project.has(path))return path;}catch{/* not a project path */}
+    }
+    return null;
+  }
+  const bibEntries=()=>project.files().filter(file=>/\.bib$/i.test(file.path)&&typeof file.text==='string').flatMap(file=>parseBib(file.text,file.path));
+  /** Follow what the source at offset points to. Returns false when there is nothing to follow. */
+  function follow(path,offset){
+    const text=project.get(path)?.text;if(typeof text!=='string')return false;
+    const target=targetAt(text,offset);if(!target)return false;
+    const go=place=>{if(!place)return false;reveal(place);return true;};
+    if(target.kind==='ref'){const label=findLabels(textFiles()).find(label=>label.name===target.name);return go(label&&{path:label.file,offset:label.start});}
+    if(target.kind==='label'){findAllReferences(target.name);return true;}
+    if(target.kind==='input'||target.kind==='graphics'||target.kind==='bib'){const file=resolveFile(target.name,target.kind);if(!file)return false;openFile(file,{focus:true});return true;}
+    if(target.kind==='macro'){const definition=findDefinition(textFiles(),target.name);return go(definition&&{path:definition.file,offset:definition.start});}
+    if(target.kind==='cite'){const entry=bibEntries().find(entry=>entry.key===target.name);return go(entry&&{path:entry.file,offset:entry.start});}
+    return false;
+  }
+  const make=(tag,className,text)=>{const node=document.createElement(tag);if(className)node.className=className;if(text!=null)node.textContent=text;return node;};
+  function cardMeta(...parts){
+    const meta=make('div','card-meta');
+    for(const part of parts.filter(Boolean)){if(meta.childNodes.length)meta.append(make('span','',' · '));meta.append(typeof part==='string'?make('span','',part):part);}
+    return meta;
+  }
+  function suggestions(title,options,replace){
+    const box=make('div');box.append(make('div','card-title'));box.firstChild.innerHTML=icon('warning',14);box.firstChild.append(title);
+    if(options.length){const chips=make('div','card-chips');for(const option of options){const button=make('button','',option);button.type='button';button.dataset.tip=t('follow.replace',{name:option});button.onclick=()=>replace(option);chips.append(button);}box.append(chips);}
+    return box;
+  }
+  const followHint=()=>{const meta=make('div','card-meta');meta.append(Object.assign(make('kbd'),{textContent:mac?'⌘':'Ctrl'}),make('span','',t('follow.hint')));return meta;};
+  /** The hover card for offset in path: {start, end, go, content, ready}, or null. peek skips building content. */
+  function describeTarget(path,offset,{peek=false}={}){
+    const text=project.get(path)?.text;if(typeof text!=='string')return null;
+    const target=targetAt(text,offset);if(!target||target.kind==='label'&&peek)return null;
+    const base={start:target.start,end:target.end,ready:null};
+    const replace=value=>{const editor=views.get(path)?.editor;if(editor&&editor.getValue().slice(target.start,target.end)===target.name){editor.edit(target.start,target.end,value);views.get(path)?.card?.hide();}};
+    if(target.kind==='ref'||target.kind==='label'){
+      const files=textFiles(),labels=findLabels(files),definition=labels.find(label=>label.name===target.name);
+      if(peek)return {...base,go:!!definition};
+      const content=make('div');
+      if(!definition){content.append(suggestions(t('follow.noLabel',{name:target.name}),nearest(target.name,labels.map(label=>label.name)),replace));return {...base,go:false,content};}
+      const info=structure.labels.find(label=>label.name===definition.name&&label.file===definition.file),count=structure.references?.get(definition.name)||0,source=files.get(definition.file);
+      const found=info&&/^(?:equation|align|gather|multline|flalign|alignat|eqnarray|displaymath|math)\*?$/.test(info.kind)&&mathAt(source,definition.start);
+      if(found&&options.typesetMath){
+        const formula=make('div','card-formula');content.append(formula);
+        base.ready=options.typesetMath({found,source,scale:'s',maxWidth:400}).then(result=>{if(result?.canvas)formula.replaceChildren(result.canvas);else formula.replaceWith(make('pre','card-code',source.slice(found.start,found.end).trim()));}).catch(()=>formula.remove());
+      }else if(info?.text)content.append(make('div','card-text',info.text));
+      content.append(cardMeta(make('b','',definition.name),info?.kind,`${definition.file}:${definition.line}`,count?t('labels.refs',{n:count}):t('labels.unused')));
+      if(target.kind==='ref')content.append(followHint());
+      return {...base,go:target.kind==='ref',content};
+    }
+    if(target.kind==='input'||target.kind==='graphics'||target.kind==='bib'){
+      const file=resolveFile(target.name,target.kind);if(peek)return {...base,go:!!file};
+      const content=make('div');
+      if(!file){
+        const wanted=target.kind==='graphics'?/\.(png|jpe?g|pdf)$/i:target.kind==='bib'?/\.bib$/i:/\.(tex|ltx)$/i,paths=project.paths().filter(path=>wanted.test(path)),stems=new Map(paths.map(path=>[path.replace(/\.[^./]+$/,''),path]));
+        content.append(suggestions(t('follow.noFile',{name:target.name}),nearest(target.name.replace(/\.[^./]+$/,''),[...stems.keys()],{limit:6}),replace));return {...base,go:false,content};
+      }
+      const data=project.get(file);
+      if(isImagePath(file)){
+        const image=make('img','card-image'),url=URL.createObjectURL(new Blob([data.data]));image.alt=basename(file);image.src=url;content.append(image);
+        const size=cardMeta(make('b','',file),`${(data.data.length/1024).toFixed(1)} KB`);content.append(size);
+        base.ready=new Promise(resolve=>{image.onload=()=>{size.append(make('span','',' · '),make('span','',`${image.naturalWidth} × ${image.naturalHeight} px`));URL.revokeObjectURL(url);resolve();};image.onerror=()=>{URL.revokeObjectURL(url);resolve();};});
+      }else if(typeof data.text==='string'){
+        const lines=data.text.split('\n');content.append(make('pre','card-code',lines.slice(0,4).join('\n')),cardMeta(make('b','',file),t('follow.lines',{n:lines.length})));
+      }else content.append(cardMeta(make('b','',file),`${(data.data.length/1024).toFixed(1)} KB`));
+      content.append(followHint());return {...base,go:true,content};
+    }
+    if(target.kind==='macro'){
+      const definition=findDefinition(textFiles(),target.name);if(!definition||definition.file===path&&definition.start<=target.start&&target.start<=definition.end)return null;
+      if(peek)return {...base,go:true};
+      const content=make('div');content.append(make('pre','card-code',definition.text.trim()),cardMeta(`${definition.file}:${definition.line}`),followHint());
+      return {...base,go:true,content};
+    }
+    if(target.kind==='cite'){
+      const entries=bibEntries(),entry=entries.find(entry=>entry.key===target.name);if(peek)return {...base,go:!!entry};
+      const content=make('div');
+      if(!entry){content.append(suggestions(t('follow.noCite',{name:target.name}),nearest(target.name,entries.map(entry=>entry.key),{limit:5}),replace));return {...base,go:false,content};}
+      content.append(make('div','card-title',plainField(entry.fields.title)||entry.key),make('div','card-text',byline(entry)),cardMeta(make('b','',entry.key),entry.type,`${entry.file}:${entry.line}`),followHint());
+      return {...base,go:true,content};
+    }
+    return null;
+  }
+  // References to labels, files or citations that do not exist get a dashed underline after a pause.
+  function markBroken(path=active){
+    const editor=views.get(path)?.editor;if(!editor||!isTex(path))return;
+    const text=editor.getValue(),files=textFiles(),names=new Set(findLabels(files).map(label=>label.name)),keys=bibEntries().map(entry=>entry.key),known=new Set(keys),list=[];
+    for(const ref of findReferences(new Map([[path,text]])))if(!names.has(ref.name))list.push({start:ref.start,end:ref.end,className:'deco-broken'});
+    for(const match of text.matchAll(/\\(includegraphics|input|include)\s*(?:\[[^\]]*\])?\s*\{([^{}\n]+)\}/g)){
+      if(/^\s*%/.test(text.slice(text.lastIndexOf('\n',match.index)+1,match.index)))continue;
+      if(!resolveFile(match[2],match[1]==='includegraphics'?'graphics':'input')){const start=match.index+match[0].lastIndexOf('{')+1;list.push({start,end:start+match[2].length,className:'deco-broken'});}
+    }
+    if(keys.length)for(const cite of text.matchAll(/\\(?:[a-zA-Z]*cite[a-zA-Z]*|nocite)\*?\s*(?:\[[^\]]*\]\s*){0,2}\{([^{}]*)\}/g)){
+      let at=cite.index+cite[0].lastIndexOf('{')+1;
+      for(const part of cite[1].split(',')){const key=part.trim(),start=at+part.indexOf(key);if(key&&key!=='*'&&!known.has(key))list.push({start,end:start+key.length,className:'deco-broken'});at+=part.length+1;}
+    }
+    editor.setDecorations('broken',list);
+  }
+  // Breadcrumbs follow the caret; while the caret is scrolled out of view they follow the top of the view.
+  const crumbs=createBreadcrumbs($('crumbs'),{t,
+    onPath:path=>{toggleSidebar(true);set('sideView','files');tree.reveal(path);},
+    onSection:(heading,at)=>{
+      const list=structure.headings,index=list.indexOf(heading);if(index<0)return;
+      let first=index;while(first>0&&list[first-1].level>=heading.level)first--;
+      let last=index;while(last<list.length-1&&list[last+1].level>=heading.level)last++;
+      const items=list.slice(first,last+1).filter(item=>item.level===heading.level||item.level===heading.level+1&&list.indexOf(item)>index&&list.slice(index+1,list.indexOf(item)+1).every(other=>other.level>heading.level));
+      openMenu(app,at,items.map(item=>({label:(item.level>heading.level?'    ':'')+[item.number,item.title].filter(Boolean).join('  '),checked:item===heading,run:()=>reveal({path:item.file,line:item.line})})));
+    },
+    onEnvironment:environment=>{const editor=activeEditor();if(editor)editor.select(environment.from,environment.to,{center:false});}});
+  let crumbFrame=0;
+  const queueCrumbs=()=>{if(!crumbFrame)crumbFrame=(globalThis.requestAnimationFrame||setTimeout)(updateCrumbs);};
+  function headingAt(path,line){
+    const list=structure.headings,own=list.findLast(heading=>heading.file===path&&heading.line<=line);if(own)return own;
+    const first=list.findIndex(heading=>heading.file===path);return first>0?list[first-1]:null;
+  }
+  function updateCrumbs(){
+    crumbFrame=0;
+    const view=views.get(active);if(!view?.editor){crumbs.update(active?{path:active}:null);return;}
+    const editor=view.editor,scroller=editor.scroller,line=view.position?.line||1,top=editor.lineAtY(scroller.scrollTop+12),bottom=editor.lineAtY(scroller.scrollTop+scroller.clientHeight-12);
+    const away=line<top||line>bottom,at=away?top:line,heading=isTex(active)?headingAt(active,at):null;
+    let environment=null;
+    if(!away&&isTex(active)){
+      const text=editor.getValue(),caret=editor.caret,found=environmentAt(text,caret);
+      if(found&&found.name!=='document')environment=found;
+      else{const math=mathAt(text,caret);if(math&&!math.env)environment={name:math.kind,display:math.kind==='display'?'\\[ … \\]':'$ … $',from:math.start,to:math.end};}
+    }
+    crumbs.update({path:active,heading,environment,stuck:away&&!!heading&&heading.file===active&&heading.line<top});
   }
 
   // ---- compile and preview ----------------------------------------------------------------------
@@ -591,7 +830,7 @@ export function mountEditor(options={}){
       // A panel that opened for an error steps aside once the document compiles again.
       if(panelAuto){panelAuto=false;set('panel',false);}
       if(result?.empty)showSheet(revision);
-      else if(result?.pdf)await setPdf(result.pdf,{...result,revision:result.revision??revision,durationMs:result.durationMs??performance.now()-began});
+      else if(result?.pdf){const durationMs=result.durationMs??performance.now()-began;await setPdf(result.pdf,{...result,revision:result.revision??revision,durationMs});if(state.pdfRevision===revision){state.lastFullMs=durationMs;record('full',durationMs);}}
       if(run===state.run&&revision===state.revision&&!state.failed&&(result?.empty||state.pdfRevision===revision))void takeSnapshot().catch(()=>notify('history.failed'));
     }catch(error){if(run===state.run&&revision===state.revision)api.setError(error,{quiet:reason==='auto'});}
     finally{
@@ -609,7 +848,7 @@ export function mountEditor(options={}){
     ++pdfSequence;rendererAbort?.abort();if(state.pdfUrl)URL.revokeObjectURL(state.pdfUrl);
     state.pdf=state.pdfUrl=state.meta=null;state.pdfRevision=state.previewRevision=revision;
     if(!$('sheet')){viewport.innerHTML=SHEET;i18n.apply(viewport);}
-    marker.remove();updateDoc();updateStatus();updateEngine();updatePage();
+    marker.remove();applyThumbs();updateDoc();updateStatus();updateEngine();updatePage();
   }
   const pages=()=>[...viewport.querySelectorAll('canvas[data-page]')];
   // A region of a page: top/bottom (and optionally left/right) as fractions of it.
@@ -643,9 +882,12 @@ export function mountEditor(options={}){
   const pageWidth=base=>settings.zoom==='fit'?Math.min(fitWidth(),base*2.5):base*settings.zoom;
   const currentZoom=()=>{const base=parseFloat(pages()[0]?.dataset.base);return settings.zoom==='fit'?(base?pageWidth(base)/base:1):settings.zoom;};
   function updateZoomLabel(){$('zoom-label').textContent=settings.zoom==='fit'?t('zoom.fitLabel'):Math.round(settings.zoom*100)+'%';}
+  /** The rail shows for documents of two pages or more while the setting is on. */
+  function applyThumbs(){const rail=$('thumbs'),show=settings.thumbs&&pages().length>1;if(rail.hidden===!show){if(show)thumbs.sync();return;}rail.hidden=!show;if(show)thumbs.sync();}
   function updatePage(){
     const list=pages(),middle=viewport.scrollTop+viewport.clientHeight/3,input=$('page-input');let current=0;
     for(const [index,canvas] of list.entries())if(canvas.offsetTop<=middle)current=index;
+    thumbs.setCurrent(current+1);
     $('page-nav').hidden=list.length<2;$('page-indicator').textContent=list.length>1?`/ ${list.length}`:'';
     if(document.activeElement!==input){input.value=String(current+1);input.style.width=String(list.length).length+1.4+'ch';}
   }
@@ -655,14 +897,35 @@ export function mountEditor(options={}){
   }
   // The zoom bar rests out of sight; scrolling or zooming brings it back for a moment.
   function showZoombar(){$('zoombar').dataset.show='true';clearTimeout(barTimer);barTimer=setTimeout(()=>{if(!state.destroyed)delete $('zoombar').dataset.show;},1600);}
+  // The caret's place in the preview: a bar in the page margin. Moving into another paragraph lights that
+  // paragraph for a moment before it settles into the bar; typing within one paragraph never does.
+  let markerKey=null;
   function placeMarker(scroll=false){
     const canvas=state.marker&&viewport.querySelector(`canvas[data-page="${state.marker.page}"]`);
-    if(!canvas||!canvas.offsetHeight){marker.remove();return;}
+    if(!canvas||!canvas.offsetHeight){marker.remove();markerChip();return;}
     if(marker.parentNode!==canvas.parentNode)canvas.parentNode.append(marker);
     const top=canvas.offsetTop+canvas.offsetHeight*state.marker.top,height=Math.max(8,canvas.offsetHeight*(state.marker.bottom-state.marker.top));
     marker.style.top=top+'px';marker.style.height=height+'px';marker.style.left=canvas.offsetLeft-8+'px';
+    const key=state.marker.uid!=null?state.marker.page+':'+state.marker.uid:null;
+    if(key&&markerKey&&key!==markerKey&&motion())flashSync(canvas);
+    markerKey=key;
     if(scroll&&settings.follow&&(top<viewport.scrollTop+12||top+height>viewport.scrollTop+viewport.clientHeight-12))
       viewport.scrollTo?.({top:Math.max(0,top-viewport.clientHeight/3),behavior:'smooth'});
+    markerChip();
+  }
+  function flashSync(canvas){
+    viewport.querySelector('.sync-flash')?.remove();
+    const node=document.createElement('div');node.className='sync-flash';placeRegion(node,canvas,state.marker,6);canvas.parentNode.append(node);
+    const animation=node.animate?.([{opacity:0},{opacity:1,offset:.1},{opacity:1,transform:'scaleX(1)',offset:.62},{opacity:0,transform:'scaleX(.01)'}],{duration:780,easing:'cubic-bezier(.2,0,0,1)'});
+    if(animation)animation.finished.then(()=>node.remove(),()=>node.remove());else setTimeout(()=>node.remove(),780);
+  }
+  // When the caret's place is scrolled out of the preview, a chip at that edge says where it is.
+  function markerChip(){
+    const chip=$('marker-chip');
+    if(!marker.isConnected||!state.marker){chip.hidden=true;return;}
+    const top=marker.offsetTop,bottom=top+marker.offsetHeight,edge=bottom<viewport.scrollTop+4?'top':top>viewport.scrollTop+viewport.clientHeight-4?'bottom':'';
+    chip.hidden=!edge;if(!edge)return;
+    chip.dataset.edge=edge;chip.textContent=t(edge==='top'?'marker.up':'marker.down',{n:state.marker.page});
   }
   /** Resize pages with CSS at once; refreshPages then redraws them sharp. */
   function layoutPages(){
@@ -744,7 +1007,7 @@ export function mountEditor(options={}){
       viewport.scrollTop=scroll;viewport.scrollLeft=across;
       state.pdf=data;state.pdfRevision=metadata.revision??state.revision;state.previewRevision=state.pdfRevision;
       state.meta={pages:metadata.pages??rendered?.pages,durationMs:metadata.durationMs};
-      updateDoc();updateStatus();updatePage();updateZoomLabel();placeMarker();
+      applyThumbs();updateDoc();updateStatus();updatePage();updateZoomLabel();placeMarker();
       if(settled.length&&!state.failed)settlePagination(settled);
     }catch(error){if(newUrl)URL.revokeObjectURL(newUrl);if(sequence===pdfSequence&&!state.destroyed)api.setError(new Error(`PDF preview could not be rendered: ${error.message||error}`));}
   }
@@ -877,16 +1140,19 @@ export function mountEditor(options={}){
   }
   function templateGallery(){return openTemplateGallery({host:app,t,lang:i18n.lang,hasFiles:!!project.paths().length,readArchive,create:data=>void replaceProject(data,true),notify});}
   function exportZip(){download(zip(project.files().map(file=>({path:file.path,data:fileBytes(file)}))),(project.main?basename(project.main).replace(/\.tex$/i,''):'project')+'.zip','application/zip');}
+  // Export shows its own progress: a line under the button while the full pass runs, a check when the file is handed over.
+  let exportTimer;
+  function exportState(value){const button=action('export-menu');clearTimeout(exportTimer);if(value)button.dataset.state=value;else delete button.dataset.state;if(value==='done')exportTimer=setTimeout(()=>exportState(null),1400);}
   async function downloadPdf(){
     if(state.compiling){notify('toast.wait');return;}
-    if(state.pdfRevision!==state.revision)await compile('download');
-    if(state.pdfRevision!==state.revision){notify('toast.stale');return;}
-    if(state.pdf)download(state.pdf,basename(project.main||'main.tex').replace(/\.tex$/i,'')+'.pdf','application/pdf');
+    if(state.pdfRevision!==state.revision){action('export-menu').style.setProperty('--eta',Math.round(clamp(state.lastFullMs||2000,400,30000))+'ms');exportState('working');await compile('download');}
+    if(state.pdfRevision!==state.revision){exportState(null);notify('toast.stale');return;}
+    if(state.pdf){download(state.pdf,basename(project.main||'main.tex').replace(/\.tex$/i,'')+'.pdf','application/pdf');exportState('done');}
   }
   function exportMenu(){
     const pages=state.meta?.pages,size=state.pdf&&[pages&&(pages===1?t('page'):t('pages',{n:pages})),`${(state.pdf.byteLength/1024).toFixed(1)} KB`].filter(Boolean).join(' · ');
     openMenu(app,action('export-menu').getBoundingClientRect(),[
-      {label:t('export.pdf'),icon:'download',hint:!state.pdf?'':state.pdfRevision!==state.revision?t('export.compileFirst'):size,disabled:!state.pdf||state.compiling,run:downloadPdf},
+      {label:t('export.pdf'),icon:'download',hint:!state.pdf?'':state.pdfRevision!==state.revision?(Number.isFinite(state.lastFullMs)?t('export.compileEta',{s:Math.max(.5,Math.round(state.lastFullMs/500)/2)}):t('export.compileFirst')):size,disabled:!state.pdf||state.compiling,run:downloadPdf},
       {label:t('project.export'),icon:'archive',disabled:!project.files().length,run:exportZip},
       {label:t('export.file',{name:active?basename(active):''}),icon:'file',disabled:!active,run:()=>downloadFile(active)}]);
   }
@@ -894,6 +1160,7 @@ export function mountEditor(options={}){
     openMenu(app,action('capsule-menu').getBoundingClientRect(),[
       {label:t('compile.auto'),checked:settings.autoCompile,run:()=>set('autoCompile',!settings.autoCompile)},
       {label:t('compile.now'),icon:'play',hint:keys('Mod+Enter'),disabled:action('compile').disabled,run:()=>compile()},'separator',
+      {label:t('insp.title'),icon:'bolt',run:openInspector},
       {label:t('panel.problems'),icon:'warning',hint:keys('Mod+J'),run:()=>openPanel('problems')},{label:t('panel.log'),icon:'file',run:()=>openPanel('log')}]);
   }
   const tree=createFileTree({el:$('tree'),host:app,project,t,actions:{open:path=>{openFile(path,{focus:true});if(narrowQuery?.matches)toggleSidebar(false);},remove,download:downloadFile,upload:(files,dir)=>void upload(files,dir),notify,
@@ -927,7 +1194,8 @@ export function mountEditor(options={}){
   // ---- events -----------------------------------------------------------------------------------
   listen(action('compile'),'click',()=>compile());listen(action('cancel'),'click',cancel);
   listen($('auto-compile'),'change',event=>set('autoCompile',event.target.checked));
-  listen(action('capsule'),'click',()=>state.compiling?cancel():compile());listen(action('capsule-menu'),'click',capsuleMenu);
+  listen(action('capsule'),'click',event=>{if(event.target.closest?.('.cap-live,.cap-bars')&&state.live){openInspector();return;}state.compiling?cancel():compile();});listen(action('capsule-menu'),'click',capsuleMenu);
+  listen(action('pdf-sync'),'click',()=>{if(lag()&&!state.compiling)void compile();});
   listen(action('export-menu'),'click',exportMenu);
   listen($('layout'),'click',event=>{const button=event.target.closest('button');if(button)setLayout(button.dataset.value);});
   listen(action('settings'),'click',()=>toggleSettings());
@@ -974,6 +1242,7 @@ export function mountEditor(options={}){
   for(const tab of $('panel').querySelectorAll('.panel-tab'))listen(tab,'click',()=>set('panelTab',tab.dataset.panel));
   listen(action('zoom-in'),'click',()=>stepZoom(1));listen(action('zoom-out'),'click',()=>stepZoom(-1));
   listen(action('zoom-fit'),'click',()=>setZoom(settings.zoom==='fit'?1:'fit'));listen(action('zoom-menu'),'click',zoomMenu);
+  listen(action('toggle-thumbs'),'click',()=>set('thumbs',!settings.thumbs));
   listen($('page-input'),'focus',()=>$('page-input').select());listen($('page-input'),'blur',updatePage);
   listen($('page-input'),'keydown',event=>{
     if(event.key!=='Enter'&&event.key!=='Escape')return;
@@ -987,7 +1256,8 @@ export function mountEditor(options={}){
     if(!event.ctrlKey&&!event.metaKey)return;
     event.preventDefault();setZoom(clamp(currentZoom()*Math.exp(-event.deltaY*0.01),0.25,4),{x:event.clientX,y:event.clientY});
   },{passive:false});
-  listen(viewport,'scroll',()=>{updatePage();showZoombar();},{passive:true});
+  listen(viewport,'scroll',()=>{updatePage();showZoombar();markerChip();},{passive:true});
+  listen($('marker-chip'),'click',()=>{if(marker.isConnected)viewport.scrollTo?.({top:Math.max(0,marker.offsetTop-viewport.clientHeight/3),behavior:'smooth'});});
   const previewPoint=event=>{
     const canvas=event.target.closest?.('canvas[data-page]');if(!canvas)return;
     const box=canvas.getBoundingClientRect();
@@ -1022,7 +1292,9 @@ export function mountEditor(options={}){
   listen(root,'keydown',event=>{
     if(event.defaultPrevented||event.isComposing)return;
     const mod=event.ctrlKey||event.metaKey,key=event.key.toLowerCase();
-    const command=mod&&!event.altKey&&commands().find(command=>command.key?.toLowerCase()==='mod+'+(event.shiftKey?'shift+':'')+key);
+    // Option/Alt changes event.key on macOS, so Alt combinations are matched by physical key.
+    const typed=event.altKey?/^Key([A-Z])$/.exec(event.code)?.[1]?.toLowerCase():key;
+    const command=mod&&typed&&commands().find(command=>command.key?.toLowerCase()==='mod+'+(event.altKey?'alt+':'')+(event.shiftKey?'shift+':'')+typed);
     if(command){event.preventDefault();if(!command.disabled)command.run();}
     else if(key==='escape'){
       if(!$('settings').hidden){event.preventDefault();toggleSettings(false);action('settings').focus();}
@@ -1072,9 +1344,9 @@ export function mountEditor(options={}){
       if(targets.some(([target])=>!target))return false;
       for(const [target,canvas] of targets){for(const key of Object.keys(target.dataset))canvas.dataset[key]=target.dataset[key];canvas.style.cssText=target.style.cssText;canvas.setAttribute('aria-label',target.getAttribute('aria-label'));target.replaceWith(canvas);}
       for(const [,canvas] of targets)canvas.classList.toggle('provisional',reflow);
-      if(regions.length)paintInk(regions);placePagination();
+      if(regions.length)paintInk(regions);placePagination();thumbs.changed([...canvases.keys()]);
       if(state.failed){state.failed=false;state.problems=state.problems.filter(problem=>problem.severity!=='error');renderProblems();}
-      state.previewRevision=revision;
+      state.previewRevision=revision;if(canvases.size)state.livePages=[...canvases.keys()].sort((a,b)=>a-b);
       if(Number.isFinite(durationMs)&&canvases.size)api.setLiveStatus({state:reflow?'reflow':'live',ms:durationMs,revision});
       updateStatus();updatePage();placeMarker();return true;
     },
@@ -1094,24 +1366,27 @@ export function mountEditor(options={}){
     setLiveStatus({state:mode='ready',ms,reason,revision}={}){
       if(revision!==undefined&&revision!==state.revision)return;
       state.live={state:mode,ms,reason};
+      if(mode==='waiting')record('waiting',0);
       if((mode==='live'||mode==='reflow')&&Number.isFinite(ms)){
-        state.latency.push(ms);if(state.latency.length>12)state.latency.shift();
+        state.latency.push(ms);if(state.latency.length>12)state.latency.shift();record(mode,ms);
         // One pulse per burst of typing, not one per keystroke.
         const now=performance.now();if(now-lastPulse>900&&!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches)$('preview-status').querySelector('.dot').animate?.([{boxShadow:'0 0 0 0 var(--select)'},{boxShadow:'0 0 0 7px transparent'}],{duration:500,easing:'ease-out'});lastPulse=now;
       }
-      updateLive();
+      updateLive();renderInspector();
     },
+    /** {live:'warming'|'ready'|'off', restarts} from the host's persistent engine. */
+    setEngineInfo(info={}){state.engineInfo={...state.engineInfo,...info};renderInspector();},
     /** Where the caret's text sits in the preview: {page, top, bottom} as fractions of the page, or null. */
     setMarker(position,{scroll=true}={}){state.marker=position||null;placeMarker(scroll);},
     refreshMath:updateMath,
     clearLogs(){state.logs=[];$('logs').textContent='';},
     destroy(){
       state.destroyed=true;state.run++;pdfSequence++;previewRun++;
-      for(const timer of [compileTimer,settleTimer,busyTimer,zoomTimer,saveTimer,metaTimer,barTimer,inkTimer])clearTimeout(timer);
+      for(const timer of [compileTimer,settleTimer,busyTimer,zoomTimer,saveTimer,metaTimer,barTimer,inkTimer,exportTimer])clearTimeout(timer);inspector?.surface.close(false);
       toaster.hide();tips.destroy();rendererAbort?.abort();if(state.pdfUrl)URL.revokeObjectURL(state.pdfUrl);
       if(hoverFrame)cancelAnimationFrame(hoverFrame);
       for(const path of [...views.keys()])dropView(path);
-      popover?.destroy();removers.forEach(remove=>remove());root.replaceChildren();
+      popover?.destroy();thumbs.destroy();removers.forEach(remove=>remove());root.replaceChildren();
     },
   };
 
@@ -1139,7 +1414,7 @@ export function mountEditor(options={}){
     if(!saved?.files?.length)queueSave({type:'load'});else if(!saved.historyId)queueSave();
     updateControls();updateEngine();updateSave();updateProject();
   }
-  applyAppearance();applyLayout();applySide();i18n.apply(root);renderSettings();renderPanel();renderProblems();updateControls();updateEngine();updateZoomLabel();updateSave();
+  applyAppearance();applyLayout();applySide();action('toggle-thumbs').setAttribute('aria-pressed',String(settings.thumbs));i18n.apply(root);renderSettings();renderPanel();renderProblems();updateControls();updateEngine();updateZoomLabel();updateSave();
   $('auto-compile').checked=settings.autoCompile;$('preview-status').dataset.auto=String(settings.autoCompile);updateLive();
   // Sliding thumbs need real boxes; measure once laid out and again when web fonts settle.
   (globalThis.requestAnimationFrame||setTimeout)(()=>{remeasure();if(!state.destroyed)app.classList.add('ready');});

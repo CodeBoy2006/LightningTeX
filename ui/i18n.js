@@ -159,6 +159,49 @@ Object.assign(zh,{
   'reason.why.check':'每次局部更新都会与完整版面核对。核对不通过时由完整排版接手，预览不会显示错误的页面。',
   'reason.why.off':'这里无法局部更新，所有修改都走完整排版。',
 });
+// Navigating the source: jumps, hover cards, breadcrumbs and the references list.
+Object.assign(en,{
+  'follow.hint':'click to go there','follow.none':'Nothing to go to here','follow.replace':'Use {name}','follow.lines':'{n} lines',
+  'follow.noLabel':'No label named {name}','follow.noFile':'No project file named {name}','follow.noCite':'No bibliography entry {name}',
+  'crumbs.sections':'Sections at this level','crumbs.stuck':'Section at the top of the view','crumbs.select':'Select this environment',
+  'panel.refs':'References',
+});
+Object.assign(zh,{
+  'follow.hint':'点击跳转','follow.none':'这里没有可以跳转的目标','follow.replace':'改为 {name}','follow.lines':'{n} 行',
+  'follow.noLabel':'没有名为 {name} 的标签','follow.noFile':'项目里没有文件 {name}','follow.noCite':'参考文献里没有条目 {name}',
+  'crumbs.sections':'同级章节','crumbs.stuck':'视图顶部所在的章节','crumbs.select':'选中整个环境',
+  'panel.refs':'引用',
+});
+Object.assign(en,{
+  'palette.group.recent':'Recently used','palette.group.files':'Files','palette.group.sections':'Sections & labels','palette.group.commands':'Commands','palette.group.symbols':'Symbols','palette.group.line':'Line',
+  'palette.scope.sections':'sections','palette.scope.commands':'commands','palette.scope.line':'line','palette.scope.symbols':'symbols','palette.clearScope':'Search everything',
+  'palette.keys':'Tab next group · ↵ open','palette.lineHint':'Type a line number','palette.placeholder':'Search files, sections and commands…',
+});
+Object.assign(zh,{
+  'palette.group.recent':'最近使用','palette.group.files':'文件','palette.group.sections':'章节与标签','palette.group.commands':'命令','palette.group.symbols':'符号','palette.group.line':'行号',
+  'palette.scope.sections':'章节','palette.scope.commands':'命令','palette.scope.line':'行号','palette.scope.symbols':'符号','palette.clearScope':'搜索全部',
+  'palette.keys':'Tab 下一组 · ↵ 打开','palette.lineHint':'输入行号','palette.placeholder':'搜索文件、章节与命令…',
+});
+Object.assign(en,{
+  'insp.title':'Live inspector','insp.kind.live':'Live','insp.kind.reflow':'Reflow, pagination pending','insp.kind.full':'Full pass','insp.kind.waiting':'Waiting for input','insp.kind.none':'Idle',
+  'insp.timeline':'Last {n} updates','insp.live':'Only the edited paragraph was redrawn (page {pages}), in {ms}.','insp.reflow':'Page {pages} was reflowed locally in {ms}; pagination settles after a pause.',
+  'insp.full':'This update went through a full pass ({time}).','insp.idle':'No local update yet.','insp.raw':'Details','insp.engine':'Warmed engine',
+  'insp.engine.ready':'ready','insp.engine.warming':'warming up','insp.engine.off':'off','insp.restarts':'{n} restart(s)','insp.settle':'settles after a 0.5 s pause',
+  'insp.median':'Typical update','insp.count':'{n} updates',
+  'pdf.synced':'PDF in sync','pdf.behind':'PDF behind by {n} edit(s)','pdf.updating':'Updating PDF…','pdf.syncNow':'Compile the PDF now','pdf.syncedTip':'The downloadable PDF matches the preview',
+  'export.compileEta':'compiles first, about {s} s',
+});
+Object.assign(zh,{
+  'insp.title':'实时检查器','insp.kind.live':'实时','insp.kind.reflow':'重排待校准','insp.kind.full':'完整排版','insp.kind.waiting':'等待输入','insp.kind.none':'空闲',
+  'insp.timeline':'最近 {n} 次更新','insp.live':'只重排了修改的段落（第 {pages} 页），用时 {ms}。','insp.reflow':'局部重排了第 {pages} 页，用时 {ms}；分页在停顿后校准。',
+  'insp.full':'这次更新走了完整排版（{time}）。','insp.idle':'还没有局部更新。','insp.raw':'详情','insp.engine':'常驻引擎',
+  'insp.engine.ready':'已就绪','insp.engine.warming':'预热中','insp.engine.off':'未启动','insp.restarts':'{n} 次重启','insp.settle':'停顿 0.5 s 后校准',
+  'insp.median':'典型耗时','insp.count':'共 {n} 次',
+  'pdf.synced':'PDF 已同步','pdf.behind':'PDF 落后 {n} 次修改','pdf.updating':'正在更新 PDF…','pdf.syncNow':'立即完整编译 PDF','pdf.syncedTip':'可下载的 PDF 与预览一致',
+  'export.compileEta':'将先完整编译，约 {s} s',
+});
+Object.assign(en,{'thumbs.toggle':'Page thumbnails','thumbs.title':'Pages','thumbs.page':'Page {n}','marker.up':'↑ Caret · page {n}','marker.down':'↓ Caret · page {n}'});
+Object.assign(zh,{'thumbs.toggle':'页面缩略图','thumbs.title':'页面','thumbs.page':'第 {n} 页','marker.up':'↑ 光标位置 · 第 {n} 页','marker.down':'↓ 光标位置 · 第 {n} 页'});
 const languages={en,zh};
 export function createI18n(preference='auto'){
   let lang='en';

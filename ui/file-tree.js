@@ -3,11 +3,13 @@ import {icon} from './icons.js';
 import {basename,dirname,joinPath,isImagePath,canBeMain} from './project.js';
 import {openMenu} from './overlays.js';
 const DRAG='text/x-lightningtex';
+const collator=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'});
+const motion=el=>typeof el.animate==='function'&&!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const fileIcon=path=>isImagePath(path)?'image':/\.(tex|sty|cls|bib|ltx)$/i.test(path)?'tex':'file';
 
 /** actions: open(path), remove(path), download(path), upload(files, dir), pick(dir), notify(key, values) */
 export function createFileTree({el,host,project,t,actions}){
-  const collapsed=new Set();let selected=null,active=null,renaming=null,toggled=null;
+  const collapsed=new Set();let selected=null,active=null,renaming=null,toggled=null,dragging=null;
   const rows=()=>{
     const children=new Map(),out=[];
     const add=(path,folder)=>{
@@ -25,10 +27,13 @@ export function createFileTree({el,host,project,t,actions}){
     };
     walk('',0);return out;
   };
-  const rowOf=path=>[...el.children].find(row=>row.dataset.path===path);
+  const rowOf=path=>[...el.children].find(row=>row.dataset.path===path&&!row.classList.contains('row-leave'));
   function render(){
     const focused=el.contains(document.activeElement)&&document.activeElement.tagName!=='INPUT',list=rows();
     if(selected&&!list.some(row=>row.path===selected))selected=null;
+    // Rows that disappear (deleted, or folded away) fold shut in place instead of vanishing.
+    const kept=new Set(list.map(row=>row.path)),gone=motion(el)&&el.isConnected?[...el.children].filter(row=>row.dataset.path&&!kept.has(row.dataset.path)&&!row.classList.contains('row-leave')):[];
+    const anchors=gone.map(row=>{let next=row.nextElementSibling;while(next&&!kept.has(next.dataset.path))next=next.nextElementSibling;return [row,next?.dataset.path];});
     el.replaceChildren();
     for(const row of list){
       const item=document.createElement('div');item.className='row';item.setAttribute('role','treeitem');item.draggable=true;
@@ -50,6 +55,10 @@ export function createFileTree({el,host,project,t,actions}){
       el.append(item);
     }
     toggled=null;
+    for(const [row,next] of anchors){
+      row.classList.add('row-leave');row.removeAttribute('role');row.removeAttribute('tabindex');row.inert=true;row.style.height=row.offsetHeight+'px';
+      el.insertBefore(row,next?rowOf(next):null);setTimeout(()=>row.remove(),160);
+    }
     if(renaming){const input=el.querySelector('.row-rename');input?.focus();const dot=input?.value.lastIndexOf('.');input?.setSelectionRange(0,dot>0?dot:input.value.length);}
     else if(focused)(rowOf(selected)||el.firstChild)?.focus();
   }
@@ -88,7 +97,17 @@ export function createFileTree({el,host,project,t,actions}){
   }
   const pathAt=event=>event.target.closest?.('.row')?.dataset.path??null;
   const dropDir=event=>{const path=pathAt(event);return !path?'':project.isFolder(path)?path:dirname(path);};
-  const clearDrop=()=>{el.removeAttribute('data-drop');for(const row of el.querySelectorAll('.drop'))row.classList.remove('drop');};
+  const clearDrop=()=>{el.removeAttribute('data-drop');for(const row of el.querySelectorAll('.drop,.drop-before,.drop-after'))row.classList.remove('drop','drop-before','drop-after');};
+  // Where a dragged item would land in dir: a 2px line before the first row that sorts after it.
+  function insertionLine(dir){
+    if(!dragging||dir===dirname(dragging))return;
+    const folder=project.isFolder(dragging),name=basename(dragging),parent=dir?rowOf(dir):null;
+    if(dir&&collapsed.has(dir)){parent?.classList.add('drop-after');return;}
+    const children=[...el.children].filter(row=>!row.classList.contains('row-leave')&&dirname(row.dataset.path)===dir&&row.dataset.path!==dragging);
+    const after=children.find(row=>{const isFolder=row.dataset.kind==='folder';return isFolder!==folder?folder:collator.compare(basename(row.dataset.path),name)>0;});
+    if(after)after.classList.add('drop-before');
+    else{let last=children.at(-1)||parent;if(!last)return;const index=[...el.children].indexOf(last);let end=last;for(const row of [...el.children].slice(index+1)){if(!row.dataset.path.startsWith(last.dataset.path+'/'))break;end=row;}end.classList.add('drop-after');}
+  }
   el.addEventListener('click',event=>{
     const path=pathAt(event);if(!path||renaming)return;
     selected=path;
@@ -110,11 +129,13 @@ export function createFileTree({el,host,project,t,actions}){
     else return;
     event.preventDefault();
   });
-  el.addEventListener('dragstart',event=>{const path=pathAt(event);if(!path||renaming){event.preventDefault();return;}event.dataTransfer.setData(DRAG,path);event.dataTransfer.effectAllowed='copyMove';});
+  el.addEventListener('dragstart',event=>{const path=pathAt(event);if(!path||renaming){event.preventDefault();return;}event.dataTransfer.setData(DRAG,path);event.dataTransfer.effectAllowed='copyMove';dragging=path;rowOf(path)?.classList.add('dragging');});
+  el.addEventListener('dragend',()=>{dragging=null;clearDrop();for(const row of el.querySelectorAll('.dragging'))row.classList.remove('dragging');});
   el.addEventListener('dragover',event=>{
     const types=[...(event.dataTransfer?.types||[])];if(!types.includes(DRAG)&&!types.includes('Files'))return;
     event.preventDefault();clearDrop();
     const dir=dropDir(event);if(dir)rowOf(dir)?.classList.add('drop');else el.dataset.drop='true';
+    insertionLine(dir);
   });
   el.addEventListener('dragleave',event=>{if(!el.contains(event.relatedTarget))clearDrop();});
   el.addEventListener('drop',event=>{
@@ -126,6 +147,8 @@ export function createFileTree({el,host,project,t,actions}){
   });
   return {
     render,create,
+    /** Select and focus a file or folder, opening the folders above it. */
+    reveal(path){if(!project.has(path)&&!project.isFolder(path))return;selected=path;expandTo(path);render();rowOf(path)?.focus();rowOf(path)?.scrollIntoView?.({block:'nearest'});},
     /** Highlight the file shown in the editor and make sure its folders are open. */
     setActive(path){active=path;if(path){selected=path;expandTo(path);}render();},
     /** Folder that new or uploaded files should land in, from the current selection. */
