@@ -1,11 +1,10 @@
-import{BrowserWorker,loadSupportFiles}from'./runtime-helpers.mjs';import fs from'node:fs/promises';import path from'node:path';import{pathToFileURL}from'node:url';import assert from'node:assert/strict';
+import{BrowserWorker}from'./runtime-helpers.mjs';import fs from'node:fs/promises';import path from'node:path';import{pathToFileURL}from'node:url';import assert from'node:assert/strict';
 import{BackgroundEngine,LiveEngine}from'../engine/client.js';import{splitPreamble,findLiveEdit}from'../core/document.js';import{unitContext,liveUnitEligibility,compareUnitBaseline}from'../core/capture.js';import{decodeDisplayList,createDisplayListRenderer}from'../render/index.mjs';import{createCanvas}from'@napi-rs/canvas';import*as pdfjs from'pdfjs-dist/legacy/build/pdf.mjs';import{parseEngineFont}from'../render/type1-font.mjs';
 const root=path.resolve(import.meta.dirname,'..'),base=pathToFileURL(root+'/public/');
 globalThis.Worker=BrowserWorker;
-const files=await loadSupportFiles(base);
 const {TEMPLATES}=await import('../ui/templates.js'),samples=TEMPLATES.map(template=>template.files[template.main]);
 const others=template=>Object.entries(template.files).filter(([name])=>name!==template.main).map(([name,data],rev)=>({path:name,data,rev}));
-const fonts=new Map(),bg=new BackgroundEngine({base,files}),live=new LiveEngine({base,files,onFonts:o=>{for(const[k,v]of Object.entries(o))fonts.set(k,v)}}),results=[];
+const fonts=new Map(),bg=new BackgroundEngine({base}),live=new LiveEngine({base,onFonts:o=>{for(const[k,v]of Object.entries(o))fonts.set(k,v)}}),results=[];
 try{await bg.start();for(let i=0;i<samples.length;i++){
  // The blank template has no content yet: the engine reports an empty document, not a TeX error.
  if(TEMPLATES[i].id==='blank'){await assert.rejects(bg.compile(samples[i]),error=>error.empty===true&&/No pages of output/.test(error.message));results.push({sample:'blank',empty:true});continue;}

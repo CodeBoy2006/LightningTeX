@@ -4,13 +4,11 @@ const decoder=new TextDecoder();
 // Host writes only when available=0; worker notifies after fully consuming.
 onmessage=async ({data})=>{try{
  const m=await loadRtexEngine({base:data.base,module:data.module,endpoint:data.endpoint,env:{TEXINPUTS:'/rtex/latex//:',LUAINPUTS:'/rtex//:',openout_any:'a',max_print_line:'100000',RTEX_REQ:'/dev/rtex-req',RTEX_RESP:'/dev/rtex-resp'},print:text=>postMessage({log:text}),printErr:text=>postMessage({log:text})});
- const fs=m.FS;fs.mkdirTree('/rtex/latex');fs.mkdirTree('/live');
+ const fs=m.FS;fs.mkdirTree('/live');
  m.kpse_remote_register_misses(data.packageMisses||[]);
  if(data.aux)fs.writeFile('/live/serve.aux',data.aux);
  fs.chdir('/live');
- for(const [name,contents] of Object.entries(data.files||{}))writeEngineFile(fs,'/rtex/'+name,contents);
  for(const file of data.project||[])writeEngineFile(fs,'/live/'+file.path,file.data);
- Object.assign(m.ENV,{TEXINPUTS:'/rtex/latex//:',LUAINPUTS:'/rtex//:',openout_any:'a',max_print_line:'100000',RTEX_REQ:'/dev/rtex-req',RTEX_RESP:'/dev/rtex-resp'});
  const ctl=new Int32Array(data.mailbox,0,4),bytes=new Uint8Array(data.mailbox,16);let offset=0;
  const sentFonts=new Set();
  let responseBuffer=new Uint8Array(0);

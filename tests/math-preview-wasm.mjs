@@ -1,5 +1,5 @@
 // Real formula previews with the TOC paragraph context used by the multi-file report.
-import {BrowserWorker,loadSupportFiles} from './runtime-helpers.mjs';
+import {BrowserWorker} from './runtime-helpers.mjs';
 import assert from 'node:assert/strict';
 import {BackgroundEngine,LiveEngine} from '../engine/client.js';
 import {splitPreamble} from '../core/document.js';
@@ -7,7 +7,7 @@ import {unitContext,liveUnitEligibility} from '../core/capture.js';
 import {mathAt,previewSource,parseMacros,inkBounds} from '../core/math-preview.js';
 import {decodeDisplayList} from '../render/index.mjs';
 
-const base=new URL('../public/',import.meta.url),files=await loadSupportFiles(base);
+const base=new URL('../public/',import.meta.url);
 globalThis.Worker=BrowserWorker;
 const source=String.raw`\documentclass[11pt]{article}
 \usepackage{amsmath,amssymb}
@@ -18,7 +18,7 @@ const source=String.raw`\documentclass[11pt]{article}
 \end{document}`;
 const macros=String.raw`\newcommand{\R}{\mathbb{R}}`,paragraph=String.raw`We study a matrix $A \in \R^{m \times n}$ and a vector $b \in \R^m$.`;
 const project=[{path:'macros.tex',data:macros,rev:1},{path:'introduction.tex',data:'\\section{Introduction}\n'+paragraph+'\n',rev:1}];
-const bg=new BackgroundEngine({base,files}),live=new LiveEngine({base,files});
+const bg=new BackgroundEngine({base}),live=new LiveEngine({base});
 try {
  const full=await bg.compile(source,{files:project}),capture=full.capture;
  const borrowed=capture.units.find(unit=>unit.kind==='par'&&liveUnitEligibility(capture,unit).ok),context=unitContext(capture,borrowed);

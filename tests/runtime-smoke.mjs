@@ -1,10 +1,9 @@
 import {Worker} from 'node:worker_threads';import fs from 'node:fs/promises';import path from 'node:path';import{pathToFileURL}from'node:url';import assert from'node:assert/strict';
 import {splitPreamble} from '../core/document.js';
-import {loadSupportFiles} from './runtime-helpers.mjs';
-const root=path.resolve(import.meta.dirname,'..'),files=await loadSupportFiles(pathToFileURL(root+'/public/'));
+const root=path.resolve(import.meta.dirname,'..');
 const w=new Worker(path.join(import.meta.dirname,'worker-harness.cjs'),{workerData:{script:path.join(root,'public/runtime/background-worker.js')}});let waits=[],logs=[];
 w.on('message',m=>{if(m.type==='log'){logs.push(m.text);return}const p=waits.shift();p?.resolve(m)});w.on('error',e=>{for(const p of waits)p.reject(e)});function next(){return new Promise((resolve,reject)=>waits.push({resolve,reject}))}
-let p=next();w.postMessage({type:'init',base:pathToFileURL(root+'/public/busytex/').href,files});assert.equal((await p).type,'ready');
+let p=next();w.postMessage({type:'init',base:pathToFileURL(root+'/public/luahbtex/').href});assert.equal((await p).type,'ready');
 const results=[];for(const [id,source]of [[1,String.raw`\documentclass{article}\begin{document}
 Hello actual WebAssembly.
 

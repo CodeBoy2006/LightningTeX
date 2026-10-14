@@ -253,12 +253,12 @@ function hit({page,y}){
 function pick(point){const target=hit(point);if(target)ui.reveal(target);}
 async function boot(){try{
  ui.setEngineStatus({status:'loading'});
- const manifest=await fetch(new URL('busytex/asset-manifest.json',base)).then(response=>response.ok?response.json():null).catch(()=>null);
+ const manifest=await fetch(new URL('luahbtex/asset-manifest.json',base)).then(response=>response.ok?response.json():null).catch(()=>null);
  const assets=manifest?.assets||{},loaded=new Map();
  ui.setLoadProgress({step:0,assets});
  ({background,live}=await createEngine({base,onLog:text=>{
    const part=/^(Loading|Loaded) (\S+) part (\d+)\/(\d+)/.exec(text);
-   if(part){const [,stage,name,index]=part,asset=assets[name],step=name==='busytex.wasm'?0:1;
+   if(part){const [,stage,name,index]=part,asset=assets[name],step=name==='luahbtex.wasm'?0:1;
      if(stage==='Loaded')loaded.set(name,Number(index));
      const done=asset?.parts.slice(0,loaded.get(name)||0).reduce((sum,part)=>sum+part.size,0)||0,total=asset?.encodedSize;
      ui.setLoadProgress({step,done,total});

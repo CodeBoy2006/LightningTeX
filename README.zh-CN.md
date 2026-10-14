@@ -1,6 +1,6 @@
 # Realtime TeX Web
 
-将 realtime-tex 的 Lua 端增量排版搬进浏览器：复用 TeXlyre / BusyTeX 的 LuaHBTeX WebAssembly，保留原项目的捕获器、上下文回放、持久段落服务和二进制显示列表。浏览器宿主用 JavaScript 实现；没有把依赖原生进程的 Rust Session 直接宣称为已经编译成 WASM。
+将 realtime-tex 的 Lua 端增量排版搬进浏览器：从源码构建 LuaHBTeX WebAssembly，保留原项目的捕获器、上下文回放、持久段落服务和二进制显示列表。浏览器宿主用 JavaScript 实现；没有把依赖原生进程的 Rust Session 直接宣称为已经编译成 WASM。
 
 ## 直接使用
 
@@ -14,7 +14,7 @@ node server.mjs
 
 不能直接双击 index.html：Web Worker、WASM 资源加载和增量通道需要 HTTP 安全上下文。附带的服务器只监听本机，并设置 COOP / COEP。远程自托管时需要 HTTPS 和相同响应头；其他服务器配置见 docs/DEPLOYMENT.md。
 
-首次加载约 76 MiB 压缩引擎数据，解压后约 119.5 MiB，另外还有网页与加载脚本。只预装 TeX Live basic；microtype、booktabs 等额外宏包及其依赖在文档实际使用时下载，并复用浏览器缓存，不再整包加载 recommended。建议在桌面浏览器使用；本次未验收手机浏览器。
+首次加载约 42.4 MiB 压缩引擎数据，gzip 解压后约 54.4 MiB（TeX 文件仍按 LZ4 分块存储），另外还有网页与加载脚本。只预装 TeX Live basic；microtype、booktabs 等额外宏包及其依赖在文档实际使用时下载，并复用浏览器缓存，不再整包加载 recommended。建议在桌面浏览器使用；本次未验收手机浏览器。
 
 ## 独立 WASM 引擎模块
 
@@ -22,7 +22,7 @@ node server.mjs
 
 模块提供源码分段、上下文回放、基线核验和二进制显示列表解码；用最新源码完整编译取得最终 PDF。两条排版路径共用已编译的 WebAssembly.Module，但隔离可变内存；相同上下文不重复安装，实时字体每个 Worker 只传一次，PDF/字体/显示列表采用可转移缓冲区。详见 [模块接口与示例](engine/README.md)。
 
-`npm run test:engine` 会将构建包复制到仓库之外，再运行真实 WASM，检查独立加载、字形坐标一致性、增量与全文错误恢复、模块复用和字体传输量。底层仍使用已固定版本的 BusyTeX 二进制，内部其他引擎尚未裁剪；仅暴露 LuaHBLaTeX。压缩引擎与 basic 数据合计仍约 76 MiB，不声称已经生成 LuaHBTeX-only 二进制。
+`npm run test:engine` 会将构建包复制到仓库之外，再运行真实 WASM，检查独立加载、字形坐标一致性、增量与全文错误恢复、模块复用和字体传输量。底层已从 TeX Live 2026 源码构建 LuaHBTeX-only WASM，并把增量 Lua/TeX 服务嵌入 `/rtex`；删除 pdfTeX、XeTeX、BibTeX、MakeIndex、DVI 工具及 ICU/fontconfig 等依赖。WASM 从 31.0 MiB 减至 4.68 MiB；压缩引擎与数据合计从 76.0 MiB 减至 42.4 MiB，下降 44.2%。裁掉 1,587 个资源文件，保留 LuaHBLaTeX 格式和共享字体/映射；可选 AFM 字体度量改为按需下载。源码、工具链固定版本和重建步骤见 [源码构建说明](engine/build/README.md)。
 
 ## 怎么试
 
@@ -59,7 +59,7 @@ Ctrl / Command + Enter 完整编译；编译时再次点击顶栏状态胶囊可
 - 已编译 PDF 作为页面底图，只清除并重绘通过边界校验的区域；缩放重放最新局部结果。前言/宏定义、文件结构、不能隔离的跨文件段落、复杂绘图、并列栏相交区域或不受支持的字体/色彩仍走完整编译。预览与 PDF 分别记录版本，迟到的全文结果不能覆盖更新的预览
 - 不含原项目所有 Rust Session 功能；没有承诺与原生版所有包和环境完全等价
 - 支持多文件项目、图片/PDF 上传和项目 ZIP 导入/导出；尚未接入 BibTeX/Biber
-- 缺失的宏包、文档类和字体由 BusyTeX 自动向 TeX Live 2026 文件服务获取。完整编译后将下载文件保存在浏览器 Cache Storage 中，后续完整编译和增量引擎共用；缓存不可用时仍可联网编译。首次使用未缓存文件需要网络，仍不保证所有宏包兼容
+- 缺失的宏包、文档类和字体由引擎自动向 TeX Live 2026 文件服务获取。完整编译后将下载文件保存在浏览器 Cache Storage 中，后续完整编译和增量引擎共用；缓存不可用时仍可联网编译。首次使用未缓存文件需要网络，仍不保证所有宏包兼容
 - 外部 shell 命令关闭。编译发生在客户端，不提交文档内容；默认文件服务 texlive2026.texlyre.org 会收到所查询的文件名。需要 Python、图形转换器等外部程序的功能仍需单独支持
 - 对需要三遍以上才能收敛的特殊引用，日志会提示；不声称完整文档已经通用收敛
 
@@ -80,6 +80,8 @@ Ctrl / Command + Enter 完整编译；编译时再次点击顶栏状态胶囊可
 后续累计 benchmark 通过 147 项测试：112 次有效局部修改和 17 次未完成公式输入，覆盖连续输入/退格、段落增删与恢复、跨页增长/缩短、公式增高和整块删除/撤销；15 个检查点与独立全文编译核对字形和规则。首段前插入、连同空行删除公式现在也能即时更新；恢复已删除内容会复用原单元，避免误用后续段落的公式计数器。运行 `npm run test:sequence` 复现，结果写入 `qa/live-sequence.json`。Node 本机一次运行中位 5.95 ms、P95 102.88 ms（含局部排版、字形绘制和检查，不含浏览器输入计时器）。浏览器另验证连续输入期间 Live 更新、跨页校准及最新 PDF 内容；详见 QA.md。
 
 2026-10-14 重新使用上述完整 13 页论文与两张原始 PDF 插图验收，改为浏览器实际逐键输入（可信 keydown/beforeinput/input 事件）。定理连续输入 20 键产生 11 次 Live 更新（9.9–17 ms）；跨第 5、6 页的证明连续输入 61 键产生 32 次 Live 更新（16–39 ms），输入期间没有全文编译，停下后约 0.5 秒校准。另验证段落增删、未完成公式保留预览、根式与跨页求和分式恢复；下载 PDF 包含最新修改，测试页已恢复原稿。150 项测试和扩展后的 18 类真实 WASM 重排检查通过，记录见 `qa/full-paper-input.json` 与 QA.md。
+
+2026-10-14 源码裁剪版通过 172 项测试及全文、增量、重排、连续编辑、多文件、模板、PDF 文本与独立分发包回归。新旧引擎三轮对照的字形、规则和坐标签名全部一致；本机冷加载中位数从 689 ms 降至 342 ms，增量服务启动从 993 ms 降至 675 ms。预热局部核心请求为 0.23/0.27 ms，没有加速结论；浏览器实测预热 Live 4.7 ms。数据见 `qa/luahbtex-{before,after,verification}.json` 与 QA.md。
 
 浏览器验证限定桌面 Codex 内置浏览器。中文输入法按用户要求未测试；Safari、Firefox、移动端、物理键盘及更大文档的性能尚未验收。局部绘制要求白色纸面，不能解释的全页绘制仍回退。不能据这些样例声称任意 LaTeX 操作都即时完成。
 
@@ -102,13 +104,13 @@ npm run test:reflow
 npm run test:sequence
 ```
 
-npm run preview 使用本机静态服务器提供 dist。Worker 位于 public/runtime，原项目 Lua/TeX 文件在 public/rtex，压缩 WASM/数据在 public/busytex。Vite 只负责前端构建，不运行原生 TeX。
+npm run preview 使用本机静态服务器提供 dist。Worker 位于 public/runtime，增量 Lua/TeX 源码在 engine/tex（修改后需重建 WASM），压缩 WASM/数据在 public/luahbtex。Vite 只打包现有产物；源码编译步骤见 engine/build/README.md。
 
 Node 回归测试使用 `tests/fixtures/tex-packages.json.gz` 中的少量已下载宏包运行离线检查；这些测试夹具不会打包到网页。浏览器运行时仍按需获取缺失文件，包含 microtype 的 Lua 模块和字体配置。
 
 浏览器输入 benchmark：运行开发服务器后打开 `/tests/browser-input.html`，通过项目 ZIP 导入完整论文及插图；待全文编译完成，展开 `Input benchmark`，点击 `Reset measurements`，再用键盘连续编辑。面板统计真实输入事件、Live 状态、全文请求及 Live Worker 启动次数，`Download trace` 导出记录。恢复基准原稿后可重复同一操作；面板只在该测试页面加载。
 
-`tests/runtime-helpers.mjs` 统一提供 Node 的浏览器 Worker 适配和支持文件读取；支持文件清单复用 `engine/client.js` 的 `TEX_FILES`，添加 Lua/TeX 支持文件时只需更新这一处。
+`tests/runtime-helpers.mjs` 提供 Node 的浏览器 Worker 适配；增量服务直接由 WASM 装载。`tests/engine-binary.test.mjs` 检查二进制哈希、嵌入源码一致性和资源裁剪；`node tests/engine-benchmark.mjs output.json [reference.json]` 测量冷启动、全文和预热局部请求，并逐项比较固定样例的排版签名。
 
 独立模块用 `createEngine({endpoint})` 指定包服务地址；设为 `''` 可关闭远程查找及远程文件缓存恢复。网页在 `main.js` 的 `createEngine` 调用中传入该选项；默认地址仍在 `public/runtime/raw-loader.js` 中。自托管服务必须实现 BusyTeX 的 `GET /<format_id>/<filename>` 接口并使用配套的 TeX Live 2026 文件树，不能直接填写 CTAN 地址。完整编译（包括下载）最多 120 秒，可随时取消。浏览器清理网站数据会删除宏包缓存；只缓存成功下载的文件，不持久化缺失结果。随应用打包的字体不查询不存在的可选替代格式；完整编译遇到的 404 结果在当前会话内传给实时引擎，避免局部编辑重复等待网络。首次完整编译、引擎预热与后续局部更新的耗时不同；修改前言或不支持的内容仍会触发全文排版，局部重排后的精确分页也由全文编译完成。
 

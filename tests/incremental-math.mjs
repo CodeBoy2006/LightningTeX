@@ -1,5 +1,5 @@
 // Real persistent WASM edits, exact full-layout comparison, and real font outlines.
-import {BrowserWorker,loadSupportFiles} from './runtime-helpers.mjs';
+import {BrowserWorker} from './runtime-helpers.mjs';
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -11,9 +11,9 @@ import {replaceUnitRows} from '../core/live-layout.js';
 import {decodeDisplayList,createDisplayListRenderer} from '../render/index.mjs';
 import {parseEngineFont} from '../render/type1-font.mjs';
 import {parseMacros} from '../core/math-preview.js';
-const root=new URL('../',import.meta.url),base=new URL('public/',root),files=await loadSupportFiles(base);
+const root=new URL('../',import.meta.url),base=new URL('public/',root);
 globalThis.Worker=BrowserWorker;
-const fonts=new Map(),bg=new BackgroundEngine({base,files}),live=new LiveEngine({base,files,onFonts:items=>Object.entries(items).forEach(([key,value])=>fonts.set(key,value))});
+const fonts=new Map(),bg=new BackgroundEngine({base}),live=new LiveEngine({base,onFonts:items=>Object.entries(items).forEach(([key,value])=>fonts.set(key,value))});
 const renderer=createDisplayListRenderer({resolveFont:async name=>fonts.get(name),parseFont:(buffer,desc)=>parseEngineFont(buffer,desc,pdfjs)});
 const initial=String.raw`\documentclass{article}
 \usepackage{amsmath,amssymb}

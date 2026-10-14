@@ -939,7 +939,7 @@ export function mountEditor(options={}){
     setLoadProgress({step,done,total,assets}={}){
       const list=$('load-steps');if(!list)return;
       if(!list.children.length){for(let i=0;i<4;i++){const row=document.createElement('div');row.append(Object.assign(document.createElement('span'),{textContent:t('load.'+i)}),document.createElement('small'));list.append(row);}list.after(Object.assign(document.createElement('p'),{className:'load-write',textContent:t('load.write')}));}
-      for(const [i,row] of [...list.children].entries()){row.dataset.state=i<step?'done':i===step?'active':'pending';if(assets&&i<2){const asset=assets[i===0?'busytex.wasm':'texlive-basic.data'];if(asset)row.lastChild.textContent='0 / '+(asset.encodedSize/1048576).toFixed(1)+' MiB';}}
+      for(const [i,row] of [...list.children].entries()){row.dataset.state=i<step?'done':i===step?'active':'pending';if(assets&&i<2){const asset=assets[i===0?'luahbtex.wasm':'texlive-luahbtex.data'];if(asset)row.lastChild.textContent='0 / '+(asset.encodedSize/1048576).toFixed(1)+' MiB';}}
       if(total&&list.children[step])list.children[step].lastChild.textContent=(done/1048576).toFixed(1)+' / '+(total/1048576).toFixed(1)+' MiB';
     },
     setLivePages({canvases,revision,durationMs,reflow=false,regions=[]}){

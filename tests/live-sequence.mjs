@@ -1,7 +1,7 @@
 // Cumulative editing benchmark using the shipped WASM, source routing and real font outlines.
 import assert from 'node:assert/strict';
 import {writeFile} from 'node:fs/promises';
-import {BrowserWorker,loadSupportFiles} from './runtime-helpers.mjs';
+import {BrowserWorker} from './runtime-helpers.mjs';
 import {BackgroundEngine,LiveEngine} from '../engine/client.js';
 import {captureSpans,findLiveEdit,acceptLiveEdit,splitPreamble} from '../core/document.js';
 import {unitContext,compareUnitBaseline,liveUnitEligibility,fontKey} from '../core/capture.js';
@@ -12,8 +12,8 @@ import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {createCanvas} from '@napi-rs/canvas';
 
 globalThis.Worker=BrowserWorker;
-const base=new URL('../public/',import.meta.url),files=await loadSupportFiles(base),fonts=new Map();
-const bg=new BackgroundEngine({base,files}),live=new LiveEngine({base,files,onFonts:items=>Object.entries(items).forEach(([k,v])=>fonts.set(k,v))});
+const base=new URL('../public/',import.meta.url),fonts=new Map();
+const bg=new BackgroundEngine({base}),live=new LiveEngine({base,onFonts:items=>Object.entries(items).forEach(([k,v])=>fonts.set(k,v))});
 const renderer=createDisplayListRenderer({resolveFont:async name=>fonts.get(name),parseFont:(bytes,desc)=>parseEngineFont(bytes,desc,pdfjs)});
 const long='Crossing pages keeps all of this paragraph visible. '.repeat(120);
 const equation=String.raw`\begin{equation}

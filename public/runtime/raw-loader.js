@@ -1,6 +1,6 @@
-/* Raw persistent BusyTeX runtime. Classic Worker script, no pipeline resets. */
+/* Persistent LuaHBTeX runtime. Classic Worker script, no pipeline resets. */
 importScripts('./tex-packages.js');
-self.loadRtexEngine = async function ({base = '../busytex/', module, endpoint, print = console.log, printErr = console.error, env = {}} = {}) {
+self.loadRtexEngine = async function ({base = '../luahbtex/', module, endpoint, print = console.log, printErr = console.error, env = {}} = {}) {
   base = new URL(base, self.location.href).href;
   const started=performance.now();
   async function read(url) {
@@ -33,35 +33,36 @@ self.loadRtexEngine = async function ({base = '../busytex/', module, endpoint, p
     return output.buffer;
   }
   // Sequential assembly bounds peak memory to decoded assets plus one 16MiB part.
-  if(!module)module=await WebAssembly.compile(await unpack('busytex.wasm'));
-  let dataBytes=await unpack('texlive-basic.data');
-  importScripts(base + 'busytex.js');
-  const cfg = { noInitialRun: true, thisProgram: '/bin/busytex', print, printErr,
+  if(!module)module=await WebAssembly.compile(await unpack('luahbtex.wasm'));
+  let dataBytes=await unpack('texlive-luahbtex.data');
+  importScripts(base + 'luahbtex.js');
+  const cfg = { noInitialRun: true, thisProgram: '/bin/luahbtex', print, printErr,
     instantiateWasm(imports,receive){receive(new WebAssembly.Instance(module,imports),module);},
     locateFile: p => base.startsWith('file:') ? decodeURIComponent(new URL(p, base).pathname) : base + p,
     preRun: [m => { self.LZ4=m.LZ4; Object.assign(m.ENV, {
       TEXMFDIST:'/texlive/texmf-dist', TEXMFVAR:'/texlive/texmf-dist/texmf-var',
       TEXMFCACHE:'/texlive/texmf-dist/texmf-var', TEXMFCNF:'/texlive/texmf-dist/web2c',
-      FONTCONFIG_PATH:'/texlive', FONTCONFIG_FILE:'/texlive/fonts.conf', ICU_DATA:'/texlive/',
       TEXLIVE_REMOTE_ENDPOINT:endpoint??'https://texlive2026.texlyre.org', ...env
     }); }]
   };
   cfg.getPreloadedPackage=(name,size)=>{
-      if(!name.endsWith('texlive-basic.data')||!dataBytes||dataBytes.byteLength!==size)throw Error('Unexpected data package '+name);
+      if(!name.endsWith('texlive-luahbtex.data')||!dataBytes||dataBytes.byteLength!==size)throw Error('Unexpected data package '+name);
       const bytes=dataBytes;dataBytes=null;return bytes;
   };
   // The official data loader captures this object and installs a preRun hook.
-  self.BusytexPipeline = cfg;
-  importScripts(base + 'texlive-basic.js');
-  const m = await busytex(cfg);
+  self.TeXData = cfg;
+  importScripts(base + 'texlive-luahbtex.js');
+  const m = await luahbtex(cfg);
   delete m.instantiateWasm;delete m.getPreloadedPackage;m.compiledModule=module;
   print('Runtime loaded in '+Math.round(performance.now()-started)+' ms');
+  // Kpathsea resolves the executable inside the virtual filesystem.
+  writeEngineFile(m.FS,'/bin/luahbtex',new Uint8Array());
   m.FS.mkdirTree('/project'); m.FS.chdir('/project');
   await restoreTexPackages(m,printErr);
   registerBundledFontMisses(m);
   return m;
 };
-self.rtexLuaArgs = file => ['luahblatex', '--no-shell-escape', '--interaction=nonstopmode', '--halt-on-error', '--fmt', '/texlive/texmf-dist/texmf-var/web2c/luahbtex/luahblatex.fmt', '--nosocket', file];
+self.rtexLuaArgs = file => ['--no-shell-escape', '--interaction=nonstopmode', '--halt-on-error', '--fmt', '/texlive/texmf-dist/texmf-var/web2c/luahbtex/luahblatex.fmt', '--nosocket', file];
 self.writeEngineFile = (fs, path, data) => {
   fs.mkdirTree(path.slice(0, path.lastIndexOf('/')));
   fs.writeFile(path, data);

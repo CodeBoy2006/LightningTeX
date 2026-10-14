@@ -1,9 +1,7 @@
 import {splitPreamble,safeProjectPath} from '../core/document.js';
 const encoder=new TextEncoder(),decoder=new TextDecoder();
-export const TEX_FILES=['rtex-json.lua','rtex-dl.lua','rtex-dl-bin.lua','rtex-capture.lua','rtex-serve.lua','rtex-pic.lua','latex/rtex-capture.sty','latex/rtex-pic.tex','latex/rtex-serve-patches.tex'];
-export async function loadSupport(base){return Object.fromEntries(await Promise.all(TEX_FILES.map(async p=>{const r=await fetch(new URL('rtex/'+p,base));if(!r.ok)throw Error(`Missing rtex support: ${p}`);return [p,await r.text()]})))}
 export class BackgroundEngine {
- constructor({base,files,onLog=()=>{},runtime={},endpoint}){Object.assign(this,{base,files,onLog,runtime,endpoint});this.next=0;this.pending=new Map();this.generation=0;this.ready=null;this.worker=null;this.synced=new Map();this.root=null}
+ constructor({base,onLog=()=>{},runtime={},endpoint}){Object.assign(this,{base,onLog,runtime,endpoint});this.next=0;this.pending=new Map();this.generation=0;this.ready=null;this.worker=null;this.synced=new Map();this.root=null}
  start(){
   if(this.ready)return this.ready;
   const generation=++this.generation;
@@ -25,7 +23,7 @@ export class BackgroundEngine {
    };
    worker.onerror=e=>{if(current())this.stop(Error(e.message||'TeX worker failed'))};
    // Defer postMessage until this.ready has been assigned, including sync mock failures.
-   queueMicrotask(()=>{if(current())try{worker.postMessage({type:'init',base:new URL('busytex/',this.base).href,files:this.files,module:this.runtime.module,endpoint:this.endpoint})}catch(error){this.stop(error)}});
+   queueMicrotask(()=>{if(current())try{worker.postMessage({type:'init',base:new URL('luahbtex/',this.base).href,module:this.runtime.module,endpoint:this.endpoint})}catch(error){this.stop(error)}});
   });
   return this.ready;
  }
@@ -62,7 +60,7 @@ export class BackgroundEngine {
  }
 }
 export class LiveEngine {
- constructor({base,files,onLog=()=>{},onFonts=()=>{},runtime={},endpoint}){Object.assign(this,{base,files,onLog,onFonts,runtime,endpoint});this.queue=Promise.resolve();this.req=0;this.frames=[];this.readers=[];this.buffer=new Uint8Array();this.generation=0;this.worker=null;this.failure=Error('Live engine not started')}
+ constructor({base,onLog=()=>{},onFonts=()=>{},runtime={},endpoint}){Object.assign(this,{base,onLog,onFonts,runtime,endpoint});this.queue=Promise.resolve();this.req=0;this.frames=[];this.readers=[];this.buffer=new Uint8Array();this.generation=0;this.worker=null;this.failure=Error('Live engine not started')}
  current(generation){if(generation!==this.generation||!this.worker)throw this.failure||Error('Live engine restarted')}
  // files: preamble dependencies ({path,data,rev}) placed beside the serve document.
  async start(preamble,aux,files=[],packageMisses=[]){
@@ -74,7 +72,7 @@ export class LiveEngine {
    const worker=this.worker=new Worker(new URL('runtime/live-worker.js',this.base));this.failure=null;
    worker.onmessage=({data})=>{if(generation!==this.generation||worker!==this.worker)return;try{if(data.log)this.onLog(data.log);if(data.fonts)this.onFonts(data.fonts);if(data.bytes)this.feed(data.bytes,generation);if(data.error)this.fail(Error(data.error),generation);if(data.done)this.fail(Error('Live engine ended'),generation)}catch(error){this.fail(error,generation)}};
    worker.onerror=e=>this.fail(Error(e.message||'Live worker failed'),generation);
-   worker.postMessage({base:new URL('busytex/',this.base).href,files:this.files,preamble,aux,mailbox,packageMisses,module:this.runtime.module,endpoint:this.endpoint,project:files.map(({path,data})=>({path,data}))});
+   worker.postMessage({base:new URL('luahbtex/',this.base).href,preamble,aux,mailbox,packageMisses,module:this.runtime.module,endpoint:this.endpoint,project:files.map(({path,data})=>({path,data}))});
    this.ready=this.read(120000,generation).then(ready=>{
     this.current(generation);
     if(ready.header.op!=='ready')throw Error('Live engine did not become ready');return ready.header;

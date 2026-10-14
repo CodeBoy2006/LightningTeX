@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {BrowserWorker,loadSupportFiles} from './runtime-helpers.mjs';
+import {BrowserWorker} from './runtime-helpers.mjs';
 import {BackgroundEngine} from '../engine/client.js';
 
 test('Type 1 descriptors resolve only requested fonts and cache hits and misses', {timeout:60000}, async()=>{
- const base=new URL('../public/',import.meta.url),files=await loadSupportFiles(base);
+ const base=new URL('../public/',import.meta.url);
  const priorWorker=globalThis.Worker;
  globalThis.Worker=BrowserWorker;
- const engine=new BackgroundEngine({base,files});
+ const engine=new BackgroundEngine({base});
  try {
   const result=await engine.compile(String.raw`\documentclass{article}
 \begin{document}

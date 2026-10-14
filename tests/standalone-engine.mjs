@@ -24,12 +24,10 @@ try {
   await fs.cp(new URL('../dist-engine/',import.meta.url),directory,{recursive:true});
   const pkg=JSON.parse(await fs.readFile(new URL('package.json',base),'utf8'));
   assert.equal(pkg.dependencies,undefined);
-  await assert.rejects(fs.access(new URL('rtex/rtex-bg.lua',base)));
+  await assert.rejects(fs.access(new URL('rtex/',base)));
+  await assert.rejects(fs.access(new URL('busytex/',base)));
   globalThis.Worker=EngineWorker;
-  globalThis.fetch=async url=>{
-    assert.ok(String(url).startsWith(base.href),'support fetches must stay inside the package');
-    return new Response(await fs.readFile(new URL(url)));
-  };
+  globalThis.fetch=()=>{throw Error('The embedded service must not fetch host support files');};
   const {createEngine,splitPreamble,captureSpans,unitContext,compareUnitBaseline,decodeDisplayList,replaceUnitRows}=await import(new URL('index.js',base));
   engine=await createEngine({endpoint:'',onLog:text=>logs.push(text)});
   const source=String.raw`\documentclass{article}
@@ -43,7 +41,7 @@ Another paragraph stays here.
   assert.ok(engine.background.runtime.module instanceof WebAssembly.Module);
   const beforeStart=logs.length;
   await engine.live.start(splitPreamble(source).preamble+'\n\\RequirePackage{luatexbase}\n',full.aux,[],full.packageMisses);
-  assert.ok(!logs.slice(beforeStart).some(text=>text.includes('busytex.wasm')),'live startup must skip WASM fetching/decompression');
+  assert.ok(!logs.slice(beforeStart).some(text=>text.includes('luahbtex.wasm')),'live startup must skip WASM fetching/decompression');
   assert.equal(engine.live.runtime.module,engine.background.runtime.module);
   const generation=engine.live.generation,span=captureSpans(source,full.capture)[0],ctx=unitContext(full.capture,span.unit);
   const proof=decodeDisplayList((await engine.live.compile(ctx,span.original,span.unit.advanced||{})).binary);

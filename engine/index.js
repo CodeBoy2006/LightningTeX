@@ -1,11 +1,11 @@
-import {BackgroundEngine,LiveEngine,loadSupport} from './client.js';
+import {BackgroundEngine,LiveEngine} from './client.js';
 
 // In the distribution, index.js and the runtime/data directories live together.
 export async function createEngine({base='./',endpoint,onLog=()=>{},onLiveLog=onLog,onFonts=()=>{}}={}){
   base=new URL(base,import.meta.url);
-  const files=await loadSupport(base),runtime={};
-  const background=new BackgroundEngine({base,files,runtime,endpoint,onLog});
-  const live=new LiveEngine({base,files,runtime,endpoint,onLog:onLiveLog,onFonts});
+  const runtime={};
+  const background=new BackgroundEngine({base,runtime,endpoint,onLog});
+  const live=new LiveEngine({base,runtime,endpoint,onLog:onLiveLog,onFonts});
   return {background,live,dispose(){background.stop();live.stop();runtime.module=null;}};
 }
 

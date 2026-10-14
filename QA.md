@@ -171,3 +171,34 @@
 - Real runtime smoke, **26 incremental math edits** with exact final layout, **18 reflow/full-ink comparisons**, **112 sequential edits plus 17 incomplete inputs and 15 full checkpoints**, multi-file project tests and the production build passed. Incremental suites kept one initialization full compile and zero live restarts during local edits. Historical generated timing/PDF artifacts were restored after rerunning; no cross-run speedup claim is made. The existing >500 kB application bundle advisory remains.
 - Codex in-app browser at `127.0.0.1:5175/ui/index.html` loaded the actual module-backed app, compiled the default math document to one PDF page, and rendered a prose replacement through Live. First proof/font work displayed 422 ms; the warm reverse replacement displayed **6.1 ms**. Original source restored. Screenshot: `qa/standalone-engine-browser.png`.
 - No new dependency, C/WASM binary rewrite, shared mutable TeX memory or pagination engine. The module retains two isolated TeX instances so full compilation cannot block incremental work. Other browsers, mobile, native Node API, a repeated 13-page paper run and memory profiling were not covered. Full PDF export still requires full compilation; provisional pagination and numbering retain existing limits.
+
+## LuaHBTeX-only source build and resource pruning — 2026-10-14
+
+- Built LuaHBTeX 1.24.0 from the TeX Live 2026 release source with Emscripten 5.0.4 and `-Oz`, using the pinned TeXlyre build rules plus `engine/build/luahbtex.mk`. The direct C entry links LuaHBTeX and required libraries, excluding pdfTeX, XeTeX, BibTeX, MakeIndex, DVI applets, ICU, fontconfig, TECkit and FreeType. The strict final link rejects unresolved symbols. The incremental Lua/TeX service is embedded at `/rtex`; the host no longer fetches or copies support files. Existing two-instance isolation is retained.
+- Pruned **1,587 resource files / 60,013,094 bytes**; retained 5,597 files / 96,831,353 bytes before LZ4 packaging. Kept the matching LuaHBLaTeX format, shared PDF maps, OTF/TFM/PFB fonts and generic initialization macros. Removed other formats/macros, unused tool resources, ICU/fontconfig data, Metafont sources, logs and AFM metrics; regenerated `ls-R`. AFM metrics are optional remote downloads now. Both compiler and packager use 16 KiB LZ4 chunks.
+
+| Asset bytes | Previous | LuaHBTeX-only | Reduction |
+| --- | ---: | ---: | ---: |
+| Raw WASM | 32,507,525 | 4,902,183 | 84.9% |
+| Gzip WASM | 13,104,205 | 1,922,759 | 85.3% |
+| Gzip TeX data | 66,583,309 | 42,574,731 | 36.1% |
+| Combined encoded assets | 79,687,514 | 44,497,490 | 44.2% |
+
+- Three sequential fresh Worker pairs per version used identical sources on the same host. Old assets/client were recovered from commit `17b307c`; current code used the new source build. **All exact layout signatures match**, including font identity, glyph/rule positions, dimensions, line geometry and page count for OpenType/math/accents, Type 1 with microtype, a six-page document, and 30 alternating local requests per round. Raw records: `qa/luahbtex-before.json` and `qa/luahbtex-after.json`.
+
+| Node benchmark, median of three rounds | Previous | LuaHBTeX-only |
+| --- | ---: | ---: |
+| Cold Worker load | 689 ms | 342 ms |
+| Persistent service startup | 993 ms | 675 ms |
+| Initial full compilation | 1,209 ms | 1,106 ms |
+| OpenType full compilation | 564 ms | 514 ms |
+| Type 1/microtype full compilation | 1,184 ms | 1,144 ms |
+| Six-page full compilation | 1,347 ms | 1,252 ms |
+| Warm local request | 0.23 ms | 0.27 ms |
+
+- These are local WASM/IPC observations, excluding browser input timers, network and rendering. The warm request did not improve; the measured gains are chiefly transfer size and startup. No memory or universal latency claim is made.
+- **172 unit/DOM/renderer tests**, runtime/error recovery, **26 incremental edits** with exact final coordinates, **18 reflow comparisons**, **112 sequential edits / 17 incomplete inputs / 15 full checkpoints**, multi-file projects and formula previews, all templates, PDF text extraction/aux/TOC checks, and production build passed. No incremental engine restart during the local edit suites. The existing application bundle-size advisory remains. `qa/luahbtex-verification.json` preserves this run; historical QA outputs were restored.
+- The relocated standalone package passed with no external `/rtex` directory, no BusyTeX asset directory, no host support-file fetches and no optional-package fixtures. Full PDF, shared compiled module, eight edits with zero repeated font transport, exact layout, error recovery and unversioned nested project inputs all pass. API entry is 60.72 kB and has no runtime npm dependency.
+- Codex in-app browser at `127.0.0.1:5176/ui/index.html` rendered the default document to one page, performed prose Live updates (191 ms first proof/fonts, **4.7 ms warm**), and restored the original source. No console warnings/errors were observed. Screenshot: `qa/luahbtex-browser.jpg`. Test tab/server closed.
+- Build recipe, source and toolchain hashes, output hashes and embedded-file hashes are retained in `engine/build/README.md` and `public/luahbtex/build-info.json`. The earlier temporary source build tree, raw link map and logs were cleared during the session; the recorded map hash remains. Resource extraction/pruning, asset hashes, runtime checks and before/after benchmarks were rerun from retained assets. The final source-path move is verified by identical embedded hashes, not a second full C compilation.
+- Limits: optional AFM-dependent documents may now require network/cache; no exhaustive package/font compatibility check, Safari/Firefox/mobile validation, physical input, 13-page paper rerun, memory profile or PDF pixel-equivalence test. No new runtime dependency, generic build framework or pagination engine.

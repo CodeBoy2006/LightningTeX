@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "assets": {
+    "luahbtex.wasm": {
+      "encoding": "gzip",
+      "decodedSize": 4902183,
+      "encodedSize": 1922759,
+      "parts": [
+        {
+          "file": "luahbtex.wasm.gz.part000",
+          "size": 1922759,
+          "sha256": "fdd661f1d9af74fe63947c1de80b4e1e5cf466cd656ea01d92f78cf2296f450b"
+        }
+      ]
+    },
+    "texlive-luahbtex.data": {
+      "encoding": "gzip",
+      "decodedSize": 52123184,
+      "encodedSize": 42574731,
+      "parts": [
+        {
+          "file": "texlive-luahbtex.data.gz.part000",
+          "size": 16777216,
+          "sha256": "faa3cfa33bbe3cd422d7205b13bf136bafcc5dd8b1612532a8a3ddfebcf935cd"
+        },
+        {
+          "file": "texlive-luahbtex.data.gz.part001",
+          "size": 16777216,
+          "sha256": "a6c12500c921676ad4a5d7590202cc33adbf17392f02c4fef79687d67d26cbc1"
+        },
+        {
+          "file": "texlive-luahbtex.data.gz.part002",
+          "size": 9020299,
+          "sha256": "92c886d8d02c98a6477325d02cb2841321ebdd72e91898d308209dc5ddad1b05"
+        }
+      ]
+    }
+  }
+}

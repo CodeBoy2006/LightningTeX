@@ -1,0 +1,1089 @@
+{
+  "date": "2026-10-14",
+  "host": "macOS ARM64; Node v24.21.0; Codex in-app browser",
+  "unitTests": 172,
+  "resources": {
+    "keptFiles": 5597,
+    "keptBytes": 96831353,
+    "removedFiles": 1587,
+    "removedBytes": 60013094
+  },
+  "sizes": {
+    "before": {
+      "wasm": 32507525,
+      "wasmGzip": 13104205,
+      "data": 92785062,
+      "dataGzip": 66583309,
+      "totalEncoded": 79687514
+    },
+    "after": {
+      "wasm": 4902183,
+      "wasmGzip": 1922759,
+      "data": 52123184,
+      "dataGzip": 42574731,
+      "totalEncoded": 44497490
+    }
+  },
+  "incremental": {
+    "runtime": "actual WASM, PDF.js Type1 conversion, OpenType outline renderer",
+    "localEdits": 26,
+    "fullCompilesDuringEdits": 1,
+    "engineRestartsDuringEdits": 0,
+    "exactFinalLayout": true,
+    "firstEditMs": 204.33579199999986,
+    "warmMedianMs": 4.68729200000007,
+    "times": [
+      204.33579199999986,
+      10.035875000000033,
+      5.29970800000001,
+      5.629333000000315,
+      4.961499999999887,
+      6.5299589999999625,
+      5.898000000000138,
+      4.62520799999993,
+      4.968249999999898,
+      5.447500000000218,
+      4.7979999999997744,
+      4.740542000000005,
+      4.991250000000036,
+      4.348332999999911,
+      4.487582999999631,
+      6.416874999999891,
+      4.782041999999819,
+      4.68729200000007,
+      4.757207999999991,
+      4.2235420000001795,
+      3.9866659999997864,
+      4.073124999999891,
+      3.7834579999998823,
+      4.355082999999922,
+      3.908375000000433,
+      4.096750000000156
+    ]
+  },
+  "reflow": {
+    "fullCompilesDuringLocalEdits": 1,
+    "restarts": 0,
+    "independentFullComparisons": 18,
+    "results": [
+      {
+        "name": "wrap",
+        "oldRows": 1,
+        "newRows": 4,
+        "ms": 98
+      },
+      {
+        "name": "split",
+        "oldRows": 1,
+        "newRows": 2,
+        "ms": 5
+      },
+      {
+        "name": "delete",
+        "oldRows": 1,
+        "newRows": 0,
+        "ms": 4
+      },
+      {
+        "name": "join",
+        "oldRows": 1,
+        "newRows": 2,
+        "ms": 10
+      },
+      {
+        "name": "taller math",
+        "oldRows": 2,
+        "newRows": 2,
+        "ms": 21
+      },
+      {
+        "name": "list item",
+        "oldRows": 2,
+        "newRows": 3,
+        "ms": 4
+      },
+      {
+        "name": "numbered item",
+        "oldRows": 2,
+        "newRows": 3,
+        "ms": 6
+      },
+      {
+        "name": "heading",
+        "oldRows": 1,
+        "newRows": 1,
+        "ms": 7
+      },
+      {
+        "name": "quotation",
+        "oldRows": 1,
+        "newRows": 1,
+        "ms": 3
+      },
+      {
+        "name": "included file",
+        "oldRows": 1,
+        "newRows": 1,
+        "ms": 3
+      },
+      {
+        "name": "cross-page",
+        "oldRows": 86,
+        "newRows": 103,
+        "ms": 235
+      },
+      {
+        "name": "theorem text",
+        "oldRows": 3,
+        "newRows": 3,
+        "ms": 14
+      },
+      {
+        "name": "theorem math",
+        "oldRows": 3,
+        "newRows": 3,
+        "ms": 29
+      },
+      {
+        "name": "theorem list",
+        "oldRows": 3,
+        "newRows": 4,
+        "ms": 9
+      },
+      {
+        "name": "lemma",
+        "oldRows": 1,
+        "newRows": 1,
+        "ms": 4
+      },
+      {
+        "name": "proposition",
+        "oldRows": 1,
+        "newRows": 1,
+        "ms": 4
+      },
+      {
+        "name": "corollary",
+        "oldRows": 1,
+        "newRows": 1,
+        "ms": 4
+      },
+      {
+        "name": "remark",
+        "oldRows": 1,
+        "newRows": 1,
+        "ms": 9
+      }
+    ]
+  },
+  "sequence": {
+    "runtime": "actual WASM and font outlines; sequential requests, no browser input timer",
+    "initialPages": 2,
+    "localEdits": 112,
+    "incompleteInputsRetained": 17,
+    "fullCompilesDuringLocalEdits": 1,
+    "restarts": 0,
+    "independentFullComparisons": 15,
+    "medianMs": 4.97,
+    "p95Ms": 99.14,
+    "maxMs": 242.41,
+    "results": [
+      {
+        "name": "typing",
+        "ms": 206.21,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 6.09,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 6.69,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 5.61,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 5.25,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.75,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.95,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.49,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.65,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.66,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.7,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.62,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 5.31,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.8,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.34,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.43,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.52,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.67,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.82,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.56,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 5.18,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.7,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.57,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.45,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.64,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.52,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.49,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.45,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "typing",
+        "ms": 4.64,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.81,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.8,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.39,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.52,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.68,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.91,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 5.86,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 5.48,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.73,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.46,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.77,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.9,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.47,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.8,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.62,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.7,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.79,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.64,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.46,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.92,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.97,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.86,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.74,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.53,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.97,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 5.08,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.86,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.97,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.81,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.65,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.62,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 5.17,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.86,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.67,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.96,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 5.09,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.85,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 4.89,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 5.04,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 5.06,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 5.05,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 5.36,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 5.1,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 5.32,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 5.14,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 5.2,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 5.07,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "typing",
+        "ms": 5.18,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 5.26,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 5.12,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 5.14,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 5.09,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 5.11,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 5,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 4.93,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 5.2,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 5.08,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 5.1,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 4.59,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 4.93,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 5.42,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 5.62,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 5.15,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 5.48,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 4.92,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 5.01,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 5.35,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "backspace",
+        "ms": 5.2,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "split",
+        "ms": 5.18,
+        "pages": 1,
+        "rows": 3
+      },
+      {
+        "name": "join",
+        "ms": 5.52,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "insert between paragraphs",
+        "ms": 10.21,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "delete inserted paragraph",
+        "ms": 8.29,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "join with trailing spaces",
+        "ms": 11.58,
+        "pages": 1,
+        "rows": 3
+      },
+      {
+        "name": "formula typing",
+        "ms": 23.51,
+        "pages": 1,
+        "rows": 3
+      },
+      {
+        "name": "grow equation",
+        "ms": 23.41,
+        "pages": 1,
+        "rows": 2
+      },
+      {
+        "name": "grow across pages",
+        "ms": 242.41,
+        "pages": 2,
+        "rows": 92
+      },
+      {
+        "name": "shrink across pages",
+        "ms": 108.46,
+        "pages": 2,
+        "rows": 13
+      },
+      {
+        "name": "delete cross-page paragraph",
+        "ms": 94.15,
+        "pages": 2,
+        "rows": 0
+      },
+      {
+        "name": "restore cross-page paragraph",
+        "ms": 204.88,
+        "pages": 2,
+        "rows": 80
+      },
+      {
+        "name": "edit later paragraph",
+        "ms": 99.14,
+        "pages": 1,
+        "rows": 1
+      },
+      {
+        "name": "insert before first paragraph",
+        "ms": 96.81,
+        "pages": 1,
+        "rows": 4
+      },
+      {
+        "name": "delete whole equation with separators",
+        "ms": 122.36,
+        "pages": 1,
+        "rows": 0
+      },
+      {
+        "name": "restore whole equation",
+        "ms": 97.64,
+        "pages": 1,
+        "rows": 2
+      }
+    ]
+  },
+  "project": {
+    "runtime": "actual browser Worker scripts and LuaHBTeX WASM in Node worker_threads (not browser UI)",
+    "multiFile": {
+      "pages": 1,
+      "passes": 2,
+      "units": 8,
+      "ms": 1768
+    },
+    "errorAttribution": [
+      {
+        "severity": "error",
+        "message": "Undefined control sequence \\nosuchmacro",
+        "file": "sections/method.tex",
+        "line": 3
+      }
+    ],
+    "formulaPreview": {
+      "typeset": 6,
+      "engineRestarts": 0,
+      "firstMs": 129.46,
+      "medianMs": 0.65,
+      "maxMs": 129.46
+    }
+  },
+  "runtime": {
+    "runtime": "Node worker running identical browser WASM worker scripts",
+    "results": [
+      {
+        "id": 1,
+        "type": "result",
+        "pdf": 5055,
+        "pages": 1,
+        "durationMs": 1107.380458
+      },
+      {
+        "id": 2,
+        "type": "result",
+        "pdf": 42775,
+        "pages": 1,
+        "durationMs": 1420.67375
+      },
+      {
+        "id": 3,
+        "type": "error",
+        "error": "msy/m/n on input line 1.\nLaTeX Font Info:    ... okay on input line 1.\nLaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 1.\nLaTeX Font Info:    ... okay on input line 1.\nLaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 1.\nLaTeX Font Info:    ... okay on input line 1.\nLaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 1.\nLaTeX Font Info:    ... okay on input line 1.\nLaTeX Font Info:    Checking defaults for TU/lmr/m/n on input line 1.\nLaTeX Font Info:    ... okay on input line 1.\nLaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 1.\nLaTeX Font Info:    ... okay on input line 1.\nLaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 1.\nLaTeX Font Info:    ... okay on input line 1.\nInserting `rtex-capture' in `pre_shipout_filter'.\n! Undefined control sequence.\nl.1 ...s{article}\\begin{document}\\undefinedcommand\n                                                  \\end{document}\n\nHere is how much of LuaTeX's memory you used:\n 1250 strings out of 476075\n 100000,460012 words of node,token memory allocated\n 375 words of node memory still in use:\n   2 hlist, 1 rule, 1 dir, 3 kern, 1 glyph, 3 attribute, 48 glue_spec, 3 attribute_list, 1 write nodes\n   avail lists: 2:9,3:2,4:1,5:3,7:2,9:3\n 23771 multiletter control sequences out of 65536+600000\n 15 fonts using 510647 bytes\n 56i,0n,64p,217b,40s stack positions out of 10000i,1000n,20000p,200000b,200000s\n!  ==> Fatal error occurred, no output PDF file produced!\n"
+      },
+      {
+        "id": 4,
+        "type": "result",
+        "pdf": 3887,
+        "pages": 1,
+        "durationMs": 884.8200830000005
+      }
+    ]
+  },
+  "templates": {
+    "runtime": "actual browser Worker scripts and WASM in Node worker_threads (not browser UI)",
+    "results": [
+      {
+        "sample": "article",
+        "pages": 1,
+        "bytes": 54844,
+        "durationMs": 1690.696375
+      },
+      {
+        "live": {
+          "edits": 20,
+          "baseline": {
+            "ok": true,
+            "rows": 2,
+            "glyphs": 106
+          },
+          "medianMs": 0.6191249999997126,
+          "minMs": 0.5063749999999345,
+          "maxMs": 1.4516249999996944,
+          "errorRecovery": true
+        }
+      },
+      {
+        "sample": "notes",
+        "pages": 1,
+        "bytes": 71230,
+        "durationMs": 1271.3986249999998
+      },
+      {
+        "sample": "report",
+        "pages": 1,
+        "bytes": 74182,
+        "durationMs": 1218.4712909999998
+      },
+      {
+        "sample": "blank",
+        "empty": true
+      }
+    ]
+  },
+  "pdfPreview": {
+    "runtime": "actual WASM and PDF.js in Node; not browser latency",
+    "results": [
+      {
+        "name": "initial math and references",
+        "passes": 2,
+        "pages": 1,
+        "durationMs": 1267.296667,
+        "text": "Inline   x 2   = 81 .  1 2  +   √ 4 = 42 . y   = 10   (1) See Equation 1.  a   = 20 ,   (2)  b   = 30 .   (3) 1"
+      },
+      {
+        "name": "inline math edit",
+        "passes": 1,
+        "pages": 1,
+        "durationMs": 540.8630840000001,
+        "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 42 . y   = 10   (1) See Equation 1.  a   = 20 ,   (2)  b   = 30 .   (3) 1"
+      },
+      {
+        "name": "display fraction and radical edit",
+        "passes": 1,
+        "pages": 1,
+        "durationMs": 547.2943339999997,
+        "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 43 . y   = 10   (1) See Equation 1.  a   = 20 ,   (2)  b   = 30 .   (3) 1"
+      },
+      {
+        "name": "numbered equation edit",
+        "passes": 1,
+        "pages": 1,
+        "durationMs": 529.2934169999999,
+        "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 43 . y   = 11   (1) See Equation 1.  a   = 20 ,   (2)  b   = 30 .   (3) 1"
+      },
+      {
+        "name": "align edit",
+        "passes": 1,
+        "pages": 1,
+        "durationMs": 532.1229579999999,
+        "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 43 . y   = 11   (1) See Equation 1.  a   = 20 ,   (2)  b   = 31 .   (3) 1"
+      },
+      {
+        "name": "removed label cannot survive in cached aux",
+        "passes": 2,
+        "pages": 1,
+        "durationMs": 1078.8174999999997,
+        "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 43 . y   = 11   (1) See Equation   ?? .  a   = 20 ,   (2)  b   = 31 .   (3) 1"
+      },
+      {
+        "name": "restored label converges",
+        "passes": 2,
+        "pages": 1,
+        "durationMs": 1090.6163749999996,
+        "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 43 . y   = 11   (1) See Equation 1.  a   = 20 ,   (2)  b   = 31 .   (3) 1"
+      },
+      {
+        "name": "unfinished math recovery preserves last good aux",
+        "passes": 1,
+        "pages": 1,
+        "durationMs": 537.704667,
+        "text": "Inline   x 2   = 83 .  1 2  +   √ 4 = 43 . y   = 11   (1) See Equation 1.  a   = 20 ,   (2)  b   = 31 .   (3) 1"
+      },
+      {
+        "name": "preamble changes invalidate cached aux",
+        "passes": 2,
+        "pages": 1,
+        "durationMs": 1176.2762079999993,
+        "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 43 . y   = 11   (1) See Equation 1.  a   = 20 ,   (2)  b   = 31 .   (3) 1"
+      },
+      {
+        "name": "table of contents",
+        "passes": 2,
+        "pages": 1,
+        "durationMs": 1009.9532499999987,
+        "text": "Contents  1   First heading   1  1   First heading  Some prose. 1"
+      },
+      {
+        "name": "unchanged aux cannot suppress TOC regeneration",
+        "passes": 2,
+        "pages": 1,
+        "durationMs": 1304.7352919999994,
+        "text": "Contents  1   First heading   1  1   First heading  Revised prose. 1"
+      }
+    ]
+  },
+  "standalone": {
+    "relocated": true,
+    "sourceDependencies": 0,
+    "wasmModuleReused": true,
+    "warmEdits": 8,
+    "warmFontBytes": 0,
+    "exactEditedLayout": true,
+    "liveRecovery": true,
+    "fullRecovery": true,
+    "projectWithoutRevisions": true,
+    "timesMs": [
+      0.8825830000000678,
+      0.4635000000002947,
+      0.49949999999989814,
+      0.2958330000001297,
+      0.3239590000002863,
+      0.32666699999981574,
+      0.2795000000000982,
+      0.299916999999823
+    ]
+  },
+  "browser": {
+    "url": "http://127.0.0.1:5176/ui/index.html",
+    "pages": 1,
+    "fullSeconds": 5.14,
+    "firstLiveMs": 191,
+    "warmLiveMs": 4.7,
+    "consoleErrors": 0,
+    "sourceRestored": true,
+    "screenshot": "luahbtex-browser.jpg"
+  },
+  "checks": {
+    "sourceCompile": true,
+    "strictLink": true,
+    "embeddedHashes": true,
+    "decodedAssetHashes": true,
+    "prunedResourceInventory": true,
+    "exactBeforeAfterLayout": true,
+    "appBuild": true
+  },
+  "limitations": [
+    "Timing is local; Node benchmark excludes browser input scheduling and rendering.",
+    "Optional AFM metrics require remote lookup when not cached.",
+    "No Safari, Firefox, mobile, physical input, 13-page paper rerun or memory profiling.",
+    "The source build completed earlier in this task; its temporary build tree and raw link map/logs were subsequently cleared. Input/output/map hashes and build recipe are retained; runtime checks and before/after benchmarks were repeated from committed assets."
+  ]
+}

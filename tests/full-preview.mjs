@@ -1,13 +1,13 @@
 // Actual WASM -> PDF.js regression, separate from browser UI acceptance.
-import {BrowserWorker,loadSupportFiles} from './runtime-helpers.mjs';
+import {BrowserWorker} from './runtime-helpers.mjs';
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {getDocument,PDFWorker} from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {BackgroundEngine} from '../engine/client.js';
 
-const root=new URL('../',import.meta.url),base=new URL('public/',root),files=await loadSupportFiles(base);
+const root=new URL('../',import.meta.url),base=new URL('public/',root);
 globalThis.Worker=BrowserWorker;
-const engine=new BackgroundEngine({base,files}),worker=new PDFWorker(),results=[];
+const engine=new BackgroundEngine({base}),worker=new PDFWorker(),results=[];
 const document=body=>String.raw`\documentclass{article}
 \usepackage{amsmath}
 \begin{document}

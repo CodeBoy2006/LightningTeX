@@ -1,5 +1,5 @@
 // Real WASM: multi-file projects, error attribution, and standalone formula previews in the persistent engine.
-import {BrowserWorker,loadSupportFiles} from './runtime-helpers.mjs';
+import {BrowserWorker} from './runtime-helpers.mjs';
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {BackgroundEngine,LiveEngine} from '../engine/client.js';
@@ -9,9 +9,9 @@ import {mathAt,previewSource,parseMacros,inkBounds} from '../core/math-preview.j
 import {parseTexLog} from '../core/tex-log.js';
 import {decodeDisplayList} from '../render/index.mjs';
 import {TEMPLATES} from '../ui/templates.js';
-const root=new URL('../',import.meta.url),base=new URL('public/',root),files=await loadSupportFiles(base);
+const root=new URL('../',import.meta.url),base=new URL('public/',root);
 globalThis.Worker=BrowserWorker;
-const bg=new BackgroundEngine({base,files}),live=new LiveEngine({base,files});
+const bg=new BackgroundEngine({base}),live=new LiveEngine({base});
 const report=TEMPLATES.find(template=>template.id==='report'),png=Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='),c=>c.charCodeAt(0));
 let rev=0;const project=overrides=>Object.entries({...report.files,...overrides}).filter(([path,data])=>path!=='main.tex'&&data!=null).map(([path,data])=>({path,data,rev:++rev}));
 const main=report.files['main.tex'],out={};

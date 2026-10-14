@@ -1,0 +1,95 @@
+{
+  "engine": "LuaHBTeX 1.24.0",
+  "texlive": "2026",
+  "emscripten": "5.0.4",
+  "optimization": "-Oz",
+  "lz4ChunkSize": 16384,
+  "buildRepository": "https://github.com/TeXlyre/texlyre-busytex-build",
+  "buildCommit": "f544a51a99e7d3978bb70608e927a9a23f96d4a7",
+  "sourceArchive": "texlive-20260301-source.tar.xz",
+  "sourceSha256": "32ea827edd3fb80a682ffbdf95d7ba6139ff074516e660c8923260fc82f5e0f0",
+  "sdkSha256": "0c632bf6a185906036edea8b39bc4658193674a27221c0f07d8c9b10ce5b3b9c",
+  "inputDataSha256": "ccb35d98d77cbaf988e1481f8538709f72166196785cf6b8785eabe6c8fb2993",
+  "wasmSha256": "407af89d72916d9aeab9d66238d3656b191d4569cfbd5e11cfc8f5a31f99d705",
+  "dataSha256": "62ecc6731dcd3e2dba85c655edf1c90b45c4209b5bf7f64b3a2a1e76ca89c571",
+  "linkMapSha256": "3a7c030406c4c1cd363e1145dbcd037d6a7087860b648294a6d98d791718292c",
+  "linkedArchives": [
+    "busytex_libluahbtex.a",
+    "lib.a",
+    "libc++-noexcept.a",
+    "libc++abi-noexcept.a",
+    "libc.a",
+    "libc_optz.a",
+    "libcompiler_rt.a",
+    "libdlmalloc.a",
+    "libff.a",
+    "libgraphite2.a",
+    "libharfbuzz.a",
+    "libkpathsea.a",
+    "libluaffi.a",
+    "libluaharfbuzz.a",
+    "libluaharfbuzzsubset.a",
+    "libluahbtexspecific.a",
+    "libluamisc.a",
+    "libluasocket.a",
+    "libmd5.a",
+    "libmplibcore.a",
+    "libmputil.a",
+    "libpng.a",
+    "libpplib.a",
+    "libsockets.a",
+    "libstubs.a",
+    "libtexlua53.a",
+    "libunilib.a",
+    "libz.a",
+    "libzzip.a"
+  ],
+  "embeddedSupport": [
+    {
+      "file": "LICENSE",
+      "sha256": "d593293bed4099c6c522568948b20589141461b505190fec7b499d55560c8c0d"
+    },
+    {
+      "file": "latex/rtex-capture.sty",
+      "sha256": "667973d7f53ccceb7e2c3602c045793183f396b8b370369e8bd98a9ceae73208"
+    },
+    {
+      "file": "latex/rtex-pic.tex",
+      "sha256": "7b4a96929e9c1250fea9ccfec035ae7fdcae621dfc9935c6d40fc453ea626f01"
+    },
+    {
+      "file": "latex/rtex-serve-patches.tex",
+      "sha256": "797b05463d25e32e2c6a0be66029ef318f26c6a5b9f369b745adc04c78319b2c"
+    },
+    {
+      "file": "rtex-capture.lua",
+      "sha256": "f593c5ca6bd57e75ebc0adc747d82fc1e404dbe75ef1b4daa8642b86e4de35ae"
+    },
+    {
+      "file": "rtex-dl-bin.lua",
+      "sha256": "00ed4562df494e3c53aab8608670e6a4f532ab89ca0a80f0955bea05dd6e16be"
+    },
+    {
+      "file": "rtex-dl.lua",
+      "sha256": "6daa283b943a4b29de6112c0f73f2101d457c6c29a9ef0ba2b1c9ee8f9adb77b"
+    },
+    {
+      "file": "rtex-json.lua",
+      "sha256": "b3e5e56da75801d62c8cdff48b109545cf48f1d51441ad222622b95aad2c48d8"
+    },
+    {
+      "file": "rtex-pic.lua",
+      "sha256": "5b19a36a0dd9b43f8042f4450a05f707e560bbcf1e5cea41aa3d1b63c90102e7"
+    },
+    {
+      "file": "rtex-serve.lua",
+      "sha256": "e06b5b09544b8664e730b21ecfa3cf31b15f13ab2ffd15e5fa1ac9d2417d908e"
+    }
+  ],
+  "resources": {
+    "keptFiles": 5597,
+    "keptBytes": 96831353,
+    "removedFiles": 1587,
+    "removedBytes": 60013094
+  }
+}

@@ -1,6 +1,6 @@
 # Persistent LuaLaTeX WASM runtime probe
 
-Historical probe notes follow. The current standalone package is documented in `engine/README.md`: it requires the packed manifest (the raw-asset fallback has been removed), shares compiled WASM between workers, and sends each font once per live worker. These notes preserve the original probe evidence, not the current public API.
+Historical probe notes follow. The current standalone package is documented in `engine/README.md`: it requires the packed manifest (the raw-asset fallback has been removed), uses the source-built LuaHBTeX-only executable and embedded `/rtex` service, shares compiled WASM between workers, and sends each font once per live worker. Rebuild details are in `engine/build/README.md`; old paths, sizes and external support mounting below are historical. These notes preserve the original probe evidence, not the current public API.
 
 ## Verified
 

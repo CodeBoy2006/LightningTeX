@@ -1,0 +1,5 @@
+LuaHBTeX 1.24.0 / TeX Live 2026; source-built, no other engine applets.
+Emscripten 5.0.4; -Oz; LZ4 chunks 16384 bytes.
+Incremental Lua/TeX service embedded at /rtex.
+Full provenance and hashes: build-info.json
+Build recipe: engine/build/README.md in the companion source.

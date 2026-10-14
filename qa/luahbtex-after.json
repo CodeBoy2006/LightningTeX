@@ -1,0 +1,97 @@
+{
+  "scope": "Three sequential fresh Worker pairs; core WASM and IPC only, no browser input timer or renderer.",
+  "sourceHash": "cd7de75c450e35f594594beb73132e4ba33da8b114b79810b475cc3fa0ee0629",
+  "results": [
+    {
+      "loadMs": 351.489167,
+      "liveStartMs": 674.666125,
+      "fullMs": 1180.623833,
+      "liveMedianMs": 0.26516700000001947,
+      "layouts": [
+        {
+          "name": "opentype",
+          "pages": 1,
+          "signature": "b3074e90d36417f313ce5692e44594ff1f9c34741aa6c18acfb3b352b7cd02c9",
+          "ms": 511.8641249999996,
+          "passes": 1
+        },
+        {
+          "name": "type1",
+          "pages": 1,
+          "signature": "eb77c4176b740de8cc1e479ab03bacbac62fd9b80b85fd7417a034c845aac6cc",
+          "ms": 1143.625958,
+          "passes": 2
+        },
+        {
+          "name": "multipage",
+          "pages": 6,
+          "signature": "e62f8b12ea771b7755dd6698614e1004859a9babe9f9660eff309093042ab8fe",
+          "ms": 1230.48875,
+          "passes": 2
+        }
+      ],
+      "liveSignature": "91e69e61af52ebabf664b98fde679fdefc0fec5e7cb5dbc84f84bd1ed1a9e860"
+    },
+    {
+      "loadMs": 329.01920900000005,
+      "liveStartMs": 676.6521250000005,
+      "fullMs": 1087.7730419999998,
+      "liveMedianMs": 0.26958399999966787,
+      "layouts": [
+        {
+          "name": "opentype",
+          "pages": 1,
+          "signature": "b3074e90d36417f313ce5692e44594ff1f9c34741aa6c18acfb3b352b7cd02c9",
+          "ms": 518.4202910000004,
+          "passes": 1
+        },
+        {
+          "name": "type1",
+          "pages": 1,
+          "signature": "eb77c4176b740de8cc1e479ab03bacbac62fd9b80b85fd7417a034c845aac6cc",
+          "ms": 1086.1073750000005,
+          "passes": 2
+        },
+        {
+          "name": "multipage",
+          "pages": 6,
+          "signature": "e62f8b12ea771b7755dd6698614e1004859a9babe9f9660eff309093042ab8fe",
+          "ms": 1259.9257909999997,
+          "passes": 2
+        }
+      ],
+      "liveSignature": "91e69e61af52ebabf664b98fde679fdefc0fec5e7cb5dbc84f84bd1ed1a9e860"
+    },
+    {
+      "loadMs": 341.9622909999998,
+      "liveStartMs": 673.4941250000011,
+      "fullMs": 1106.3704579999994,
+      "liveMedianMs": 0.2053749999995489,
+      "layouts": [
+        {
+          "name": "opentype",
+          "pages": 1,
+          "signature": "b3074e90d36417f313ce5692e44594ff1f9c34741aa6c18acfb3b352b7cd02c9",
+          "ms": 513.8509169999998,
+          "passes": 1
+        },
+        {
+          "name": "type1",
+          "pages": 1,
+          "signature": "eb77c4176b740de8cc1e479ab03bacbac62fd9b80b85fd7417a034c845aac6cc",
+          "ms": 1145.7794169999997,
+          "passes": 2
+        },
+        {
+          "name": "multipage",
+          "pages": 6,
+          "signature": "e62f8b12ea771b7755dd6698614e1004859a9babe9f9660eff309093042ab8fe",
+          "ms": 1252.434792,
+          "passes": 2
+        }
+      ],
+      "liveSignature": "91e69e61af52ebabf664b98fde679fdefc0fec5e7cb5dbc84f84bd1ed1a9e860"
+    }
+  ],
+  "matchesReference": true
+}
