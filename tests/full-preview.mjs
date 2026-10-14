@@ -3,7 +3,7 @@ import {BrowserWorker,loadSupportFiles} from './runtime-helpers.mjs';
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {getDocument,PDFWorker} from 'pdfjs-dist/legacy/build/pdf.mjs';
-import {BackgroundEngine} from '../core/engine-client.js';
+import {BackgroundEngine} from '../engine/client.js';
 
 const root=new URL('../',import.meta.url),base=new URL('public/',root),files=await loadSupportFiles(base);
 globalThis.Worker=BrowserWorker;

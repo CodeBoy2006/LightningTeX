@@ -1,7 +1,7 @@
 import {Worker as NodeWorker} from 'node:worker_threads';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
-import {TEX_FILES} from '../core/engine-client.js';
+import {TEX_FILES} from '../engine/client.js';
 
 // The real worker harness with the browser callbacks used by the engine clients.
 export class BrowserWorker {

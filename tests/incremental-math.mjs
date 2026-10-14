@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {createCanvas} from '@napi-rs/canvas';
-import {BackgroundEngine,LiveEngine} from '../core/engine-client.js';
+import {BackgroundEngine,LiveEngine} from '../engine/client.js';
 import {splitPreamble,captureSpans,findLiveEdit,acceptLiveEdit} from '../core/document.js';
 import {unitContext,liveUnitEligibility,compareUnitBaseline,fontKey} from '../core/capture.js';
 import {replaceUnitRows} from '../core/live-layout.js';

@@ -3,11 +3,11 @@ importScripts('./raw-loader.js');
 let engine,snapshot,lastPreamble,lastAux;const decoder=new TextDecoder();
 function removeTree(fs,path){if(!fs.analyzePath(path).exists)return;for(const name of fs.readdir(path)){if(name==='.'||name==='..')continue;const p=path+'/'+name;fs.isDir(fs.stat(p).mode)?removeTree(fs,p):fs.unlink(p)}if(path!=='/project'&&path!=='/out')fs.rmdir(path)}
 async function init(data){
- engine=await loadRtexEngine({base:data.base||'../busytex/',env:{TEXINPUTS:'/rtex/latex//:',LUAINPUTS:'/rtex//:',RTEX_CAPTURE_DIR:'/out',RTEX_UNIT_ENVS:'equation,equation*,align,align*,gather,gather*,multline,multline*,displaymath,theorem,lemma,proposition,corollary,remark',openout_any:'a',max_print_line:'100000',shell_escape:'f'},print:t=>postMessage({type:'log',text:t}),printErr:t=>postMessage({type:'log',text:t})});
+ engine=await loadRtexEngine({base:data.base,module:data.module,endpoint:data.endpoint,env:{TEXINPUTS:'/rtex/latex//:',LUAINPUTS:'/rtex//:',RTEX_CAPTURE_DIR:'/out',RTEX_UNIT_ENVS:'equation,equation*,align,align*,gather,gather*,multline,multline*,displaymath,theorem,lemma,proposition,corollary,remark',openout_any:'a',max_print_line:'100000',shell_escape:'f'},print:t=>postMessage({type:'log',text:t}),printErr:t=>postMessage({type:'log',text:t})});
  const fs=engine.FS;fs.mkdirTree('/rtex/latex');fs.mkdirTree('/out');
  for(const [name,contents] of Object.entries(data.files))writeEngineFile(fs,'/rtex/'+name,contents);
  const cut=2**26;const tail=engine.HEAPU8.subarray(cut);snapshot=engine.HEAPU8.slice(0,tail.some(x=>x)?engine.HEAPU8.length:cut);
- postMessage({type:'ready'});
+ postMessage({type:'ready',module:engine.compiledModule});
 }
 function listFiles(fs,path,prefix=''){const out=[];for(const name of fs.readdir(path)){if(name==='.'||name==='..')continue;const p=path+'/'+name;if(fs.isDir(fs.stat(p).mode))out.push(...listFiles(fs,p,prefix+name+'/'));else out.push(prefix+name)}return out}
 function mirrorDirs(fs,from,to){for(const name of fs.readdir(from)){if(name==='.'||name==='..')continue;const p=from+'/'+name;if(fs.isDir(fs.stat(p).mode)){fs.mkdirTree(to+'/'+name);mirrorDirs(fs,p,to+'/'+name)}}}
@@ -17,7 +17,7 @@ function syncProject(fs,project){
  for(const {path,data} of project?.write||[])writeEngineFile(fs,'/project/'+path,data);
 }
 function run(source,id,preamble,root='main.tex',project){
- const began=performance.now(),fs=engine.FS;syncProject(fs,project);removeTree(fs,'/out');fs.chdir('/project');fs.writeFile(root,source);
+ const began=performance.now(),fs=engine.FS;syncProject(fs,project);removeTree(fs,'/out');fs.chdir('/project');writeEngineFile(fs,'/project/'+root,source);
  // \include writes its aux beside the output of the same relative path.
  mirrorDirs(fs,'/project','/out');
  const job=String.raw`\RequirePackage{rtex-capture}\input{`+root+'}';
@@ -53,11 +53,13 @@ function run(source,id,preamble,root='main.tex',project){
  const packageMisses=JSON.parse(decoder.decode(fs.readFile('/tmp/texlive_remote/.misses.json')));
  return {type:'result',id,pdf,capture,pages,fonts,aux,passes,packageMisses,log:logs.at(-1)||'',durationMs:performance.now()-began};
 }
-onmessage=async({data})=>{try{if(data.type==='init')await init(data);else if(data.type==='compile'){
+let jobs=Promise.resolve();
+onmessage=({data})=>{jobs=jobs.then(async()=>{try{if(data.type==='init')await init(data);else if(data.type==='compile'){
  if(!engine)throw Error('Engine is not ready');
  let result;
  try{result=run(data.source,data.id,data.preamble,data.root,data.project)}
  finally{await engine.saveTexPackages()}
  // Finish caching before the host starts the live worker with the same packages.
- postMessage(result);
-}}catch(e){postMessage({type:'error',id:data.id,message:String(e),log:e.log,empty:e.empty,stack:e.stack})}};
+ // FS.readFile returns owned copies; transfer large outputs, retaining aux for the next pass.
+ postMessage(result,[result.pdf.buffer,...new Set(Object.values(result.fonts).map(bytes=>bytes.buffer))]);
+}}catch(e){postMessage({type:'error',id:data.id,message:String(e),log:e.log,empty:e.empty,stack:e.stack})}})};

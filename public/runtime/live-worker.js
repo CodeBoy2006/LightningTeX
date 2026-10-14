@@ -3,7 +3,7 @@ const decoder=new TextDecoder();
 // Shared mailbox: control[0]=available bytes, control[1]=EOF, payload starts at 16.
 // Host writes only when available=0; worker notifies after fully consuming.
 onmessage=async ({data})=>{try{
- const m=await loadRtexEngine({base:data.base||'./busytex/',env:{TEXINPUTS:'/rtex/latex//:',LUAINPUTS:'/rtex//:',openout_any:'a',max_print_line:'100000',RTEX_REQ:'/dev/rtex-req',RTEX_RESP:'/dev/rtex-resp'},print:text=>postMessage({log:text}),printErr:text=>postMessage({log:text})});
+ const m=await loadRtexEngine({base:data.base,module:data.module,endpoint:data.endpoint,env:{TEXINPUTS:'/rtex/latex//:',LUAINPUTS:'/rtex//:',openout_any:'a',max_print_line:'100000',RTEX_REQ:'/dev/rtex-req',RTEX_RESP:'/dev/rtex-resp'},print:text=>postMessage({log:text}),printErr:text=>postMessage({log:text})});
  const fs=m.FS;fs.mkdirTree('/rtex/latex');fs.mkdirTree('/live');
  m.kpse_remote_register_misses(data.packageMisses||[]);
  if(data.aux)fs.writeFile('/live/serve.aux',data.aux);
@@ -12,15 +12,16 @@ onmessage=async ({data})=>{try{
  for(const file of data.project||[])writeEngineFile(fs,'/live/'+file.path,file.data);
  Object.assign(m.ENV,{TEXINPUTS:'/rtex/latex//:',LUAINPUTS:'/rtex//:',openout_any:'a',max_print_line:'100000',RTEX_REQ:'/dev/rtex-req',RTEX_RESP:'/dev/rtex-resp'});
  const ctl=new Int32Array(data.mailbox,0,4),bytes=new Uint8Array(data.mailbox,16);let offset=0;
+ const sentFonts=new Set();
  let responseBuffer=new Uint8Array(0);
  function emitResponse(chunk){
    const joined=new Uint8Array(responseBuffer.length+chunk.length);joined.set(responseBuffer);joined.set(chunk,responseBuffer.length);responseBuffer=joined;
-   while(responseBuffer.length>=4){const view=new DataView(responseBuffer.buffer,responseBuffer.byteOffset,responseBuffer.byteLength);const length=view.getUint32(0,true);if(length>64*1024*1024)throw Error('Response too large');if(responseBuffer.length<length+4)return;
+   while(responseBuffer.length>=4){const view=new DataView(responseBuffer.buffer,responseBuffer.byteOffset,responseBuffer.byteLength);const length=view.getUint32(0,true);if(length<1||length>32*1024*1024)throw Error('Response too large');if(responseBuffer.length<length+4)return;
      const frame=responseBuffer.slice(0,length+4);responseBuffer=responseBuffer.slice(length+4);const fonts={};
      if(frame[4]===1){const v=new DataView(frame.buffer);const jsonLength=v.getUint32(5,true);let i=9+jsonLength;const dlEnd=frame.length;
-       if(i+16<=dlEnd&&decoder.decode(frame.subarray(i,i+4))==='RTDL'){i+=16;while(i+5<=dlEnd){const tag=frame[i],size=v.getUint32(i+1,true),p=i+5;if(p+size>dlEnd)throw Error('Truncated display-list record');if(tag===2&&size>=30){const n=v.getUint16(p+28,true);if(30+n>size)throw Error('Truncated font name');const filename=decoder.decode(frame.subarray(p+30,p+30+n));if(filename){try{fonts[filename]=fs.readFile(filename)}catch(e){postMessage({fontError:filename,message:String(e)})}}}i=p+size;}}
+       if(i+16<=dlEnd&&decoder.decode(frame.subarray(i,i+4))==='RTDL'){i+=16;while(i+5<=dlEnd){const tag=frame[i],size=v.getUint32(i+1,true),p=i+5;if(p+size>dlEnd)throw Error('Truncated display-list record');if(tag===2&&size>=30){const n=v.getUint16(p+28,true);if(30+n>size)throw Error('Truncated font name');const filename=decoder.decode(frame.subarray(p+30,p+30+n));if(filename&&!sentFonts.has(filename)){try{fonts[filename]=fs.readFile(filename);sentFonts.add(filename)}catch(e){postMessage({fontError:filename,message:String(e)})}}}i=p+size;}}
      }
-     postMessage({bytes:frame,fonts});
+     postMessage({bytes:frame,fonts},[frame.buffer,...Object.values(fonts).map(bytes=>bytes.buffer)]);
    }
  }
  const req=fs.makedev(64,0),resp=fs.makedev(64,1);

@@ -16,6 +16,14 @@ node server.mjs
 
 首次加载约 76 MiB 压缩引擎数据，解压后约 119.5 MiB，另外还有网页与加载脚本。只预装 TeX Live basic；microtype、booktabs 等额外宏包及其依赖在文档实际使用时下载，并复用浏览器缓存，不再整包加载 recommended。建议在桌面浏览器使用；本次未验收手机浏览器。
 
+## 独立 WASM 引擎模块
+
+运行 `npm run build:engine` 生成 `dist-engine/`，整个目录可以独立部署或用 `npm pack ./dist-engine` 打包。通过 `import {createEngine} from './index.js'` 使用全文编译和常驻增量服务，无需编辑器、PDF.js、Canvas 或前端框架。现有网页也使用同一个入口。
+
+模块提供源码分段、上下文回放、基线核验和二进制显示列表解码；用最新源码完整编译取得最终 PDF。两条排版路径共用已编译的 WebAssembly.Module，但隔离可变内存；相同上下文不重复安装，实时字体每个 Worker 只传一次，PDF/字体/显示列表采用可转移缓冲区。详见 [模块接口与示例](engine/README.md)。
+
+`npm run test:engine` 会将构建包复制到仓库之外，再运行真实 WASM，检查独立加载、字形坐标一致性、增量与全文错误恢复、模块复用和字体传输量。底层仍使用已固定版本的 BusyTeX 二进制，内部其他引擎尚未裁剪；仅暴露 LuaHBLaTeX。压缩引擎与 basic 数据合计仍约 76 MiB，不声称已经生成 LuaHBTeX-only 二进制。
+
 ## 怎么试
 
 1. 打开页面后自动编译默认文档，右侧显示真实 PDF
@@ -83,6 +91,8 @@ Ctrl / Command + Enter 完整编译；编译时再次点击顶栏状态胶囊可
 npm ci
 npm run dev
 npm run build
+npm run build:engine
+npm run test:engine
 npm test
 npm run test:runtime
 npm run test:integration
@@ -98,9 +108,9 @@ Node 回归测试使用 `tests/fixtures/tex-packages.json.gz` 中的少量已下
 
 浏览器输入 benchmark：运行开发服务器后打开 `/tests/browser-input.html`，通过项目 ZIP 导入完整论文及插图；待全文编译完成，展开 `Input benchmark`，点击 `Reset measurements`，再用键盘连续编辑。面板统计真实输入事件、Live 状态、全文请求及 Live Worker 启动次数，`Download trace` 导出记录。恢复基准原稿后可重复同一操作；面板只在该测试页面加载。
 
-`tests/runtime-helpers.mjs` 统一提供 Node 的浏览器 Worker 适配和支持文件读取；支持文件清单复用 `core/engine-client.js` 的 `TEX_FILES`，添加 Lua/TeX 支持文件时只需更新这一处。
+`tests/runtime-helpers.mjs` 统一提供 Node 的浏览器 Worker 适配和支持文件读取；支持文件清单复用 `engine/client.js` 的 `TEX_FILES`，添加 Lua/TeX 支持文件时只需更新这一处。
 
-包服务地址在 `public/runtime/raw-loader.js` 的 `TEXLIVE_REMOTE_ENDPOINT` 中设置；设为空字符串可关闭远程查找及远程文件缓存恢复。自托管服务必须实现 BusyTeX 的 `GET /<format_id>/<filename>` 接口并使用配套的 TeX Live 2026 文件树，不能直接填写 CTAN 地址。完整编译（包括下载）最多 120 秒，可随时取消。浏览器清理网站数据会删除宏包缓存；只缓存成功下载的文件，不持久化缺失结果。随应用打包的字体不查询不存在的可选替代格式；完整编译遇到的 404 结果在当前会话内传给实时引擎，避免局部编辑重复等待网络。首次完整编译、引擎预热与后续局部更新的耗时不同；修改前言或不支持的内容仍会触发全文排版，局部重排后的精确分页也由全文编译完成。
+独立模块用 `createEngine({endpoint})` 指定包服务地址；设为 `''` 可关闭远程查找及远程文件缓存恢复。网页在 `main.js` 的 `createEngine` 调用中传入该选项；默认地址仍在 `public/runtime/raw-loader.js` 中。自托管服务必须实现 BusyTeX 的 `GET /<format_id>/<filename>` 接口并使用配套的 TeX Live 2026 文件树，不能直接填写 CTAN 地址。完整编译（包括下载）最多 120 秒，可随时取消。浏览器清理网站数据会删除宏包缓存；只缓存成功下载的文件，不持久化缺失结果。随应用打包的字体不查询不存在的可选替代格式；完整编译遇到的 404 结果在当前会话内传给实时引擎，避免局部编辑重复等待网络。首次完整编译、引擎预热与后续局部更新的耗时不同；修改前言或不支持的内容仍会触发全文排版，局部重排后的精确分页也由全文编译完成。
 
 ## 来源与许可证
 

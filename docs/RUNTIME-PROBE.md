@@ -1,5 +1,7 @@
 # Persistent LuaLaTeX WASM runtime probe
 
+Historical probe notes follow. The current standalone package is documented in `engine/README.md`: it requires the packed manifest (the raw-asset fallback has been removed), shares compiled WASM between workers, and sends each font once per live worker. These notes preserve the original probe evidence, not the current public API.
+
 ## Verified
 
 Official `texlyre-busytex@1.4.0` release assets run **LuaHBTeX 1.24.0 / TeX Live 2026** WebAssembly. Node worker tests execute the same WASM and JS worker implementation intended for the browser; no native TeX binary is used.

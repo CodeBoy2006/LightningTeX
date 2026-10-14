@@ -1,5 +1,5 @@
 import{BrowserWorker,loadSupportFiles}from'./runtime-helpers.mjs';import fs from'node:fs/promises';import path from'node:path';import{pathToFileURL}from'node:url';import assert from'node:assert/strict';
-import{BackgroundEngine,LiveEngine}from'../core/engine-client.js';import{splitPreamble,findLiveEdit}from'../core/document.js';import{unitContext,liveUnitEligibility,compareUnitBaseline}from'../core/capture.js';import{decodeDisplayList,createDisplayListRenderer}from'../render/index.mjs';import{createCanvas}from'@napi-rs/canvas';import*as pdfjs from'pdfjs-dist/legacy/build/pdf.mjs';import{parseEngineFont}from'../render/type1-font.mjs';
+import{BackgroundEngine,LiveEngine}from'../engine/client.js';import{splitPreamble,findLiveEdit}from'../core/document.js';import{unitContext,liveUnitEligibility,compareUnitBaseline}from'../core/capture.js';import{decodeDisplayList,createDisplayListRenderer}from'../render/index.mjs';import{createCanvas}from'@napi-rs/canvas';import*as pdfjs from'pdfjs-dist/legacy/build/pdf.mjs';import{parseEngineFont}from'../render/type1-font.mjs';
 const root=path.resolve(import.meta.dirname,'..'),base=pathToFileURL(root+'/public/');
 globalThis.Worker=BrowserWorker;
 const files=await loadSupportFiles(base);

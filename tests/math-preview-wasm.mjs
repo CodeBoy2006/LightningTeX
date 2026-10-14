@@ -1,7 +1,7 @@
 // Real formula previews with the TOC paragraph context used by the multi-file report.
 import {BrowserWorker,loadSupportFiles} from './runtime-helpers.mjs';
 import assert from 'node:assert/strict';
-import {BackgroundEngine,LiveEngine} from '../core/engine-client.js';
+import {BackgroundEngine,LiveEngine} from '../engine/client.js';
 import {splitPreamble} from '../core/document.js';
 import {unitContext,liveUnitEligibility} from '../core/capture.js';
 import {mathAt,previewSource,parseMacros,inkBounds} from '../core/math-preview.js';

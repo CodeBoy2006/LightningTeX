@@ -1,7 +1,7 @@
 // Actual WASM: broadened unit replay, changed geometry, and preserved PDF backdrop regions.
 import assert from 'node:assert/strict';
 import {BrowserWorker,loadSupportFiles} from './runtime-helpers.mjs';
-import {BackgroundEngine,LiveEngine} from '../core/engine-client.js';
+import {BackgroundEngine,LiveEngine} from '../engine/client.js';
 import {captureSpans,findLiveEdit,splitPreamble} from '../core/document.js';
 import {unitContext,compareUnitBaseline,liveUnitEligibility,fontKey} from '../core/capture.js';
 import {replaceUnitRows,pageFlow} from '../core/live-layout.js';

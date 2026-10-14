@@ -1,9 +1,9 @@
-import {splitPreamble,safeProjectPath} from './document.js';
+import {splitPreamble,safeProjectPath} from '../core/document.js';
 const encoder=new TextEncoder(),decoder=new TextDecoder();
 export const TEX_FILES=['rtex-json.lua','rtex-dl.lua','rtex-dl-bin.lua','rtex-capture.lua','rtex-serve.lua','rtex-pic.lua','latex/rtex-capture.sty','latex/rtex-pic.tex','latex/rtex-serve-patches.tex'];
 export async function loadSupport(base){return Object.fromEntries(await Promise.all(TEX_FILES.map(async p=>{const r=await fetch(new URL('rtex/'+p,base));if(!r.ok)throw Error(`Missing rtex support: ${p}`);return [p,await r.text()]})))}
 export class BackgroundEngine {
- constructor({base,files,onLog=()=>{}}){Object.assign(this,{base,files,onLog});this.next=0;this.pending=new Map();this.generation=0;this.ready=null;this.worker=null;this.synced=new Map();this.root=null}
+ constructor({base,files,onLog=()=>{},runtime={},endpoint}){Object.assign(this,{base,files,onLog,runtime,endpoint});this.next=0;this.pending=new Map();this.generation=0;this.ready=null;this.worker=null;this.synced=new Map();this.root=null}
  start(){
   if(this.ready)return this.ready;
   const generation=++this.generation;
@@ -15,7 +15,7 @@ export class BackgroundEngine {
    this.timer=setTimeout(()=>{if(current())this.stop(Error('TeX engine loading timed out'))},120000);
    worker.onmessage=({data})=>{
     if(!current())return;
-    if(data.type==='ready'){clearTimeout(this.timer);this.rejectReady=null;resolve()}
+    if(data.type==='ready'){this.runtime.module=data.module;clearTimeout(this.timer);this.rejectReady=null;resolve()}
     else if(data.type==='log')this.onLog(data.text);
     else if(data.type==='result'||data.type==='error'){
      const task=this.pending.get(data.id);
@@ -25,7 +25,7 @@ export class BackgroundEngine {
    };
    worker.onerror=e=>{if(current())this.stop(Error(e.message||'TeX worker failed'))};
    // Defer postMessage until this.ready has been assigned, including sync mock failures.
-   queueMicrotask(()=>{if(current())try{worker.postMessage({type:'init',base:new URL('busytex/',this.base).href,files:this.files})}catch(error){this.stop(error)}});
+   queueMicrotask(()=>{if(current())try{worker.postMessage({type:'init',base:new URL('busytex/',this.base).href,files:this.files,module:this.runtime.module,endpoint:this.endpoint})}catch(error){this.stop(error)}});
   });
   return this.ready;
  }
@@ -36,7 +36,7 @@ export class BackgroundEngine {
   if(reset){this.synced.clear();this.root=root}
   for(const [index,file] of files.entries()){
    const path=paths[index];
-   if(path===root||this.synced.get(path)===file.rev)continue;
+   if(path===root||file.rev!==undefined&&this.synced.get(path)===file.rev)continue;
    this.synced.set(path,file.rev);write.push({path,data:file.data});
   }
   const remove=[...this.synced.keys()].filter(path=>!seen.has(path));
@@ -62,11 +62,11 @@ export class BackgroundEngine {
  }
 }
 export class LiveEngine {
- constructor({base,files,onLog=()=>{},onFonts=()=>{}}){Object.assign(this,{base,files,onLog,onFonts});this.queue=Promise.resolve();this.req=0;this.frames=[];this.readers=[];this.buffer=new Uint8Array();this.generation=0;this.worker=null;this.failure=Error('Live engine not started')}
+ constructor({base,files,onLog=()=>{},onFonts=()=>{},runtime={},endpoint}){Object.assign(this,{base,files,onLog,onFonts,runtime,endpoint});this.queue=Promise.resolve();this.req=0;this.frames=[];this.readers=[];this.buffer=new Uint8Array();this.generation=0;this.worker=null;this.failure=Error('Live engine not started')}
  current(generation){if(generation!==this.generation||!this.worker)throw this.failure||Error('Live engine restarted')}
  // files: preamble dependencies ({path,data,rev}) placed beside the serve document.
  async start(preamble,aux,files=[],packageMisses=[]){
-  const key=JSON.stringify([preamble,decoder.decode(aux??new Uint8Array()),files.map(file=>[safeProjectPath(file.path),file.rev])]);
+  const key=JSON.stringify([preamble,decoder.decode(aux??new Uint8Array()),files.map(file=>[safeProjectPath(file.path),file.rev??file.data])]);
   if(this.worker&&key===this.startKey)return this.ready;
   this.stop();this.startKey=key;const generation=this.generation;
   try{
@@ -74,7 +74,7 @@ export class LiveEngine {
    const worker=this.worker=new Worker(new URL('runtime/live-worker.js',this.base));this.failure=null;
    worker.onmessage=({data})=>{if(generation!==this.generation||worker!==this.worker)return;try{if(data.log)this.onLog(data.log);if(data.fonts)this.onFonts(data.fonts);if(data.bytes)this.feed(data.bytes,generation);if(data.error)this.fail(Error(data.error),generation);if(data.done)this.fail(Error('Live engine ended'),generation)}catch(error){this.fail(error,generation)}};
    worker.onerror=e=>this.fail(Error(e.message||'Live worker failed'),generation);
-   worker.postMessage({base:new URL('busytex/',this.base).href,files:this.files,preamble,aux,mailbox,packageMisses,project:files.map(({path,data})=>({path,data}))});
+   worker.postMessage({base:new URL('busytex/',this.base).href,files:this.files,preamble,aux,mailbox,packageMisses,module:this.runtime.module,endpoint:this.endpoint,project:files.map(({path,data})=>({path,data}))});
    this.ready=this.read(120000,generation).then(ready=>{
     this.current(generation);
     if(ready.header.op!=='ready')throw Error('Live engine did not become ready');return ready.header;
@@ -84,25 +84,26 @@ export class LiveEngine {
  }
  feed(chunk,generation=this.generation){
   if(generation!==this.generation||!this.worker)return;
-  const all=new Uint8Array(this.buffer.length+chunk.length);all.set(this.buffer);all.set(chunk,this.buffer.length);let pos=0;
+  const all=this.buffer.length?new Uint8Array(this.buffer.length+chunk.length):chunk;
+  if(this.buffer.length){all.set(this.buffer);all.set(chunk,this.buffer.length)}let pos=0;
   while(all.length-pos>=4){
    const len=new DataView(all.buffer,all.byteOffset+pos,4).getUint32(0,true);
    if(len<1||len>32*1024*1024){this.fail(Error('Invalid live frame length'),generation);return}
    if(all.length-pos<4+len)break;
-   const body=all.slice(pos+4,pos+4+len);let frame;
+   const body=all.subarray(pos+4,pos+4+len);let frame;
    try{
     if(body[0]===0)frame={header:JSON.parse(decoder.decode(body.subarray(1)))};
     else if(body[0]===1){
      if(body.length<5)throw Error('Truncated binary live frame');
      const n=new DataView(body.buffer,body.byteOffset+1,4).getUint32(0,true);
      if(n>body.length-5)throw Error('Invalid live frame header length');
-     frame={header:JSON.parse(decoder.decode(body.subarray(5,5+n))),binary:body.slice(5+n)};
+     frame={header:JSON.parse(decoder.decode(body.subarray(5,5+n))),binary:body.subarray(5+n)};
     }else throw Error('Unknown frame kind');
     if(!frame.header||typeof frame.header.op!=='string')throw Error('Invalid live frame header');
    }catch(error){this.fail(error,generation);return}
    const reader=this.readers.shift();if(reader){clearTimeout(reader.timer);reader.resolve(frame)}else this.frames.push(frame);pos+=4+len;
   }
-  this.buffer=all.slice(pos);
+  this.buffer=pos===all.length?new Uint8Array():all.slice(pos);
  }
  read(timeout=6000,generation=this.generation){
   try{this.current(generation)}catch(error){return Promise.reject(error)}
@@ -134,11 +135,15 @@ export class LiveEngine {
   }
   return frame;
  }
- transact(object){return this.enqueue(generation=>this.exchange(object,generation))}
+ transact(object){return this.enqueue(generation=>{this.contextKey=null;return this.exchange(object,generation)})}
  unit(ctx,source,polluted){
   return this.enqueue(async generation=>{
-   const context=await this.exchange({op:'context',id:1,ctx},generation);
-   if(context.header.op!=='ok'||context.header.id!==1){const error=Error('Unexpected live context response');this.fail(error,generation);throw error}
+   const key=JSON.stringify(ctx);
+   if(key!==this.contextKey){
+    const context=await this.exchange({op:'context',id:1,ctx},generation);
+    if(context.header.op!=='ok'||context.header.id!==1){const error=Error('Unexpected live context response');this.fail(error,generation);throw error}
+    this.contextKey=key;
+   }
    const req=++this.req,frame=await this.exchange({op:'compile',req,ctx:1,source},generation);
    if(frame.header.op!=='result'||frame.header.req!==req||frame.header.ctx!==1){const error=Error('Mismatched live result');this.fail(error,generation);throw error}
    const nonempty=value=>value!=null&&typeof value==='object'&&Object.keys(value).length>0;
@@ -162,7 +167,7 @@ export class LiveEngine {
  typeset(ctx,source){return this.unit(ctx,source,()=>false)}
  fail(error,generation=this.generation){
   if(generation!==this.generation)return;
-  ++this.generation;this.failure=error;this.ready=null;this.startKey=null;
+  ++this.generation;this.failure=error;this.ready=null;this.startKey=null;this.contextKey=null;
   for(const reader of this.readers){clearTimeout(reader.timer);reader.reject(error)}
   this.readers=[];this.worker?.terminate();this.worker=null;this.frames=[];this.buffer=new Uint8Array();this.queue=Promise.resolve();
  }

@@ -1,7 +1,7 @@
 // Host orchestration tests with mocked Workers/SAB, not real-browser or TeX tests.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {BackgroundEngine,LiveEngine} from '../core/engine-client.js';
+import {BackgroundEngine,LiveEngine} from '../engine/client.js';
 const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
 const frame=header=>{const data=new TextEncoder().encode(JSON.stringify(header)),out=new Uint8Array(data.length+5);new DataView(out.buffer).setUint32(0,data.length+1,true);out[4]=0;out.set(data,5);return out};
 class MockWorker {
@@ -143,4 +143,35 @@ test('live startup shares full-job file misses without restarting an unchanged w
  worker.emit({bytes:frame({op:'ready'})});await starting;
  await live.start('preamble',undefined,[],[...misses,'26/optional.cfg']);
  assert.equal(live.worker,worker);assert.equal(MockWorker.all.length,1);live.stop();
+}));
+
+test('unchanged contexts are sent once; changes and direct transactions invalidate the cached context',()=>withWorkers(async()=>{
+ const {live}=await liveStarted(),sent=[];let last;
+ live.send=async object=>{last=object;sent.push(object);};
+ live.read=async()=>({header:last.op==='context'?{op:'ok',id:1}:last.op==='ping'?{op:'pong'}:{op:'result',req:last.req,ctx:1,status:'ok'}});
+ const ctx={kind:'par',counters:{section:1}};
+ await live.typeset(ctx,'A');await live.typeset(structuredClone(ctx),'B');
+ assert.deepEqual(sent.map(message=>message.op),['context','compile','compile']);
+ ctx.counters.section=2;await live.typeset(ctx,'C');await live.transact({op:'ping'});await live.typeset(ctx,'D');
+ assert.deepEqual(sent.slice(3).map(message=>message.op),['context','compile','ping','context','compile']);live.stop();
+}));
+test('compiled module and endpoint are shared with replacement and live workers',()=>withWorkers(async()=>{
+ const runtime={},module=new WebAssembly.Module(new Uint8Array([0,97,115,109,1,0,0,0]));
+ const bg=new BackgroundEngine({...options,runtime,endpoint:''}),ready=bg.start(),worker=MockWorker.all.at(-1);
+ worker.emit({type:'ready',module});await ready;assert.equal(runtime.module,module);
+ const live=new LiveEngine({...options,runtime,endpoint:''}),starting=live.start('preamble'),next=MockWorker.all.at(-1);
+ assert.equal(next.sent[0].module,module);assert.equal(next.sent[0].endpoint,'');next.emit({bytes:frame({op:'ready'})});await starting;
+ bg.stop();const restart=bg.start(),replacement=MockWorker.all.at(-1);await tick();
+ assert.equal(replacement.sent[0].module,module);replacement.emit({type:'ready',module});await restart;bg.stop();live.stop();
+}));
+test('project files without revisions are written on every compile',()=>{
+ const bg=new BackgroundEngine(options),file={path:'part.tex',data:'one'};
+ assert.deepEqual(bg.delta('main.tex',[file]).write,[file]);
+ assert.deepEqual(bg.delta('main.tex',[{...file,data:'two'}]).write,[{...file,data:'two'}]);
+});
+test('binary live frames retain their buffer and still accept fragmented delivery',()=>withWorkers(async()=>{
+ const {live}=await liveStarted(),header=new TextEncoder().encode(JSON.stringify({op:'result'}));
+ const bytes=new Uint8Array(header.length+12),view=new DataView(bytes.buffer);view.setUint32(0,bytes.length-4,true);bytes[4]=1;view.setUint32(5,header.length,true);bytes.set(header,9);bytes.set([1,2,3],9+header.length);
+ let pending=live.read();live.feed(bytes);let result=await pending;assert.equal(result.binary.buffer,bytes.buffer);assert.deepEqual([...result.binary],[1,2,3]);
+ pending=live.read();live.feed(bytes.subarray(0,7));live.feed(bytes.subarray(7));result=await pending;assert.deepEqual([...result.binary],[1,2,3]);live.stop();
 }));

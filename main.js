@@ -1,11 +1,8 @@
 import {mountEditor} from './ui/editor.js';
-import {BackgroundEngine,LiveEngine,loadSupport} from './core/engine-client.js';
-import {splitPreamble,findLiveEdit,captureSpans,acceptLiveEdit} from './core/document.js';
-import {unitContext,liveUnitEligibility,compareUnitBaseline} from './core/capture.js';
-import {previewSource,parseMacros,inkBounds} from './core/math-preview.js';
-import {parseTexLog} from './core/tex-log.js';
-import {decodeDisplayList,createDisplayListRenderer,CSS_PX_PER_SP} from './render/index.mjs';
-import {replaceUnitRows,pageFlow} from './core/live-layout.js';
+import {createEngine,splitPreamble,findLiveEdit,captureSpans,acceptLiveEdit,unitContext,liveUnitEligibility,compareUnitBaseline,parseMacros,parseTexLog,decodeDisplayList,replaceUnitRows} from './engine/index.js';
+import {previewSource,inkBounds} from './core/math-preview.js';
+import {createDisplayListRenderer,CSS_PX_PER_SP} from './render/index.mjs';
+import {pageFlow} from './core/live-layout.js';
 import {parseEngineFont} from './render/type1-font.mjs';
 import * as pdfjs from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -256,10 +253,10 @@ function hit({page,y}){
 function pick(point){const target=hit(point);if(target)ui.reveal(target);}
 async function boot(){try{
  ui.setEngineStatus({status:'loading'});
- const [files,manifest]=await Promise.all([loadSupport(base),fetch(new URL('busytex/asset-manifest.json',base)).then(response=>response.ok?response.json():null).catch(()=>null)]);
+ const manifest=await fetch(new URL('busytex/asset-manifest.json',base)).then(response=>response.ok?response.json():null).catch(()=>null);
  const assets=manifest?.assets||{},loaded=new Map();
  ui.setLoadProgress({step:0,assets});
- background=new BackgroundEngine({base,files,onLog:text=>{
+ ({background,live}=await createEngine({base,onLog:text=>{
    const part=/^(Loading|Loaded) (\S+) part (\d+)\/(\d+)/.exec(text);
    if(part){const [,stage,name,index]=part,asset=assets[name],step=name==='busytex.wasm'?0:1;
      if(stage==='Loaded')loaded.set(name,Number(index));
@@ -269,8 +266,7 @@ async function boot(){try{
      if(all)ui.setEngineStatus({status:'loading',progress:Math.min(.95,received/all)});
    }else if(/^Runtime loaded/.test(text))ui.setLoadProgress({step:2});
    else if(/^!|Error|Warning/i.test(text))ui.log(text,'warning');
- }});
- live=new LiveEngine({base,files,onFonts:items=>{for(const[k,v]of Object.entries(items))fonts.set(k,v)},onLog:text=>{if(/^!/.test(text))ui.log(text,'warning')}});
+ },onFonts:items=>{for(const[k,v]of Object.entries(items))fonts.set(k,v)},onLiveLog:text=>{if(/^!/.test(text))ui.log(text,'warning')}}));
  await Promise.all([background.start(),ui.ready]);ui.setEngineStatus({status:'ready'});ui.setLoadProgress({step:3});await ui.compile('initial');
  }catch(e){ui.setEngineStatus({status:'error'});ui.log(e.message,'error')}}
 void boot();
