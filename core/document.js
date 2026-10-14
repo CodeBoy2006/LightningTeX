@@ -98,9 +98,12 @@ function offsets(s){let a=[0];for(let i=0;i<s.length;i++)if(s[i]==='\n')a.push(i
 const sameFile=(a,b)=>String(a).replace(/^\.\//,'')===b;
 export function captureSpans(source,capture,root='main.tex'){
   const lines=offsets(source),bodyStart=splitPreamble(source)?.bodyStart??0,end=source.lastIndexOf('\\end{document}'),units=(capture?.units||[]).filter(unit=>!unit.file||sameFile(unit.file,root));
+  const paragraphs=new Map((capture?.paragraphs||[]).map(paragraph=>[paragraph.seq,paragraph]));
   return units.map((unit,index)=>{
     const start=Math.max(lines[unit.begin_line-1],bodyStart),next=lines[units[index+1]?.begin_line-1];
-    const limit=Math.min(lines[unit.end_line]??source.length,end>=0?end:source.length,next>start?next:source.length);
+    // TeX can close the last paragraph after returning from an input file; its end line then belongs to that other file.
+    const tail=paragraphs.get(unit.seqs?.at(-1)),returned=tail?.file&&!sameFile(tail.file,root);
+    const limit=Math.min(returned?source.length:lines[unit.end_line]??source.length,end>=0?end:source.length,next>start?next:source.length);
     const text=source.slice(start,limit).trimEnd();
     return {unit,start,end:start+text.length,original:text};
   }).filter(span=>Number.isInteger(span.start)&&span.end>span.start);

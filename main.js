@@ -140,35 +140,45 @@ async function updateLive({source,root,files,filesRev,revision}){
  const incoming=new Map([{path:root,data:source},...files].map(file=>[file.path,file]));
  if(incoming.size!==state.files.length+1||state.files.some(file=>!incoming.has(file.path)))return false;
  const changed=[...state.documents].filter(([path,document])=>incoming.get(path)?.data!==document.source);
- if(state.files.some(file=>typeof file.data!=='string'&&incoming.get(file.path).rev!==file.rev)||changed.length>1)return false;
+ if(state.files.some(file=>typeof file.data!=='string'&&incoming.get(file.path).rev!==file.rev))return false;
  if(!changed.length){state.files=files;state.filesRev=filesRev;ui.setLivePages({canvases:new Map(),revision,durationMs:0});return state.reflow?'reflow':true;}
- const [path,document]=changed[0],text=incoming.get(path).data;
- if(typeof text!=='string'||text.length>500000||state.support.some(file=>file.path===path))return false;
- const edit=findLiveEdit(document.source,text,state.capture,document.spans,state.macros);
- if(edit.incomplete){ui.setLiveStatus({state:'waiting',reason:edit.reason,revision});return true;}
- if(!edit.unit){fullReason=edit.reason;return false;}
- for(const unit of [edit.unit,...edit.removed.map(span=>span.unit)]){
-   const eligible=liveUnitEligibility(state.capture,unit);
-   if(!eligible.ok){fullReason=eligible.reason;return false;}
+ const pending=[];
+ for(const [path,document] of changed){
+   const text=incoming.get(path).data;
+   if(typeof text!=='string'||text.length>500000||state.support.some(file=>file.path===path))return false;
+   const edit=findLiveEdit(document.source,text,state.capture,document.spans,state.macros);
+   if(edit.incomplete){ui.setLiveStatus({state:'waiting',reason:edit.reason,revision});return true;}
+   if(!edit.unit){fullReason=edit.reason;return false;}
+   for(const unit of [edit.unit,...edit.removed.map(span=>span.unit)]){
+     const eligible=liveUnitEligibility(state.capture,unit);
+     if(!eligible.ok){fullReason=eligible.reason;return false;}
+   }
+   pending.push({document,text,edit});
  }
  const current=()=>gen===generation&&state===snapshot&&revision===ui.getState().revision;
  const began=performance.now();
  try{
    await liveStart;if(!current())return true;
-   const ctx=unitContext(state.capture,edit.unit),expected=edit.unit.advanced||{};
-   let proof=state.proofs.get(edit.unit.uid);
-   if(!proof){
-     proof=decodeDisplayList((await live.compile(ctx,edit.span.original,expected)).binary);
+   const edits=new Map(state.edits),affectedUnits=new Set();let reflow=state.reflow;
+   for(const {edit} of pending){
+     const ctx=unitContext(state.capture,edit.unit),expected=edit.unit.advanced||{};
+     let proof=state.proofs.get(edit.unit.uid);
+     if(!proof){
+       proof=decodeDisplayList((await live.compile(ctx,edit.span.original,expected)).binary);
+       if(!current())return true;
+       const comparison=compareUnitBaseline(edit.unit,state.pages,proof);
+       if(!comparison.ok)throw Error('Baseline verification: '+comparison.reason);
+       state.proofs.set(edit.unit.uid,proof);
+     }
+     // The server restores counters; changed numbering is provisional until the full pass.
+     const result=await live.typeset(ctx,edit.source);
      if(!current())return true;
-     const comparison=compareUnitBaseline(edit.unit,state.pages,proof);
-     if(!comparison.ok)throw Error('Baseline verification: '+comparison.reason);
-     state.proofs.set(edit.unit.uid,proof);
+     edits.set(edit.unit.uid,{unit:edit.unit,proof,list:decodeDisplayList(result.binary)});
+     for(const {unit} of edit.removed)edits.set(unit.uid,{unit,proof:{lines:state.pages.flatMap(page=>page.lines.filter(row=>row.unit===unit.uid)).sort((a,b)=>a.row-b.row)},list:{fonts:{},lines:[]}});
+     for(const unit of [edit.unit,...edit.removed.map(span=>span.unit)])affectedUnits.add(unit.uid);
+     const counters=result.header.counters||{},renumbered=Object.keys(counters).length!==Object.keys(expected).length||Object.entries(counters).some(([key,value])=>value!==expected[key]);
+     reflow||=edit.reflow||renumbered;
    }
-   // The server restores counters; changed numbering is provisional until the full pass.
-   const result=await live.typeset(ctx,edit.source);
-   if(!current())return true;
-   const list=decodeDisplayList(result.binary),edits=new Map(state.edits).set(edit.unit.uid,{unit:edit.unit,proof,list});
-   for(const {unit} of edit.removed)edits.set(unit.uid,{unit,proof:{lines:state.pages.flatMap(page=>page.lines.filter(row=>row.unit===unit.uid)).sort((a,b)=>a.row-b.row)},list:{fonts:{},lines:[]}});
    const units=new Set(edits.keys());
    let layout=state.pages;const pages=new Map();
    for(const item of edits.values()){
@@ -176,15 +186,15 @@ async function updateLive({source,root,files,filesRev,revision}){
      for(const [number,page] of updated)pages.set(number,page);
      layout=layout.map(page=>updated.get(page.page)||page);
    }
-   const affected=new Set([edit.unit,...edit.removed.map(span=>span.unit)].flatMap(unit=>unit.placements.map(row=>row.page)));
+   const affected=new Set([...affectedUnits].flatMap(uid=>edits.get(uid).unit.placements.map(row=>row.page)));
    const {canvases,flows}=await drawLivePages([...pages].filter(([number])=>affected.has(number)),units);
    if(!current())return true;
-   const counters=result.header.counters||{},renumbered=Object.keys(counters).length!==Object.keys(expected).length||Object.entries(counters).some(([key,value])=>value!==expected[key]);
-   state.reflow||=edit.reflow||layout.some(page=>page.reflowUnits?.length)||renumbered;
-   const regions=[...flows].flatMap(([page,flow])=>flow.bands.filter(band=>affected.has(page)&&[edit.unit,...edit.removed.map(span=>span.unit)].some(unit=>unit.uid===band.uid)).map(band=>({page,top:(band.y+band.shift)/flow.height,bottom:(band.y+band.shift+Math.max(0,band.h+band.delta))/flow.height})));
-   if(!ui.setLivePages({canvases,revision,durationMs:performance.now()-began,reflow:state.reflow,regions}))return false;
+   reflow||=layout.some(page=>page.reflowUnits?.length);
+   const regions=[...flows].flatMap(([page,flow])=>flow.bands.filter(band=>affectedUnits.has(band.uid)).map(band=>({page,top:(band.y+band.shift)/flow.height,bottom:(band.y+band.shift+Math.max(0,band.h+band.delta))/flow.height})));
+   if(!ui.setLivePages({canvases,revision,durationMs:performance.now()-began,reflow,regions}))return false;
    state.drawnPages=layout;for(const [number,flow] of flows)state.flows.set(number,flow);state.edits=edits;state.liveUnits=units;
-   acceptLiveEdit(document,edit,text);state.source=source;state.files=files;state.filesRev=filesRev;
+   for(const {document,edit,text} of pending)acceptLiveEdit(document,edit,text);
+   state.reflow=reflow;state.source=source;state.files=files;state.filesRev=filesRev;
    syncMarker(false);
    return state.reflow?'reflow':true;
  }catch(error){

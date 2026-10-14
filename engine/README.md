@@ -70,6 +70,8 @@ The Lua/TeX service is embedded in the WASM filesystem at `/rtex`, so `createEng
 
 For document edits, use the exported `findLiveEdit`, `acceptLiveEdit`, `parseMacros` and `replaceUnitRows` helpers. First prove each captured unit's original output using `compareUnitBaseline`. Preserve source/generation tokens around asynchronous work and reject stale results. Route unsupported edits to full compilation. `typeset()` is a low-level operation, not a source-policy check. Line-count, numbering and pagination changes remain provisional until a new full compile. Incremental output is a display list, not an updated PDF: export by calling `background.compile()` with the latest sources. `parseTexLog` is also exported.
 
+For multi-file projects, keep a separate source/span record per file and pass its project-relative path to `captureSpans(source, capture, path)`. Retain `capture.paragraphs`: its file metadata identifies an included file's final paragraph when TeX closes it after returning to its parent. The application can replay edits to several files before committing their combined preview. Ambiguous repeated inputs, paragraphs containing text from multiple files, and preamble/dependency changes still require full compilation.
+
 ## Scope and verification
 
 `npm run test:engine` builds the package, copies it outside the repository, imports its public entry, then runs real WASM full/incremental/error-recovery checks with no editor or Node dependency lookup in that directory. The test compares the edited glyph positions to a fresh full compile and checks module reuse and font transport. `npm run test:incremental`, `test:reflow` and `test:sequence` cover the existing richer fixtures.

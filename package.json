@@ -16,6 +16,7 @@
     "test:reflow": "node tests/live-reflow.mjs",
     "test:sequence": "node tests/live-sequence.mjs",
     "test:project": "node tests/project-math.mjs",
+    "test:live-project": "node --experimental-vm-modules tests/live-project.mjs",
     "prebuild": "node scripts/prepare-build-assets.mjs",
     "build:engine": "node scripts/build-engine.mjs",
     "test:engine": "npm run build:engine && node tests/standalone-engine.mjs"

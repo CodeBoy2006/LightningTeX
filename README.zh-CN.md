@@ -52,7 +52,7 @@ Ctrl / Command + Enter 完整编译；编译时再次点击顶栏状态胶囊可
 ## 本版的准确范围
 
 - 真正增量：首次完整编译捕获布局；首次编辑某个单元时校验原文字形与坐标，之后只向常驻引擎发送修改的单元。几何不变时沿用精确行替换；换行、公式增高、段落拆分/删除、相邻普通段落合并时，使用真实 TeX 字形即时重排受影响页面
-- 局部路径还支持已捕获的 itemize/enumerate/description、quote/quotation、section 等标题，以及 proof、abstract、theorem/lemma/proposition/corollary/remark、行内/独立公式、equation、align、gather、multline。定理环境保留标题、共享编号和内部列表。主文件和被引用的文本子文件按各自源位置跟踪。标题、标签/引用、编号变化会标记待校准；不完整输入保留上一张成功预览
+- 局部路径还支持已捕获的 itemize/enumerate/description、quote/quotation、section 等标题，以及 proof、abstract、theorem/lemma/proposition/corollary/remark、行内/独立公式、equation、align、gather、multline。定理环境保留标题、共享编号和内部列表。主文件、`\input`（含嵌套引用）和 `\include` 的文本子文件按各自源位置跟踪，包括返回父文件后才结束的末段。快速切换文件产生的多处待更新内容会逐项核验、统一提交预览；任一项失败或版本过期都不会留下半批更新。标题、标签/引用、编号变化会标记待校准；不完整输入保留上一张成功预览
 - 即时重排暂时伸缩页面并移动下方的 PDF 底图，保留正文、插图和页脚；跨页单元暂沿用已捕获的分页位置。停顿后由原有全文引擎恢复精确分页、页码、引用和辅助文件。没有新增分页引擎，也不把临时预览作为导出的 PDF
 - 常驻 LuaTeX 和 PDF.js Worker 复用。完整排版复用同一前言下上次成功的 aux；稳定时执行一遍，引用变化或目录等辅助文件需要时执行两遍
 - 绘制使用真实字体与整数 scaled-point 坐标。OpenType/TrueType 使用引擎 glyph index；Type 1 字体使用已安装的 PDF.js 转换原 PFB 轮廓，支持直接映射和静态 256 字符重编码（包括 Latin Modern 的 T1 与数学字体），按字体文件及编码缓存，没有新增依赖或另一套公式排版器
@@ -102,11 +102,14 @@ npm run test:preview
 npm run test:incremental
 npm run test:reflow
 npm run test:sequence
+npm run test:live-project
 ```
 
 npm run preview 使用本机静态服务器提供 dist。Worker 位于 public/runtime，增量 Lua/TeX 源码在 engine/tex（修改后需重建 WASM），压缩 WASM/数据在 public/luahbtex。Vite 只打包现有产物；源码编译步骤见 engine/build/README.md。
 
 Node 回归测试使用 `tests/fixtures/tex-packages.json.gz` 中的少量已下载宏包运行离线检查；这些测试夹具不会打包到网页。浏览器运行时仍按需获取缺失文件，包含 microtype 的 Lua 模块和字体配置。
+
+`npm run test:live-project` 在 Node 中执行实际 `main.js` 更新路径、WASM 和 Canvas 绘制，仅适配编辑器 DOM；覆盖子文件末段、嵌套引用、多个文件同批修改、段落拆分、不完整公式、过期响应与批次失败回退，并与独立全文编译核对字形和规则。该测试使用 Node 的实验性 VM 模块接口；浏览器输入调度另通过 `tests/browser-input.html` 验证。
 
 浏览器输入 benchmark：运行开发服务器后打开 `/tests/browser-input.html`，通过项目 ZIP 导入完整论文及插图；待全文编译完成，展开 `Input benchmark`，点击 `Reset measurements`，再用键盘连续编辑。面板统计真实输入事件、Live 状态、全文请求及 Live Worker 启动次数，`Download trace` 导出记录。恢复基准原稿后可重复同一操作；面板只在该测试页面加载。
 

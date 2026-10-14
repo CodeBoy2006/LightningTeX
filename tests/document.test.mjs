@@ -109,6 +109,28 @@ test('included-file spans ignore line numbers from other files and preserve unfi
   assert.equal(findLiveEdit(before,before.replace('First paragraph.',''),capture,spans).reflow,true);
  });
 });
+test('the final included paragraph uses its own EOF when TeX closes it in another file',async()=>{
+ const {captureSpans,acceptLiveEdit}=await import('../core/document.js');
+ const source='First.\n\nLast paragraph\ncontinues here.\n';
+ for(const end_line of [1,3,20]){
+  const capture={units:[{uid:1,kind:'par',file:'./part.tex',begin_line:1,end_line:2,seqs:[1]},{uid:2,kind:'par',file:'./part.tex',begin_line:3,end_line,seqs:[2]}],
+   paragraphs:[{seq:1,file:'./part.tex'},{seq:2,file:'./main.tex'}]};
+  const state={source,spans:captureSpans(source,capture,'part.tex')};
+  assert.deepEqual(state.spans.map(span=>span.original),['First.','Last paragraph\ncontinues here.']);
+  const next=source.replace('continues','still continues'),edit=findLiveEdit(source,next,capture,state.spans);
+  assert.equal(edit.unit?.uid,2);acceptLiveEdit(state,edit,next);
+  assert.equal(findLiveEdit(next,next.replace('here','there'),capture,state.spans).unit?.uid,2);
+ }
+});
+test('repeated input remains ambiguous and state-changing trailing source is not discarded',async()=>{
+ const {captureSpans}=await import('../core/document.js');
+ const unit={kind:'par',file:'./part.tex',begin_line:1,end_line:3};
+ const capture={units:[{...unit,uid:1,seqs:[1]},{...unit,uid:2,seqs:[2]}],paragraphs:[{seq:1,file:'./main.tex'},{seq:2,file:'./main.tex'}]};
+ const text='Repeated paragraph.\n';
+ assert.equal(findLiveEdit(text,text.replace('Repeated','Changed'),capture,captureSpans(text,capture,'part.tex')).unit,undefined);
+ const setup=text+'\\newpage\n',single={units:capture.units.slice(0,1),paragraphs:capture.paragraphs};
+ assert.equal(findLiveEdit(setup,setup.replace('Repeated','Changed'),single,captureSpans(setup,single,'part.tex')).unit,undefined);
+});
 test('lists and heading formatting are bounded; unsafe commands inside titles stay rejected',()=>{
  for(const source of [String.raw`\begin{itemize}\item One.\item Two.\end{itemize}`,String.raw`\section{An \emph{important} result}`,String.raw`\section[Short]{An \emph{important} result}`,String.raw`\begin{tabular}{ll}A&B\\C&D\end{tabular}`])assert.equal(liveSourcePolicy(source).ok,true,source);
  for(const source of [String.raw`\section{\input secret}`,String.raw`\section[\input secret]{Title}`,String.raw`\paragraph{\csname input\endcsname}`,String.raw`\section{\def\x{1}}`])assert.ok(!liveSourcePolicy(source).ok,source);
