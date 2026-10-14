@@ -19,12 +19,13 @@ function setup(options={}) {
   const ui=mountEditor({root,previewIntervalMs:5,renderPdf:async ({bytes,container})=>{rendered.push(bytes.at(-1));container.textContent=`PDF ${bytes.at(-1)}`;return {pages:1};},...options});
   const q=id=>root.querySelector(`[data-id="${id}"]`);
   const a=id=>root.querySelector(`[data-action="${id}"]`);
+  const pdfItem=()=>{a('export-menu').click();return [...root.querySelectorAll('[role="menu"] button')].find(button=>button.querySelector('.menu-label')?.textContent==='PDF');};
   const event=(el,name,extra={})=>el.dispatchEvent(name==='keydown'?new dom.window.KeyboardEvent(name,{bubbles:true,cancelable:true,...extra}):new dom.window.Event(name,{bubbles:true,...extra}));
   const edit=text=>{q('source').value=text;event(q('source'),'input');};
   const auto=value=>{q('auto-compile').checked=value;event(q('auto-compile'),'change');};
   const type=data=>{const input=q('source'),typed=new dom.window.InputEvent('beforeinput',{bubbles:true,cancelable:true,inputType:'insertText',data});if(input.dispatchEvent(typed)){input.setRangeText(data,input.selectionStart,input.selectionEnd,'end');event(input,'input');}};
   ui.setEngineStatus({status:'ready'});
-  return {ui,root,q,a,event,edit,auto,type,rendered,dom,cleanup(){ui.destroy();dom.window.close();for(const [key,value] of Object.entries(previous)){if(value===undefined)delete globalThis[key];else globalThis[key]=value;}}};
+  return {ui,root,q,a,pdfItem,event,edit,auto,type,rendered,dom,cleanup(){ui.destroy();dom.window.close();for(const [key,value] of Object.entries(previous)){if(value===undefined)delete globalThis[key];else globalThis[key]=value;}}};
 }
 function memoryStore(saved=null){
   const files=new Map((saved?.files||[]).map(file=>[file.path,file]));let meta=saved?{main:saved.main,tabs:saved.tabs,active:saved.active,folders:saved.folders}:null;
@@ -64,7 +65,7 @@ test('newer edit during compile schedules a second compile, then reaches current
 
 test('compile errors preserve last good PDF, mark edits stale and open the panel',async()=>{
   let calls=0;const h=setup({onCompile:async()=>{if(++calls===1)return {pdf:bytes(1)};throw new Error('Undefined control sequence <unsafe>');}});
-  try {h.auto(false);await h.ui.compile();assert.equal(h.q('panel').hidden,true);h.edit('broken source');await h.ui.compile();assert.match(h.q('preview-viewport').textContent,/PDF 1/);assert.equal(h.q('preview-status-text').textContent,'Out of date');assert.equal(h.a('download-pdf').disabled,false);assert.equal(h.q('panel').hidden,false);assert.equal(h.q('logs').hidden,false);assert.match(h.q('logs').textContent,/<unsafe>/);assert.equal(h.q('logs').querySelector('unsafe'),null);}finally{h.cleanup();}
+  try {h.auto(false);await h.ui.compile();assert.equal(h.q('panel').hidden,true);h.edit('broken source');await h.ui.compile();assert.match(h.q('preview-viewport').textContent,/PDF 1/);assert.equal(h.q('preview-status-text').textContent,'Out of date');assert.equal(h.pdfItem().disabled,false);assert.equal(h.q('panel').hidden,false);assert.equal(h.q('logs').hidden,false);assert.match(h.q('logs').textContent,/<unsafe>/);assert.equal(h.q('logs').querySelector('unsafe'),null);}finally{h.cleanup();}
 });
 
 test('a panel opened by an error closes again once the document compiles',async()=>{
@@ -239,7 +240,7 @@ test('downloading an incrementally changed preview compiles current PDF before d
    h.dom.window.HTMLAnchorElement.prototype.click=()=>downloads++;
    h.auto(false);await h.ui.setPdf(bytes(1));h.edit('math edit');
    h.ui.setLivePages({canvases:new Map(),revision:1,durationMs:2});
-   h.event(h.a('download-pdf'),'click');await tick(20);
+   h.event(h.pdfItem(),'click');await tick(20);
    assert.deepEqual(reasons,['download']);assert.equal(downloads,1);assert.equal(h.ui.getState().pdfRevision,1);
  }finally{h.cleanup();}
 });
@@ -356,11 +357,60 @@ test('a document without pages shows an empty page instead of a failure; a new p
   let empty=true;const pdf=new Uint8Array(2048);pdf[pdf.length-1]=1;
   const h=setup({onCompile:async()=>empty?{empty:true}:{pdf}});
   try {h.auto(false);await h.ui.compile();
-    assert.equal(h.q('sheet').dataset.state,'empty');assert.equal(h.q('preview-status-text').textContent,'Up to date');assert.equal(h.q('panel').hidden,true);assert.equal(h.q('toast').hidden,true);assert.equal(h.a('download-pdf').disabled,true);assert.equal(h.q('stat-doc').textContent,'');
+    assert.equal(h.q('sheet').dataset.state,'empty');assert.equal(h.q('preview-status-text').textContent,'Up to date');assert.equal(h.q('panel').hidden,true);assert.equal(h.q('toast').hidden,true);assert.equal(h.pdfItem().disabled,true);assert.equal(h.q('stat-doc').textContent,'');
     h.edit('text');assert.equal(h.q('preview-status-text').textContent,'Out of date');empty=false;await h.ui.compile();
-    assert.equal(h.q('preview-viewport').textContent,'PDF 1');assert.equal(h.q('sheet'),null);assert.equal(h.a('download-pdf').disabled,false);assert.match(h.q('stat-doc').textContent,/2\.0 KB/);
+    assert.equal(h.q('preview-viewport').textContent,'PDF 1');assert.equal(h.q('sheet'),null);assert.equal(h.pdfItem().disabled,false);assert.match(h.q('stat-doc').textContent,/2\.0 KB/);
     h.ui.project.load({files:[{path:'main.tex',text:'other project'}]});
-    assert.ok(h.q('sheet'),'the previous project\'s pages are gone');assert.equal(h.q('preview-status-text').textContent,'Not compiled');assert.equal(h.a('download-pdf').disabled,true);assert.equal(h.ui.getState().pdfRevision,-1);assert.equal(h.q('stat-doc').textContent,'');
+    assert.ok(h.q('sheet'),'the previous project\'s pages are gone');assert.equal(h.q('preview-status-text').textContent,'Not compiled');assert.equal(h.pdfItem().disabled,true);assert.equal(h.ui.getState().pdfRevision,-1);assert.equal(h.q('stat-doc').textContent,'');
     empty=true;await h.ui.compile();assert.equal(h.q('sheet').dataset.state,'empty');
     h.ui.setError(new Error('boom'));assert.equal(h.q('sheet').dataset.state,'failed');h.q('sheet').querySelector('[data-action="show-problems"]').click();assert.equal(h.q('panel').hidden,false);}finally{h.cleanup();}
+});
+
+test('palette searches files, headings and line numbers, then restores editor focus',()=>{
+ const h=setup();try{h.auto(false);
+  h.event(h.q('source'),'keydown',{key:'k',ctrlKey:true});let query=h.root.querySelector('.palette-input input');query.value='@Euler';h.event(query,'input');assert.match(h.root.querySelector('.palette-list').textContent,/Euler/);h.event(query,'keydown',{key:'Enter'});assert.equal(document.activeElement,h.q('source'));
+  h.event(h.q('source'),'keydown',{key:'k',ctrlKey:true});query=h.root.querySelector('[role="dialog"] .palette-input input');query.value=':3';h.event(query,'input');h.event(query,'keydown',{key:'Enter'});assert.equal(h.q('source').selectionStart,h.q('source').value.split('\n').slice(0,2).join('\n').length+1);
+ }finally{h.cleanup();}
+});
+test('find replaces literal and regex matches through the editor and retains selected match on Escape',()=>{
+ const h=setup({source:'alpha ALPHA beta 12 beta 34'});try{h.auto(false);h.event(h.q('source'),'keydown',{key:'h',ctrlKey:true,shiftKey:true});
+  const bar=h.root.querySelector('.find-bar'),query=bar.querySelector('.find-query'),replacement=bar.querySelector('.find-replacement');query.value='alpha';h.event(query,'input');assert.equal(h.root.querySelectorAll('.code-matches mark').length,2);
+  replacement.value='new';bar.querySelector('[aria-label="Replace all"]').click();assert.equal(h.ui.getSource(),'new new beta 12 beta 34');
+  query.value='beta (\\d+)';replacement.value='$1 beta';bar.querySelector('[aria-label="Regular expression"]').click();h.event(query,'input');bar.querySelector('[aria-label="Replace all"]').click();assert.equal(h.ui.getSource(),'new new 12 beta 34 beta');
+  query.value='beta';h.event(query,'input');h.event(query,'keydown',{key:'Enter'});h.event(query,'keydown',{key:'Escape'});assert.equal(document.activeElement,h.q('source'));assert.equal(h.q('source').value.slice(h.q('source').selectionStart,h.q('source').selectionEnd),'beta');
+ }finally{h.cleanup();}
+});
+test('completion consumes Tab, respects composition, and pairs environments once',()=>{
+ const h=setup({source:''});try{h.auto(false);h.q('source').focus();h.type('\\');h.type('b');h.type('e');h.type('g');h.event(h.q('source'),'keydown',{key:'Tab'});
+  assert.equal(h.ui.getSource(),'\\begin{}');h.type('e');h.type('q');h.event(h.q('source'),'keydown',{key:'Tab'});assert.equal((h.ui.getSource().match(/\\end\{/g)||[]).length,1);assert.match(h.ui.getSource(),/\\begin\{equation\}/);
+  h.event(h.q('source'),'compositionstart');h.edit('\\sec');assert.equal(h.root.querySelector('.completion').hidden,true);h.event(h.q('source'),'compositionend');
+ }finally{h.cleanup();}
+});
+test('tab menus and keyboard splitters update actual workspace state',()=>{
+ const h=setup();try{h.auto(false);h.ui.project.write('two.tex','two');h.ui.openFile('two.tex');h.ui.project.write('three.tex','three');h.ui.openFile('three.tex');
+  const tab=h.q('tabs').children[1];h.event(tab,'contextmenu');const menu=h.root.querySelector('[role="menu"]');[...menu.querySelectorAll('button')].find(b=>b.textContent.includes('Close tabs to the right')).click();assert.deepEqual([...h.q('tabs').children].map(n=>n.dataset.path),['main.tex','two.tex']);
+  const splitter=h.root.querySelector('[data-split="sidebar"]'),before=h.ui.getSettings().sidebar;h.event(splitter,'keydown',{key:'ArrowRight'});assert.equal(h.ui.getSettings().sidebar,before+16);h.event(splitter,'keydown',{key:'Home'});assert.equal(h.ui.getSettings().sidebar,232);
+ }finally{h.cleanup();}
+});
+test('template gallery changes the project only after its explicit replace action',()=>{
+ const h=setup({source:'Keep me'});try{h.auto(false);h.a('project-menu').click();[...h.root.querySelectorAll('[role="menu"] button')].find(b=>b.textContent.includes('New project')).click();
+  const dialog=h.root.querySelector('.template-dialog');dialog.querySelectorAll('.template-card')[3].click();assert.equal(h.ui.getSource(),'Keep me');dialog.querySelector('.dialog-actions .primary').click();assert.match(h.ui.getSource(),/\\documentclass\{article\}/);assert.ok(!h.ui.getSource().includes('Keep me'));
+ }finally{h.cleanup();}
+});
+test('image paste stores unique assets and inserts undoable source without overwriting images',async()=>{
+ const h=setup({source:'text '});try{h.auto(false);h.q('source').focus();h.ui.project.write('figures/image.png',new Uint8Array([9]));const event=new h.dom.window.Event('paste',{bubbles:true,cancelable:true});Object.defineProperty(event,'clipboardData',{value:{files:[upload('image.png',new Uint8Array([137,80,78,71]))]}});h.q('source').dispatchEvent(event);await tick();
+  assert.equal(h.ui.project.get('figures/image.png').data[0],9);assert.equal(h.ui.project.get('figures/image-2.png').data[0],137);assert.match(h.ui.getSource(),/includegraphics\[width=\\linewidth\]\{figures\/image-2.png\}/);
+ }finally{h.cleanup();}
+});
+test('snapshots are saved after successful compile, scoped to the project and recover before restore',async()=>{
+ const store=memoryStore();store.snapshots=[];store.addSnapshot=async row=>{store.snapshots.push(row);return true;};store.listSnapshots=async id=>store.snapshots.filter(row=>row.projectId===id).reverse();
+ const h=setup({store,onCompile:async()=>({pdf:bytes(1)})});try{await h.ui.ready;h.auto(false);await h.ui.compile();assert.equal(store.snapshots.length,1);const original=h.ui.getSource();h.ui.project.write('fig.png',new Uint8Array([1,2,3]));h.edit('Changed draft');
+  h.a('history').click();await tick();const dialog=h.root.querySelector('.history-dialog');assert.match(dialog.querySelector('pre').textContent,/documentclass/);dialog.querySelector('.primary').click();await tick();h.root.querySelector('[role="alertdialog"] .primary').click();await tick();
+  assert.equal(store.snapshots.at(-1).files.find(f=>f.path==='main.tex').text,'Changed draft');assert.equal(h.ui.getSource(),original);assert.ok(h.ui.project.has('fig.png'));assert.ok(store.snapshots.every(row=>row.files.every(file=>typeof file.text==='string')));
+ }finally{h.cleanup();}
+});
+
+test('full-preview crossfade keeps old pixels outside navigation and live targets',async()=>{
+ const h=setup({renderPdf:async({container})=>{const canvas=document.createElement('canvas');canvas.dataset.page='1';canvas.dataset.base='600';container.append(canvas);return {pages:1};}});
+ try{await h.ui.setPdf(bytes(1));await h.ui.setPdf(bytes(2));assert.equal(h.q('preview-viewport').querySelectorAll('canvas[data-page]').length,1);assert.ok(h.q('preview-viewport').querySelector('.page-leave canvas'));await tick(150);assert.equal(h.q('preview-viewport').querySelector('.page-leave'),null);}finally{h.cleanup();}
 });

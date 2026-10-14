@@ -1,0 +1,22 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>LightningTeX storage regression</title><style>body{font:16px/1.6 system-ui;max-width:70ch;margin:40px auto;padding:0 20px}pre{white-space:pre-wrap}</style><h1>Storage regression</h1><pre id="result">Running…</pre><script type="module">
+import {openStore} from '../ui/storage.js';
+const output=document.querySelector('#result'),name='lightningtex-test-'+crypto.randomUUID(),lines=[];
+const check=(condition,label)=>{if(!condition)throw Error(label);lines.push('PASS · '+label);output.textContent=lines.join('\n');};
+let store;
+try{
+  const old=await new Promise((resolve,reject)=>{const req=indexedDB.open(name,1);req.onupgradeneeded=()=>{req.result.createObjectStore('files');req.result.createObjectStore('meta');};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
+  await new Promise((resolve,reject)=>{const tx=old.transaction(['files','meta'],'readwrite');tx.objectStore('files').put({path:'main.tex',text:'existing draft'},'main.tex');tx.objectStore('meta').put({main:'main.tex'},'project');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});old.close();
+  store=await openStore(name);check(!!store,'v1 database upgrades to v2');const loaded=await store.load();check(loaded.files[0].text==='existing draft','upgrade preserves existing files and metadata');
+  const snapshot={id:'first',projectId:'one',time:1000000,main:'main.tex',files:[{path:'main.tex',text:'snapshot'}]};
+  check(await store.addSnapshot(snapshot),'first snapshot stored');check(!await store.addSnapshot({...snapshot,id:'soon',time:1000001}),'five-minute spacing enforced');
+  await Promise.all([store.addSnapshot({...snapshot,id:'parallel-a',time:1300000}),store.addSnapshot({...snapshot,id:'parallel-b',time:1300001})]);check((await store.listSnapshots('one')).length===2,'concurrent writes cannot bypass spacing');
+  check(await store.addSnapshot({...snapshot,id:'recovery',time:1300002,force:true}),'recovery snapshot bypasses spacing');
+  await store.addSnapshot({...snapshot,id:'other',projectId:'two',time:1300003});check((await store.listSnapshots('two')).length===1,'history is scoped to its project');
+  for(let i=0;i<35;i++)await store.addSnapshot({...snapshot,id:'retention-'+i,time:2000000+i*300000});
+  check((await store.listSnapshots('one')).length===30,'retention keeps the newest 30 snapshots');
+  store.close();store=await openStore(name);check((await store.listSnapshots('one')).length===30,'snapshots survive reopening');check((await store.load()).files[0].text==='existing draft','history writes leave the current project untouched');
+  await store.clear();check((await store.listSnapshots('one')).length===0&&(await store.load())===null,'turning persistence off clears files and history');
+  output.dataset.status='passed';output.textContent+='\n\nAll 11 checks passed.';
+}catch(error){output.dataset.status='failed';output.textContent+='\nFAIL · '+error.stack;}
+finally{store?.close();indexedDB.deleteDatabase(name);}
+</script></html>

@@ -48,6 +48,7 @@ function previewContext(capture){
 const ui=mountEditor({renderPdf,typesetMath,
  onCursor:position=>{caret=position;if(snapshot)syncMarker();},
  onPreviewPick:pick,
+ onPreviewHover:hit,
  onCancel:()=>{generation++;background?.stop();live?.stop();liveStart=null;snapshot=null;ui.setLiveStatus({state:'ready'});ui.setMarker(null);},
  onPreview:request=>updateLive(request),
  onCompile:async({source,root,files,filesRev,revision,reason})=>{
@@ -183,7 +184,8 @@ async function updateLive({source,root,files,filesRev,revision}){
    if(!current())return true;
    const counters=result.header.counters||{},renumbered=Object.keys(counters).length!==Object.keys(expected).length||Object.entries(counters).some(([key,value])=>value!==expected[key]);
    state.reflow||=edit.reflow||layout.some(page=>page.reflowUnits?.length)||renumbered;
-   if(!ui.setLivePages({canvases,revision,durationMs:performance.now()-began,reflow:state.reflow}))return false;
+   const regions=[...flows].flatMap(([page,flow])=>flow.bands.filter(band=>affected.has(page)&&[edit.unit,...edit.removed.map(span=>span.unit)].some(unit=>unit.uid===band.uid)).map(band=>({page,top:(band.y+band.shift)/flow.height,bottom:(band.y+band.shift+Math.max(0,band.h+band.delta))/flow.height})));
+   if(!ui.setLivePages({canvases,revision,durationMs:performance.now()-began,reflow:state.reflow,regions}))return false;
    state.drawnPages=layout;for(const [number,flow] of flows)state.flows.set(number,flow);state.edits=edits;state.liveUnits=units;
    acceptLiveEdit(document,edit,text);state.source=source;state.files=files;state.filesRev=filesRev;
    syncMarker(false);
@@ -234,7 +236,7 @@ function flowOffset(flow,line){
  return own?own.shift+own.dy:(flow?.bands||[]).reduce((sum,band)=>sum+(band.y+band.h<=line.y?band.delta:0),0);
 }
 // Preview -> source: double-click a line to jump to the text that produced it.
-function pick({page,y}){
+function hit({page,y}){
  const state=snapshot,sheet=state?.drawnPages.find(candidate=>candidate.page===page);
  if(!sheet)return;
  const flow=state.flows.get(page),at=y*(flow?.height??sheet.page_height);let best=null,distance=Infinity;
@@ -244,22 +246,32 @@ function pick({page,y}){
    if(gap<distance){distance=gap;best=line;}
  }
  const unit=best&&state.capture.units.find(candidate=>candidate.uid===best.unit);
- if(!unit)return;
+ if(!unit||distance>sheet.page_height*.025)return null;
  const path=projectPath(unit.file||state.root),document=state.documents.get(path),span=document?.source===ui.project.get(path)?.text?document.spans.find(candidate=>candidate.unit===unit):null;
  // Within a paragraph, land roughly on the clicked row.
- if(span)ui.reveal({path,offset:span.start+Math.floor((span.end-span.start)*(best.row-1)/Math.max(1,state.drawnPages.reduce((count,page)=>count+page.lines.filter(row=>row.unit===unit.uid).length,0)))});
- else ui.reveal({path,line:unit.begin_line});
+ const rows=sheet.lines.filter(line=>line.unit===unit.uid),height=flow?.height??sheet.page_height;
+ return {path,line:unit.begin_line,offset:span?span.start+Math.floor((span.end-span.start)*(best.row-1)/Math.max(1,state.drawnPages.reduce((count,page)=>count+page.lines.filter(row=>row.unit===unit.uid).length,0))):undefined,
+   page,top:Math.min(...rows.map(line=>line.y-line.h+flowOffset(flow,line)))/height,bottom:Math.max(...rows.map(line=>line.y+line.d+flowOffset(flow,line)))/height};
 }
+function pick(point){const target=hit(point);if(target)ui.reveal(target);}
 async function boot(){try{
  ui.setEngineStatus({status:'loading'});
  const [files,manifest]=await Promise.all([loadSupport(base),fetch(new URL('busytex/asset-manifest.json',base)).then(response=>response.ok?response.json():null).catch(()=>null)]);
- const parts=manifest?Object.values(manifest.assets).reduce((sum,asset)=>sum+asset.parts.length,0):0;let fetched=0;
+ const assets=manifest?.assets||{},loaded=new Map();
+ ui.setLoadProgress({step:0,assets});
  background=new BackgroundEngine({base,files,onLog:text=>{
-   if(/^Loading \S+ part \d+\/\d+/.test(text)){if(parts)ui.setEngineStatus({status:'loading',progress:Math.min(0.95,(++fetched-0.5)/parts)});}
+   const part=/^(Loading|Loaded) (\S+) part (\d+)\/(\d+)/.exec(text);
+   if(part){const [,stage,name,index]=part,asset=assets[name],step=name==='busytex.wasm'?0:1;
+     if(stage==='Loaded')loaded.set(name,Number(index));
+     const done=asset?.parts.slice(0,loaded.get(name)||0).reduce((sum,part)=>sum+part.size,0)||0,total=asset?.encodedSize;
+     ui.setLoadProgress({step,done,total});
+     const all=Object.values(assets).reduce((sum,asset)=>sum+asset.encodedSize,0),received=Object.entries(assets).reduce((sum,[key,asset])=>sum+asset.parts.slice(0,loaded.get(key)||0).reduce((sum,part)=>sum+part.size,0),0);
+     if(all)ui.setEngineStatus({status:'loading',progress:Math.min(.95,received/all)});
+   }else if(/^Runtime loaded/.test(text))ui.setLoadProgress({step:2});
    else if(/^!|Error|Warning/i.test(text))ui.log(text,'warning');
  }});
  live=new LiveEngine({base,files,onFonts:items=>{for(const[k,v]of Object.entries(items))fonts.set(k,v)},onLog:text=>{if(/^!/.test(text))ui.log(text,'warning')}});
- await Promise.all([background.start(),ui.ready]);ui.setEngineStatus({status:'ready'});await ui.compile('initial');
+ await Promise.all([background.start(),ui.ready]);ui.setEngineStatus({status:'ready'});ui.setLoadProgress({step:3});await ui.compile('initial');
  }catch(e){ui.setEngineStatus({status:'error'});ui.log(e.message,'error')}}
 void boot();
 window.addEventListener('pagehide',()=>{background?.stop();live?.stop();pdfRenderWorker?.destroy();pdfRenderWorker=null});

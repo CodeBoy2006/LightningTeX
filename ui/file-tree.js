@@ -7,7 +7,7 @@ const fileIcon=path=>isImagePath(path)?'image':/\.(tex|sty|cls|bib|ltx)$/i.test(
 
 /** actions: open(path), remove(path), download(path), upload(files, dir), pick(dir), notify(key, values) */
 export function createFileTree({el,host,project,t,actions}){
-  const collapsed=new Set();let selected=null,active=null,renaming=null;
+  const collapsed=new Set();let selected=null,active=null,renaming=null,toggled=null;
   const rows=()=>{
     const children=new Map(),out=[];
     const add=(path,folder)=>{
@@ -33,19 +33,23 @@ export function createFileTree({el,host,project,t,actions}){
     for(const row of list){
       const item=document.createElement('div');item.className='row';item.setAttribute('role','treeitem');item.draggable=true;
       item.dataset.path=row.path;item.dataset.kind=row.folder?'folder':'file';item.style.setProperty('--depth',String(row.depth));
+      item.dataset.type=row.folder?'folder':/\.bib$/i.test(row.path)?'bib':fileIcon(row.path);item.setAttribute('aria-level',String(row.depth+1));
       item.tabIndex=row.path===(selected??list[0].path)?0:-1;
       item.setAttribute('aria-selected',String(row.path===active));
       if(row.folder)item.setAttribute('aria-expanded',String(!collapsed.has(row.path)));
       if(row.path===selected)item.classList.add('selected');
       const main=row.path===project.main;
-      item.innerHTML=`<span class="row-twist">${row.folder?icon(collapsed.has(row.path)?'chevronRight':'chevronDown',12):''}</span><span class="row-icon">${icon(row.folder?'folder':fileIcon(row.path))}</span><span class="row-name"></span>`+
-        (main?`<span class="row-main">${icon('bolt',12)}</span>`:'')+`<button type="button" class="icon-btn row-more" tabindex="-1">${icon('more')}</button>`;
+      // A folder that was just opened or closed turns its chevron and lets its rows slide in.
+      if(row.path===toggled)item.dataset.toggled='true';else if(toggled&&row.path.startsWith(toggled+'/'))item.classList.add('row-enter');
+      item.innerHTML=`<span class="row-twist">${row.folder?icon('chevronDown',12):''}</span><span class="row-icon">${icon(row.folder?'folder':fileIcon(row.path))}</span><span class="row-name"></span>`+
+        (main?`<span class="row-main">${icon('target',12)}</span>`:'')+`<button type="button" class="icon-btn row-more" tabindex="-1">${icon('more')}</button>`;
       item.children[2].textContent=basename(row.path);
-      if(main)item.children[3].title=t('file.main');
+      if(main)item.children[3].dataset.tip=t('file.main');
       item.lastChild.setAttribute('aria-label',t('file.more'));
       if(row.path===renaming)item.children[2].replaceWith(renameInput(row.path));
       el.append(item);
     }
+    toggled=null;
     if(renaming){const input=el.querySelector('.row-rename');input?.focus();const dot=input?.value.lastIndexOf('.');input?.setSelectionRange(0,dot>0?dot:input.value.length);}
     else if(focused)(rowOf(selected)||el.firstChild)?.focus();
   }
@@ -73,13 +77,13 @@ export function createFileTree({el,host,project,t,actions}){
     }catch{actions.notify('toast.badName');}
   }
   const rename=path=>{renaming=path;selected=path;render();};
-  function toggle(path){collapsed.has(path)?collapsed.delete(path):collapsed.add(path);render();}
+  function toggle(path){collapsed.has(path)?collapsed.delete(path):collapsed.add(path);toggled=path;render();}
   function menu(path,at){
     const folder=path&&project.isFolder(path),dir=!path?'':folder?path:dirname(path);
     const creation=[{label:t(path?'file.newHere':'file.new'),icon:'fileAdd',run:()=>create(false,dir)},{label:t(path?'folder.newHere':'folder.new'),icon:'folderAdd',run:()=>create(true,dir)},{label:t('file.upload'),icon:'upload',run:()=>actions.pick(dir)}];
     if(!path){openMenu(host,at,creation);return;}
     openMenu(host,at,[...(folder?[...creation,'separator']:[]),{label:t('file.rename'),icon:'edit',hint:'F2',run:()=>rename(path)},
-      ...(folder?[]:[{label:t('file.setMain'),icon:'bolt',disabled:!canBeMain(path)||path===project.main,run:()=>project.setMain(path)},{label:t('file.download'),icon:'download',run:()=>actions.download(path)}]),
+      ...(folder?[]:[{label:t('file.setMain'),icon:'target',disabled:!canBeMain(path)||path===project.main,run:()=>project.setMain(path)},{label:t('file.download'),icon:'download',run:()=>actions.download(path)}]),
       'separator',{label:t('file.delete'),icon:'trash',danger:true,run:()=>actions.remove(path)}]);
   }
   const pathAt=event=>event.target.closest?.('.row')?.dataset.path??null;
@@ -88,7 +92,7 @@ export function createFileTree({el,host,project,t,actions}){
   el.addEventListener('click',event=>{
     const path=pathAt(event);if(!path||renaming)return;
     selected=path;
-    if(event.target.closest('.row-more')){render();menu(path,event.target.closest('.row-more').getBoundingClientRect());return;}
+    if(event.target.closest('.row-more')){const at=event.target.closest('.row-more').getBoundingClientRect();render();menu(path,at);return;}
     if(project.isFolder(path))toggle(path);else{render();actions.open(path);}
   });
   el.addEventListener('dblclick',event=>{const path=pathAt(event);if(path&&!project.isFolder(path)&&!event.target.closest('.row-more'))rename(path);});
@@ -106,7 +110,7 @@ export function createFileTree({el,host,project,t,actions}){
     else return;
     event.preventDefault();
   });
-  el.addEventListener('dragstart',event=>{const path=pathAt(event);if(!path||renaming){event.preventDefault();return;}event.dataTransfer.setData(DRAG,path);event.dataTransfer.effectAllowed='move';});
+  el.addEventListener('dragstart',event=>{const path=pathAt(event);if(!path||renaming){event.preventDefault();return;}event.dataTransfer.setData(DRAG,path);event.dataTransfer.effectAllowed='copyMove';});
   el.addEventListener('dragover',event=>{
     const types=[...(event.dataTransfer?.types||[])];if(!types.includes(DRAG)&&!types.includes('Files'))return;
     event.preventDefault();clearDrop();

@@ -10,7 +10,8 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
   const scroller=el.firstChild,body=scroller.firstChild,layer=body.firstChild,input=body.lastChild;
   input.setAttribute('aria-label',label);if(describedBy)input.setAttribute('aria-describedby',describedBy);
   const style=()=>document.defaultView.getComputedStyle(layer);
-  let text=null,lines=[],states=[],nodes=[],starts=null,active=-1,markers=new Map(),options={...settings},flashTimer,editing=false,pinned=0;
+  let text=null,lines=[],states=[],nodes=[],starts=null,active=-1,markers=new Map(),diagnostics=[],options={...settings},flashTimer,editing=false,pinned=0;
+  const lenses=Object.assign(document.createElement('div'),{className:'code-diagnostics'});body.append(lenses);
 
   const lineNode=tokens=>{
     const node=document.createElement('div');node.className='cl';
@@ -43,6 +44,7 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
       for(const [index,mark] of markers){if(index<a)shifted.set(index,mark);else if(index>=a+removed)shifted.set(index+added-removed,mark);}
       markers=shifted;
     }
+    if(removed||added)diagnostics=diagnostics.flatMap(problem=>problem.line-1<a?[problem]:problem.line-1>=a+removed?[{...problem,line:problem.line+added-removed}]:[]);
     lines=next;starts=null;
     for(let i=a+added;i<lines.length&&states[i]!==state;i++){
       states[i]=state;const result=tokenizeLine(lines[i],state),node=lineNode(result.tokens);
@@ -93,10 +95,24 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
   function sync(silent=false){
     const current=input.value;
     if(current!==text){text=current;render(current.split('\n'));if(!silent)onChange?.(current);}
-    cursor();
+    cursor();placeDiagnostics();
+    el.dispatchEvent(new document.defaultView.Event('editor-change'));
+  }
+  function placeDiagnostics(){
+    lenses.replaceChildren();
+    const grouped=new Map();
+    for(const problem of diagnostics){if(!nodes[problem.line-1])continue;const group=grouped.get(problem.line)||[];group.push(problem);grouped.set(problem.line,group);}
+    for(const [line,problems] of grouped){
+      const node=nodes[line-1],message=problems.map(problem=>problem.message).join('\n'),end=rectAt(lineStarts()[line-1]+lines[line-1].length);
+      const gutter=document.createElement('button');gutter.type='button';gutter.className='diagnostic-gutter';gutter.dataset.tip=message;gutter.setAttribute('aria-label',message);gutter.style.top=node.offsetTop+'px';gutter.style.height=node.offsetHeight+'px';
+      gutter.addEventListener('click',()=>{input.focus();input.setSelectionRange(lineStarts()[line-1],lineStarts()[line-1]);cursor();});lenses.append(gutter);
+      const error=problems.find(problem=>problem.severity==='error');
+      if(error&&end){const lens=document.createElement('span');lens.className='error-lens';lens.textContent=error.message;lens.dataset.tip=message;lens.style.top=end.top+'px';lens.style.left=end.x+20+'px';lenses.append(lens);}
+    }
   }
   // execCommand keeps the edit on the native undo stack; setRangeText is the fallback (and jsdom).
   function edit(start,end,replacement,selectStart,selectEnd=selectStart){
+    input.focus({preventScroll:true});
     input.setSelectionRange(start,end);
     let done=false;editing=true;
     try{done=replacement?document.execCommand?.('insertText',false,replacement):start===end||document.execCommand?.('delete');}catch{/* fall through */}
@@ -180,13 +196,24 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
     options={...options,...next};
     el.dataset.wrap=String(!!options.wrap);input.wrap=options.wrap?'soft':'off';input.spellcheck=!!options.spellcheck;
     el.style.setProperty('--code-size',options.fontSize+'px');el.style.setProperty('--tab',String(options.tabSize));
+    placeDiagnostics();
+  }
+  function offsetAtPoint(x,y){
+    // Temporarily hit-test the text mirror; the transparent textarea normally owns the pointer.
+    input.style.pointerEvents='none';layer.style.pointerEvents='auto';
+    let node,offset;
+    try{const point=document.caretPositionFromPoint?.(x,y),range=!point&&document.caretRangeFromPoint?.(x,y);node=point?.offsetNode||range?.startContainer;offset=point?.offset??range?.startOffset;}
+    finally{input.style.pointerEvents='';layer.style.pointerEvents='';}
+    const row=node?.nodeType===3?node.parentElement.closest('.cl'):node?.closest?.('.cl'),line=nodes.indexOf(row);
+    if(line<0)return input.selectionEnd;
+    const range=document.createRange();range.selectNodeContents(row);range.setEnd(node,offset);return lineStarts()[line]+range.toString().length;
   }
   configure({});input.value=value;sync(true);
   return {
-    el,input,body,scroller,rectAt,configure,
+    el,input,body,scroller,rectAt,configure,edit,offsetAtPoint,
     getValue:()=>text,
     setValue(next){input.value=next;sync(true);},
-    focus(){input.focus({preventScroll:true});},
+    focus(){input.focus({preventScroll:true});placeDiagnostics();},
     get caret(){return input.selectionEnd;},
     get lineHeight(){return parseFloat(style().lineHeight)||20;},
     get gutter(){return parseFloat(style().paddingLeft)||0;},
@@ -202,6 +229,7 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
       const previous=markers;markers=new Map([...marks].map(([line,mark])=>[line-1,mark]));
       for(const index of new Set([...previous.keys(),...markers.keys()]))decorate(index);
     },
+    setDiagnostics(problems){diagnostics=problems;placeDiagnostics();},
     destroy(){clearTimeout(flashTimer);for(const [target,type,handler] of listeners)target.removeEventListener(type,handler);el.remove();},
   };
 }

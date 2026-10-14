@@ -7,6 +7,7 @@ const file='M4 1.75h5L12.25 5v9.25H4zM9 1.75V5h3.25';
 const folder='M1.75 4.5c0-.6.45-1 1-1h3.1l1.4 1.5h5.75c.55 0 1 .4 1 1v6.25c0 .55-.45 1-1 1H2.75c-.55 0-1-.45-1-1z';
 const tray='M2.5 10.5v2c0 .55.45 1 1 1h9c.55 0 1-.45 1-1v-2';
 const shapes={
+  filter:stroke('M2 3.5h12L9.5 8v4l-3 1V8z'),
   bolt:fill('M9.4 1 3 9.1h4.1L6.2 15l6.8-8.4H8.7z'),
   file:stroke(file),
   tex:stroke(file)+stroke('M6 8.5h4M6 11h2.5'),
@@ -33,5 +34,16 @@ const shapes={
   info:ring(8,8,6)+stroke('M8 7.4v3.4')+dot(8,5.3,.8),
   archive:stroke('M2.5 3h11v3h-11zM3.5 6v7h9V6M6.5 8.75h3'),
   template:stroke('M2.5 2.5h11v11h-11zM2.5 6h11M6.5 6v7.5'),
+  target:ring(8,8,5.6)+dot(8,8,2.1),
+  check:stroke('M3.5 8.5 6.5 11.5 12.5 4.5'),
+  search:ring(7,7,4.2)+stroke('M10.2 10.2 13.5 13.5'),
+  chevronUp:stroke('M3.5 10 8 5.5 12.5 10'),
+  fit:stroke('M2.25 3.5v9M13.75 3.5v9M5 8h6M6.6 6.1 4.7 8l1.9 1.9M9.4 6.1 11.3 8l-1.9 1.9'),
+  copy:stroke('M5.5 5.5h7.25v8H5.5zM3.25 10.5v-8h6.5'),
+  history:ring(8,8,5.75)+stroke('M8 4.75V8l2.25 1.5'),
+  outline:stroke('M5.75 4h7.75M5.75 8h7.75M5.75 12h7.75')+dot(2.9,4,.9)+dot(2.9,8,.9)+dot(2.9,12,.9),
+  sigma:stroke('M11.5 3.5h-7L8.5 8l-4 4.5h7'),
+  keyboard:stroke('M1.75 4.25h12.5v7.5H1.75zM4.25 6.9h.4M6.6 6.9h.4M9 6.9h.4M11.35 6.9h.4M5 9.4h6'),
+  hash:stroke('M6 2.5 5 13.5M11 2.5l-1 11M2.8 6h10.7M2.5 10h10.7'),
 };
 export const icon=(name,size=16)=>`<svg class="icon icon-${name}" viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true">${shapes[name]||''}</svg>`;

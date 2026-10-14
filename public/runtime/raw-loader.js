@@ -23,6 +23,7 @@ self.loadRtexEngine = async function ({base = './busytex/', print = console.log,
       const part=entry.parts[index++];if(!/^[a-zA-Z0-9._-]+$/.test(part.file))throw Error('Invalid asset part name');
       print('Loading '+name+' part '+index+'/'+entry.parts.length);
       const bytes=await read(base+part.file);if(bytes.length!==part.size)throw Error('Truncated asset part '+part.file);
+      print('Loaded '+name+' part '+index+'/'+entry.parts.length);
       controller.enqueue(bytes);
     }});
     const reader=compressed.pipeThrough(new DecompressionStream('gzip')).getReader();

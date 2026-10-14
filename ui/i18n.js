@@ -1,4 +1,5 @@
 // Interface strings. Elements carry data-i18n / data-i18n-title keys so a language switch needs no remount.
+// A title becomes data-tip (shown by ui/tooltip.js, with data-keys as a keycap) and the accessible name.
 const en={
   'app.files':'Files','file.new':'New file','folder.new':'New folder','file.upload':'Upload files','file.more':'More',
   'file.rename':'Rename','file.delete':'Delete','file.download':'Download','file.setMain':'Set as main file','file.main':'Main file',
@@ -28,6 +29,9 @@ const en={
   'set.preview':'Compile & preview','set.autoCompile':'Auto compile','set.mathPreview':'Formula preview at cursor','set.mathScale':'Formula size','set.follow':'Preview follows cursor',
   'set.storage':'Storage','set.persist':'Keep files in this browser','set.reset':'Reset settings',
   'size.s':'S','size.m':'M','size.l':'L',
+  'view.split':'Split','layout.label':'Layout','project.menu':'Project','project.untitled':'Untitled',
+  'compile.now':'Compile now','capsule.menu':'Compile options','export.more':'More export options','export.pdf':'PDF','export.file':'Download {name}','export.compileFirst':'compiles first',
+  'zoom.menu':'Zoom','zoom.fitPage':'Fit page','page.jump':'Go to page','keys.title':'Keyboard shortcuts','keys.save':'Save now','keys.comment':'Toggle comment','keys.indent':'Indent, outdent','keys.escape':'Leave the editor, stop compiling',
 };
 const zh={
   'app.files':'文件','file.new':'新建文件','folder.new':'新建文件夹','file.upload':'上传文件','file.more':'更多',
@@ -58,7 +62,48 @@ const zh={
   'set.preview':'编译与预览','set.autoCompile':'自动编译','set.mathPreview':'光标处公式预览','set.mathScale':'公式大小','set.follow':'预览跟随光标',
   'set.storage':'存储','set.persist':'在此浏览器中保留文件','set.reset':'恢复默认设置',
   'size.s':'小','size.m':'中','size.l':'大',
+  'view.split':'分栏','layout.label':'布局','project.menu':'项目','project.untitled':'未命名',
+  'compile.now':'立即编译','capsule.menu':'编译选项','export.more':'更多导出选项','export.pdf':'PDF','export.file':'下载 {name}','export.compileFirst':'将先完整编译',
+  'zoom.menu':'缩放','zoom.fitPage':'适应整页','page.jump':'跳转到页','keys.title':'键盘快捷键','keys.save':'立即保存','keys.comment':'切换注释','keys.indent':'缩进、反缩进','keys.escape':'离开编辑器、停止编译',
 };
+Object.assign(en,{
+  'set.decrease':'Decrease font size','set.increase':'Increase font size','panel.copied':'Log copied','complete.file':'File','complete.label':'Label',
+  'load.0':'TeX engine','load.1':'TeX Live base','load.2':'Fonts & packages','load.3':'First typeset','load.write':'You can start writing while this loads.',
+  'preview.locate':'Click a paragraph to reveal its source','preview.pagination':'Pagination pending',
+  'panel.filter':'Filter problems','panel.copy':'Copy log','panel.copyFailed':'Could not copy the log. Select the text and copy it.','panel.all':'All problems','panel.error':'Errors','panel.warning':'Warnings','panel.info':'Information',
+  'palette.open':'Search files & commands','palette.placeholder':'Search files and commands…','palette.hint':'@ sections · > commands · : line','palette.none':'No matching results','palette.line':'Go to line {n}',
+  'find.open':'Find','find.replaceOpen':'Find and replace','find.placeholder':'Find in this file','find.replace':'Replace','find.all':'Replace all','find.with':'Replace with','find.case':'Match case','find.word':'Whole word','find.regex':'Regular expression','find.prev':'Previous match','find.next':'Next match','find.none':'No matches','find.invalid':'Invalid regular expression',
+  'outline.title':'Outline','outline.empty':'Sections will appear here.','outline.reveal':'Reveal in file tree',
+  'tab.others':'Close other tabs','tab.right':'Close tabs to the right','splitter.help':'Resize pane: arrow keys, Home to reset',
+  'project.new':'New project','project.drop':'Drop a project ZIP here, or browse','project.create':'Create project','project.replaceHint':'Creating a project replaces the current files. Export them first if needed.',
+  'template.article':'An article with equations','template.notes':'Theorems and aligned equations','template.report':'Sections split across files','template.blank':'A minimal document skeleton',
+  'empty.files':'Start a document','empty.hint':'Create a file, choose a template, or drop a ZIP.',
+  'words.count':'{n} words','words.selection':'{n} selected','words.title':'Words by section','words.note':'Estimate of source prose; commands, comments and math are excluded.','words.file':'Current file',
+  'symbols.open':'Math symbols','symbols.search':'Search by name or symbol…','symbols.recent':'Recently used','symbols.greek':'Greek letters','symbols.operators':'Operators','symbols.relations':'Relations','symbols.arrows':'Arrows','symbols.delimiters':'Delimiters',
+  'complete.hint':'↑ ↓ choose · Tab insert · Esc dismiss','complete.command':'Command','complete.environment':'Environment','complete.macro':'Project macro',
+  'history.open':'Local history','history.empty':'Snapshots appear after a successful full compile.','history.note':'Text files only · at most 30 snapshots · every 5 minutes','history.off':'Turn on “Keep files in this browser” to save history.','history.unavailable':'History is unavailable in this browser.','history.restore':'Restore snapshot','history.confirm':'Restore these text files?','history.body':'Current text files will be replaced. Images stay unchanged. A recovery snapshot will be saved first.','history.restored':'Snapshot restored','history.failed':'Could not save history. Your current files are unchanged.','history.missing':'No text file selected',
+  'image.failed':'Could not insert this image.','image.unsafe':'Rename this file without TeX special characters before inserting it.','image.package':'Add \\usepackage{graphicx} to the preamble to use images.',
+  'export.open':'Export','keys.nextMatch':'Next / previous match',
+});
+Object.assign(zh,{
+  'set.decrease':'减小字号','set.increase':'增大字号','panel.copied':'已复制日志','complete.file':'文件','complete.label':'标签',
+  'load.0':'TeX 引擎','load.1':'TeX Live 基础包','load.2':'字体与宏包','load.3':'首次排版','load.write':'加载期间可以先开始写。',
+  'preview.locate':'点击段落，定位到源码','preview.pagination':'分页待校准',
+  'panel.filter':'筛选问题','panel.copy':'复制日志','panel.copyFailed':'无法复制日志，请选中文字后复制。','panel.all':'全部问题','panel.error':'错误','panel.warning':'警告','panel.info':'信息',
+  'palette.open':'搜索文件与命令','palette.placeholder':'搜索文件与命令…','palette.hint':'@ 章节 · > 命令 · : 行号','palette.none':'没有匹配的结果','palette.line':'跳转到第 {n} 行',
+  'find.open':'查找','find.replaceOpen':'查找与替换','find.placeholder':'在当前文件中查找','find.replace':'替换','find.all':'全部替换','find.with':'替换为','find.case':'区分大小写','find.word':'全词匹配','find.regex':'正则表达式','find.prev':'上一个匹配','find.next':'下一个匹配','find.none':'无匹配','find.invalid':'正则表达式无效',
+  'outline.title':'大纲','outline.empty':'章节会显示在这里。','outline.reveal':'在文件树中定位',
+  'tab.others':'关闭其他标签','tab.right':'关闭右侧标签','splitter.help':'调整窗格：方向键，Home 复位',
+  'project.new':'新建项目','project.drop':'拖入项目 ZIP，或点击选择','project.create':'创建项目','project.replaceHint':'创建项目将替换当前文件，如需保留请先导出。',
+  'template.article':'含公式的单文件文章','template.notes':'定理环境与对齐公式','template.report':'按章节组织多个文件','template.blank':'最简文档骨架',
+  'empty.files':'开始一份文档','empty.hint':'新建文件、选择模板，或拖入 ZIP。',
+  'words.count':'{n} 字','words.selection':'选中 {n} 字','words.title':'各章节字数','words.note':'估算源码正文，排除命令、注释和公式。','words.file':'当前文件',
+  'symbols.open':'数学符号','symbols.search':'按名称或符号搜索…','symbols.recent':'最近使用','symbols.greek':'希腊字母','symbols.operators':'运算符','symbols.relations':'关系符','symbols.arrows':'箭头','symbols.delimiters':'定界符',
+  'complete.hint':'↑ ↓ 选择 · Tab 插入 · Esc 关闭','complete.command':'命令','complete.environment':'环境','complete.macro':'项目宏',
+  'history.open':'本地历史','history.empty':'完整编译成功后，会在这里留下快照。','history.note':'仅文本文件 · 最多 30 份 · 间隔 5 分钟','history.off':'开启「在此浏览器中保留文件」后保存历史。','history.unavailable':'此浏览器暂时无法使用历史。','history.restore':'还原快照','history.confirm':'还原这些文本文件？','history.body':'当前文本文件将被替换，图片保持不变。还原前会先保存一份恢复快照。','history.restored':'已还原快照','history.failed':'无法保存历史，当前文件未改动。','history.missing':'未选择文本文件',
+  'image.failed':'无法插入这张图片。','image.unsafe':'请先重命名文件，去掉 TeX 特殊字符再插入。','image.package':'使用图片需要在导言区加入 \\usepackage{graphicx}。',
+  'export.open':'导出','keys.nextMatch':'下一个／上一个匹配',
+});
 const languages={en,zh};
 export function createI18n(preference='auto'){
   let lang='en';
@@ -71,7 +116,7 @@ export function createI18n(preference='auto'){
   /** Refresh every tagged element below root. */
   const apply=root=>{
     for(const node of root.querySelectorAll('[data-i18n]'))node.textContent=t(node.dataset.i18n);
-    for(const node of root.querySelectorAll('[data-i18n-title]')){const text=t(node.dataset.i18nTitle);node.title=text+(node.dataset.keys?` (${node.dataset.keys})`:'');node.setAttribute('aria-label',text);}
+    for(const node of root.querySelectorAll('[data-i18n-title]')){const text=t(node.dataset.i18nTitle);node.dataset.tip=text;node.setAttribute('aria-label',text);}
   };
   return {t,set,apply,get lang(){return lang;}};
 }
