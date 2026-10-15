@@ -26,3 +26,12 @@ test('completion offers macros, environments, labels and graphics with precise s
  source=R`\eqref{eq:`;assert.deepEqual(completions(source,source.length,{labels:[{name:'eq:x',kind:'equation',file:'main.tex',line:3,text:'x'}, {name:'eq:section',kind:'section'}]}).map(i=>i.label),['eq:x']);
  assert.equal(completions(R`% \sec`,6,{files}).length,0);assert.equal(completions(R`\begin{verbatim}\sec`,20,{files}).length,0);
 });
+test('command completions stay independent and project macros override builtins',()=>{
+ const source=R`\fra`,fraction=()=>completions(source,source.length).find(item=>item.label==='frac');
+ const first=fraction();first.label='changed';first.arity=0;first.detail='changed';
+ assert.equal(fraction().text,'frac{}{}');assert.equal(fraction().arity,2);assert.notEqual(fraction().detail,'changed');
+ const files=new Map([['main.tex',R`\renewcommand{\frac}[1]{#1}`]]);
+ const overridden=completions(source,source.length,{files}).filter(item=>item.label==='frac');
+ assert.equal(overridden.length,1);assert.equal(overridden[0].kind,'macro');assert.equal(overridden[0].text,'frac{}');
+ assert.equal(fraction().text,'frac{}{}');
+});

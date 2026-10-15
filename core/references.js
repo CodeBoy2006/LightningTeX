@@ -5,12 +5,11 @@ import {maskSource} from './outline.js';
 export const REF_COMMANDS=['ref','eqref','pageref','autoref','nameref','cref','Cref','vref','Vref','cpageref','Cpageref','labelcref','namecref','nameCref','crefrange','Crefrange'];
 const refPattern=new RegExp('\\\\('+REF_COMMANDS.join('|')+')\\*?\\s*\\{([^{}]*)\\}','g');
 const labelPattern=/\\label\s*(?:\[[^\]]*\])?\s*\{([^{}]*)\}/g;
-const citePattern=/\\((?:[a-zA-Z]*cite[a-zA-Z]*|nocite))\*?\s*(?:\[[^\]]*\]\s*){0,2}\{([^{}]*)\}/g;
 
 const lineIndex=text=>{const starts=[0];for(let i=0;i<text.length;i++)if(text[i]==='\n')starts.push(i+1);return starts;};
 const lineOf=(starts,offset)=>{let low=0,high=starts.length-1;while(low<high){const mid=(low+high+1)>>1;if(starts[mid]<=offset)low=mid;else high=mid-1;}return low+1;};
 // Each comma-separated name inside {…}, with its own offsets. Spaces around names are not part of them.
-function names(text,open,body){
+function names(open,body){
   const out=[];let at=0;
   for(const part of body.split(',')){
     const lead=part.length-part.trimStart().length,name=part.trim();
@@ -23,7 +22,7 @@ function scan(text,pattern,group,fixed){
   const masked=maskSource(text),starts=lineIndex(text),out=[];pattern.lastIndex=0;
   for(let match;(match=pattern.exec(masked));){
     const open=match.index+match[0].lastIndexOf('{')+1;
-    for(const item of names(text,open,match[group]))out.push({...item,command:fixed||match[1],line:lineOf(starts,item.start),at:match.index});
+    for(const item of names(open,match[group]))out.push({...item,command:fixed||match[1],line:lineOf(starts,item.start),at:match.index});
   }
   return out;
 }
@@ -37,12 +36,6 @@ export function findReferences(files){
 export function findLabels(files){
   const out=[];
   for(const [file,text] of files)if(typeof text==='string')for(const item of scan(text,labelPattern,1,'label'))out.push({...item,file});
-  return out;
-}
-/** -> [{name (the key), file, start, end, line, command}] for every citation key. */
-export function findCitations(files){
-  const out=[];
-  for(const [file,text] of files)if(typeof text==='string')for(const item of scan(text,citePattern,2))out.push({...item,file});
   return out;
 }
 /** Map<label, count> of references, for the label view and hover cards. */
@@ -68,7 +61,7 @@ export function targetAt(text,offset){
       if(!kind)return {kind:'macro',name:command,start:from+match.index,end:from+match.index+1+command.length,command};
     }
     if(!kind)continue;
-    const parts=names(line,open,line.slice(open,close)),part=parts.find(item=>at>=item.start&&at<=item.end)||(at<open||['input','graphics','bib'].includes(kind)?parts[0]:null);
+    const parts=names(open,line.slice(open,close)),part=parts.find(item=>at>=item.start&&at<=item.end)||(at<open||['input','graphics','bib'].includes(kind)?parts[0]:null);
     if(!part)return null;
     return {kind,name:part.name,start:from+part.start,end:from+part.end,command};
   }

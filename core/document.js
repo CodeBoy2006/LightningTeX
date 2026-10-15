@@ -119,8 +119,10 @@ export function findLiveEdit(before,after,capture,spans=captureSpans(before,capt
   const delta=after.length-before.length;
   let candidates=spans.filter(span=>start>=span.start&&oldEnd<=span.end);
   // Restore an empty slot across its leftover whitespace before borrowing the following unit.
-  const empty=spans.filter(span=>span.start===span.end&&span.end<=start&&!before.slice(span.end,oldEnd).trim());
-  if(start===oldEnd&&empty.length)candidates=empty;
+  if(start===oldEnd){
+    const empty=spans.filter(span=>span.start===span.end&&span.end<=start&&!before.slice(span.end,oldEnd).trim());
+    if(empty.length)candidates=empty;
+  }
   let members=candidates;
   if(!members.length){
     const left=spans.findLast(span=>span.end<=start),right=spans.find(span=>span.start>=oldEnd);

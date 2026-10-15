@@ -16,8 +16,8 @@ export function expandSnippet(template,{indent='',unit='  '}={}){
   let text='';const stops=[];
   const source=template.replace(/\t/g,unit).replace(/\n/g,'\n'+indent);
   for(let i=0;i<source.length;){
-    const match=/^\$(?:\{(\d+)(?::([^}]*))?\}|(\d+))/.exec(source.slice(i));
-    if(source[i]==='$'&&match){
+    const match=source[i]==='$'&&/^\$(?:\{(\d+)(?::([^}]*))?\}|(\d+))/.exec(source.slice(i));
+    if(match){
       const n=Number(match[1]??match[3]),fill=match[2]??'',start=text.length;text+=fill;stops.push({n,start,end:text.length});i+=match[0].length;continue;
     }
     text+=source[i++];

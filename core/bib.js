@@ -45,9 +45,9 @@ function fieldsOf(body,strings){
 /** Readable text of a field value: TeX accents and groups removed. */
 const ACCENTS={'`':'\u0300',"'":'\u0301','^':'\u0302','"':'\u0308','~':'\u0303','=':'\u0304','.':'\u0307',u:'\u0306',v:'\u030c',H:'\u030b',c:'\u0327',d:'\u0323',b:'\u0331',k:'\u0328'};
 const LETTERS={ss:'ß',o:'ø',O:'Ø',ae:'æ',AE:'Æ',oe:'œ',OE:'Œ',aa:'å',AA:'Å',l:'ł',L:'Ł',i:'ı',j:'ȷ'};
-export const plainField=value=>plainText(String(value||'').replace(/\\(ss|o|O|ae|AE|oe|OE|aa|AA|l|L|i|j)(?![A-Za-z])\s*/g,(_,name)=>LETTERS[name]).replace(/\\([`'^"~=.uvHcdbk])\s*\{?([A-Za-z])\}?/g,(_,accent,letter)=>(letter+ACCENTS[accent]).normalize('NFC'))).replace(/\s+/g,' ').trim();
+export const plainField=value=>plainText(String(value||'').replace(/\\(ss|o|O|ae|AE|oe|OE|aa|AA|l|L|i|j)(?![A-Za-z])\s*/g,(_,name)=>LETTERS[name]).replace(/\\([`'^"~=.uvHcdbk])\s*\{?([A-Za-z])\}?/g,(_,accent,letter)=>(letter+ACCENTS[accent]).normalize('NFC')));
 /** Family names from an author list: "Golub, Gene H. and Van Loan, Charles F." -> ["Golub", "Van Loan"]. */
-export function familyNames(authors){
+function familyNames(authors){
   return String(authors||'').split(/\s+and\s+/i).map(name=>name.trim()).filter(Boolean).map(name=>{
     const plain=plainField(name);if(/,/.test(plain))return plain.split(',')[0].trim();
     const words=plain.split(/\s+/),von=words.findIndex((word,index)=>index<words.length-1&&/^[a-z]/.test(word));

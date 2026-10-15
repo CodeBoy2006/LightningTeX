@@ -6,7 +6,7 @@ import {unbalanced} from './brackets.js';
 
 const table=spec=>Object.fromEntries(Object.entries(spec).flatMap(([pkg,names])=>names.split(/\s+/).filter(Boolean).map(name=>[name,pkg])));
 /** Command (without backslash) -> the package that defines it. */
-export const COMMAND_PACKAGES=table({
+const COMMAND_PACKAGES=table({
   amssymb:'mathbb mathfrak leqslant geqslant varnothing square blacksquare therefore because nexists complement lesssim gtrsim ll gg nleq ngeq nsubseteq subsetneq supsetneq triangleq coloneq checkmark circledR curlyvee curlywedge digamma eth gimel beth daleth hbar hslash lozenge blacklozenge measuredangle sphericalangle smallsetminus Box Diamond vartriangle triangledown bigstar diagup diagdown backprime nleftarrow nrightarrow nLeftarrow nRightarrow twoheadrightarrow twoheadleftarrow rightrightarrows leftleftarrows upharpoonright restriction vDash Vdash Vvdash models intercal veebar barwedge doublebarwedge ltimes rtimes divideontimes dotplus centerdot boxplus boxminus boxtimes boxdot circledast circledcirc circleddash leftthreetimes rightthreetimes eqslantless eqslantgtr lessgtr gtrless approxeq thicksim thickapprox backsim backsimeq precsim succsim varpropto blacktriangle blacktriangledown blacktriangleleft blacktriangleright mho Finv Game Bbbk',
   amsfonts:'mathbbm',
   amsmath:'text dfrac tfrac binom dbinom tbinom boldsymbol pmb operatorname eqref tag notag nonumber xrightarrow xleftarrow overset underset substack intertext numberwithin iint iiint iiiint idotsint DeclareMathOperator mathring genfrac cfrac sideset overleftrightarrow underleftarrow underrightarrow underleftrightarrow allowdisplaybreaks shoveleft shoveright lvert rvert lVert rVert impliedby implies',
@@ -48,7 +48,7 @@ export const COMMAND_PACKAGES=table({
   epigraph:'epigraph',lettrine:'lettrine',dirtytalk:'say',
 });
 /** Environment -> package. */
-export const ENVIRONMENT_PACKAGES=table({
+const ENVIRONMENT_PACKAGES=table({
   amsmath:'align align* gather gather* multline multline* flalign flalign* alignat alignat* split cases pmatrix bmatrix Bmatrix vmatrix Vmatrix matrix smallmatrix subequations aligned gathered alignedat',
   mathtools:'dcases dcases* rcases multlined',amsthm:'proof',tikz:'tikzpicture scope',pgfplots:'axis semilogxaxis semilogyaxis loglogaxis groupplot',
   listings:'lstlisting',algpseudocode:'algorithmic',algorithm:'algorithm',tabularx:'tabularx',longtable:'longtable',multicol:'multicols multicols*',
@@ -70,7 +70,7 @@ function spelling(name,known,count=3){
 const escape=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 const lineSpan=(text,line)=>{let start=0;for(let n=1;n<line&&start>=0;n++){start=text.indexOf('\n',start);if(start>=0)start++;}if(start<0)return null;const end=text.indexOf('\n',start);return {start,end:end<0?text.length:end};};
 /** A preamble line for the main file, after the last \usepackage (or \documentclass), as an edit; null without a preamble. */
-export function preambleEdit(main,source,line){
+function preambleEdit(main,source,line){
   const masked=maskSource(source),body=masked.indexOf('\\begin{document}'),preamble=body<0?masked:masked.slice(0,body);
   let at=-1;for(const match of preamble.matchAll(/\\(?:usepackage|RequirePackage|documentclass)\s*(?:\[[^\]]*\])?\s*\{[^}]*\}[^\n]*/g))at=match.index+match[0].length;
   if(at<0)return body<0?null:{file:main,start:body,end:body,text:line+'\n'};
@@ -109,7 +109,7 @@ export function quickFixes(problem,{files=new Map(),main=null,labels=[],bibKeys=
     if(span){
       const at=maskSource(text.slice(span.start,span.end)).search(new RegExp('\\\\'+escape(name)+'(?![A-Za-z@])'));
       if(at>=0){
-        const known=[...new Set([...KERNEL,...Object.keys(COMMAND_PACKAGES),...macros])];
+        const known=[...KERNEL,...Object.keys(COMMAND_PACKAGES),...macros];
         for(const other of spelling(name,known))fixes.push({kind:'replace',label:'\\'+other,edits:[{file,start:span.start+at+1,end:span.start+at+1+name.length,text:other}]});
       }
     }
@@ -121,11 +121,14 @@ export function quickFixes(problem,{files=new Map(),main=null,labels=[],bibKeys=
       const base=name.replace(/\*$/,''),starred=name.endsWith('*'),line=starred?`${packageEdit(main,mainText,'amsthm')?'\\usepackage{amsthm}\n':''}\\newtheorem*{${name}}{${THEOREMS[base]}}`:`\\newtheorem{${name}}{${THEOREMS[base]}}`,edit=preambleEdit(main,mainText,line);
       if(edit)fixes.push({kind:'theorem',label:line,edits:[edit],primary:true});
     }
-    const known=[...new Set([...Object.keys(ENVIRONMENT_PACKAGES),'equation','equation*','figure','table','tabular','itemize','enumerate','description','center','quote','quotation','abstract','minipage','verbatim','thebibliography','array','eqnarray','flushleft','flushright','titlepage'])];
-    if(span)for(const other of spelling(name,known)){
-      const edits=[];
-      for(const [path,source] of files){if(typeof source!=='string')continue;for(const found of maskSource(source).matchAll(new RegExp('\\\\(begin|end)\\s*\\{'+escape(name)+'\\}','g'))){const start=found.index+found[0].indexOf('{')+1;edits.push({file:path,start,end:start+name.length,text:other});}}
-      if(edits.length)fixes.push({kind:'replace',label:other,edits});
+    const known=[...Object.keys(ENVIRONMENT_PACKAGES),'equation','equation*','figure','table','tabular','itemize','enumerate','description','center','quote','quotation','abstract','minipage','verbatim','thebibliography','array','eqnarray','flushleft','flushright','titlepage'];
+    if(span){
+      const suggestions=spelling(name,known),sites=[];
+      if(suggestions.length){
+        const pattern=new RegExp('\\\\(begin|end)\\s*\\{'+escape(name)+'\\}','g');
+        for(const [path,source] of files){if(typeof source!=='string')continue;for(const found of maskSource(source).matchAll(pattern)){const start=found.index+found[0].indexOf('{')+1;sites.push({file:path,start,end:start+name.length});}}
+      }
+      if(sites.length)for(const other of suggestions)fixes.push({kind:'replace',label:other,edits:sites.map(site=>({...site,text:other}))});
     }
   }else if(/^Missing \$ inserted/.test(message)&&span){
     const wrap=mathFragment(text,span);if(wrap)fixes.push({kind:'math',label:text.slice(wrap.start,wrap.end),edits:[{file,start:wrap.start,end:wrap.start,text:'$'},{file,start:wrap.end,end:wrap.end,text:'$'}],primary:true});

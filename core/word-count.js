@@ -1,13 +1,14 @@
 import {maskSource,plainText} from './outline.js';
 import {skipArgument} from './document.js';
 import {mathEnvironments} from './math-preview.js';
+const environments=[...mathEnvironments].map(name=>name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
+const mathBlocks=new RegExp('\\\\begin\\{('+environments+')\\}[\\s\\S]*?(?:\\\\end\\{\\1\\}|$)','g');
 
 /** Approximate prose words: CJK characters count individually; other scripts count word runs. */
 export function wordCount(source){
   let text=maskSource(source),body=text.indexOf('\\begin{document}');if(body>=0)text=text.slice(body+16);
   const end=text.indexOf('\\end{document}');if(end>=0)text=text.slice(0,end);
-  const environments=[...mathEnvironments].map(name=>name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
-  text=text.replace(new RegExp('\\\\begin\\{('+environments+')\\}[\\s\\S]*?(?:\\\\end\\{\\1\\}|$)','g'),' ');
+  text=text.replace(mathBlocks,' ');
   text=text.replace(/\\\[[\s\S]*?(?:\\\]|$)|\\\([\s\S]*?(?:\\\)|$)|(?<!\\)\$\$[\s\S]*?(?:\$\$|$)|(?<!\\)\$[^$]*?(?:(?<!\\)\$|$)/g,' ');
   const commands=/\\(label|ref|eqref|pageref|cite\w*|input|include|includegraphics|bibliography|bibliographystyle|begin|end|documentclass|usepackage|title|author|date|newcommand|renewcommand|providecommand|DeclareMathOperator)\*?\s*(?:\[[^\]]*\]\s*)*(?=\{)/g;
   let result='',at=0;

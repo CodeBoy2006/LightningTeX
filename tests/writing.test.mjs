@@ -54,6 +54,20 @@ see \ref{eq:sun} and \cite{golub2031}
   assert.equal(unbalanced.kind,'unbalanced');assert.equal(unbalanced.go.offset,9);
 });
 
+test('environment spelling fixes keep every choice complete across files and skip masked text',()=>{
+  const main=R`\begin{alignn}a\end{alignn}`+'\n'+R`% \begin{alignn}`;
+  const child=R`\begin{verbatim}\begin{alignn}\end{verbatim}`+'\n'+R`\begin{alignn}b\end{alignn}`;
+  const files=new Map([['main.tex',main],['child.tex',child],['image.png',undefined]]);
+  const fixes=quickFixes({message:'Environment alignn undefined',file:'main.tex',line:1},{files,main:'main.tex'});
+  assert.ok(fixes.length>=2,'the typo offers multiple independent choices');
+  for(const fix of fixes){
+    assert.equal(fix.edits.length,4);
+    const apply=path=>fix.edits.filter(edit=>edit.file===path).sort((a,b)=>b.start-a.start).reduce((text,edit)=>text.slice(0,edit.start)+edit.text+text.slice(edit.end),files.get(path));
+    assert.equal(apply('main.tex'),`\\begin{${fix.label}}a\\end{${fix.label}}\n`+R`% \begin{alignn}`);
+    assert.equal(apply('child.tex'),R`\begin{verbatim}\begin{alignn}\end{verbatim}`+`\n\\begin{${fix.label}}b\\end{${fix.label}}`);
+  }
+});
+
 test('BibTeX names, case, purification and prefixes follow bibtex.web',()=>{
   const {formatName,changeCase,purify,textPrefix,textLength,splitNames}=bibtex;
   assert.equal(formatName('Donald E. Knuth',1,'{ff~}{vv~}{ll}{, jj}'),'Donald~E. Knuth');
@@ -106,6 +120,8 @@ test('snippets expand with indentation, mirrors and stops kept in step with edit
   assert.equal(first.end-first.start,1);assert.equal(mirror.start,text.indexOf('\\end{')+5-10);
   assert.equal(shiftStops(stops,0,0,1),false,'an edit outside every stop ends the session');
   const frac=expandSnippet('frac{${1}}{${2}}$0');assert.equal(frac.text,'frac{}{}');assert.deepEqual(frac.stops.map(stop=>[stop.n,stop.start]),[[1,5],[2,7],[0,8]]);
+  const literal=expandSnippet('Cost $x and ${oops}; ${1:ok} $1 $0');
+  assert.equal(literal.text,'Cost $x and ${oops}; ok ok ');assert.deepEqual(stopOrder(literal.stops),[1,0]);
 });
 
 test('table and matrix templates put a tab stop in every cell',()=>{

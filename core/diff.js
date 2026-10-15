@@ -29,7 +29,6 @@ function middle(a,b){
     }
   }
   if(found<0)return [...a.map((text,i)=>({type:'del',text,a:i+1})),...b.map((text,i)=>({type:'add',text,b:i+1}))];
-  trace.push(v.slice());
   // Walk back through the saved frontiers.
   const ops=[];let i=n,j=m;
   for(let d=found;d>0;d--){

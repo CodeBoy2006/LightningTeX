@@ -5,6 +5,7 @@ import {SYMBOLS} from './symbols.js';
 const commands=[...new Set([...liveCommands,...'begin end section subsection subsubsection chapter part label ref eqref pageref input include includegraphics cite usepackage documentclass newcommand title author date maketitle tableofcontents'.split(' ')])];
 const environments=[...new Set([...'equation align document itemize enumerate description figure table tabular center quote quotation abstract theorem lemma proof align* equation*'.split(' '),...mathEnvironments])];
 const arities={...liveArity,begin:1,end:1,section:1,subsection:1,subsubsection:1,chapter:1,part:1,label:1,ref:1,eqref:1,pageref:1,input:1,include:1,includegraphics:1,cite:1,usepackage:1,documentclass:1,title:1,author:1,date:1};
+const builtins=commands.map(label=>({label,kind:'command',arity:arities[label]||0,detail:SYMBOLS.find(symbol=>symbol.name===label)?.glyph||''}));
 
 /** Return source edits; no DOM or TeX execution is needed to offer a completion. */
 export function completions(source,caret,{files=new Map(),labels=[],bib=[]}={}){
@@ -31,7 +32,7 @@ export function completions(source,caret,{files=new Map(),labels=[],bib=[]}={}){
       for(const match of preamble.matchAll(/\\(?:newcommand|renewcommand|providecommand|DeclareMathOperator)\*?\s*\{?\\([A-Za-z]+)\}?\s*(?:\[(\d)\])?/g))if(!macros.has(match[1]))macros.set(match[1],{arity:Number(match[2]||0)});
     }
     candidates=[...macros].map(([label,macro])=>({label,kind:'macro',arity:macro.arity}));
-    candidates.push(...commands.filter(name=>!macros.has(name)).map(label=>({label,kind:'command',arity:arities[label]||0,detail:SYMBOLS.find(s=>s.name===label)?.glyph||''})));
+    candidates.push(...builtins.filter(item=>!macros.has(item.label)));
   }
   const lower=prefix.toLowerCase();
   // Citation keys also match on author and title words.
@@ -64,5 +65,5 @@ export function createCompletion(editor,{t,context,onVisible}){
   };
   const events=[[editor.input,'keydown',keydown,true],[editor.el,'editor-change',refresh],[editor.input,'compositionstart',()=>{composing=true;hide();}],[editor.input,'compositionend',()=>{composing=false;queueMicrotask(refresh);}],[editor.input,'blur',hide],[editor.input,'click',hide],[editor.scroller,'scroll',place]];
   for(const [target,type,handler,capture] of events)target.addEventListener(type,handler,capture);
-  return {get visible(){return !el.hidden;},hide,refresh,destroy(){dead=true;for(const [target,type,handler,capture] of events)target.removeEventListener(type,handler,capture);el.remove();}};
+  return {get visible(){return !el.hidden;},hide,destroy(){dead=true;for(const [target,type,handler,capture] of events)target.removeEventListener(type,handler,capture);el.remove();}};
 }
