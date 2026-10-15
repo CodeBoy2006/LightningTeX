@@ -19,7 +19,8 @@
     "test:live-project": "node --experimental-vm-modules tests/live-project.mjs",
     "prebuild": "node scripts/prepare-build-assets.mjs",
     "build:engine": "node scripts/build-engine.mjs",
-    "test:engine": "npm run build:engine && node tests/standalone-engine.mjs"
+    "test:engine": "npm run build:engine && node tests/standalone-engine.mjs",
+    "test:bibliography": "node tests/bibliography.mjs"
   },
   "dependencies": {
     "opentype.js": "2.0.0",

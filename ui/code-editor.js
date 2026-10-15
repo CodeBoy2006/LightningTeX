@@ -1,12 +1,14 @@
 // A native textarea (caret, selection, IME, undo) over a highlighted mirror of the same text.
 // Both layers share one grid cell and identical metrics; the outer element is the only scroller.
 import {tokenizeLine} from './highlight.js';
+import {icon} from './icons.js';
 import {matchBracket,environmentAt,unbalanced} from '../core/brackets.js';
+import {SNIPPETS,expandSnippet,stopOrder,shiftStops} from './snippets.js';
 const pairs={'{':'}','[':']','(':')','$':'$'},closers=new Set(Object.values(pairs));
 const count=(text,needle)=>text.split(needle).length-1;
 
 /** structure: highlight bracket pairs and the enclosing environment at the caret, and unbalanced ones after a pause. */
-export function createCodeEditor({value='',settings,label='',describedBy,onChange,onCursor,onEscape,structure=false}={}){
+export function createCodeEditor({value='',settings,label='',describedBy,onChange,onCursor,onEscape,onQuickFix,structure=false}={}){
   const el=document.createElement('div');el.className='code';
   el.innerHTML='<div class="code-scroll"><div class="code-body"><div class="code-lines" aria-hidden="true"></div><textarea class="code-input" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea></div></div>';
   const scroller=el.firstChild,body=scroller.firstChild,layer=body.firstChild,input=body.lastChild;
@@ -17,6 +19,8 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
   // Decorations are boxes over the text, in content coordinates, grouped by owner so each can be replaced alone.
   const decor=Object.assign(document.createElement('div'),{className:'code-decor'});decor.setAttribute('aria-hidden','true');body.prepend(decor);
   const decorations=new Map();let decorFrame=0,idleTimer;
+  // A snippet session: tab stops in text offsets, kept in step with every edit until the caret leaves them.
+  let snippet=null;
 
   const lineNode=tokens=>{
     const node=document.createElement('div');node.className='cl';
@@ -104,7 +108,8 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
       for(const box of rangeRects(item.start,item.end)){
         const node=document.createElement('i');node.className='deco '+item.className;
         const wave=item.className.includes('deco-wave'),top=wave?box.top+box.height-3:box.top;
-        node.style.cssText=`left:${box.x}px;top:${top}px;width:${Math.max(2,box.width)}px;height:${wave?3:box.height}px`;
+        const empty=item.start===item.end,width=empty&&item.className.includes('deco-stop')?7:Math.max(2,box.width);
+        node.style.cssText=`left:${empty?box.x-1:box.x}px;top:${top}px;width:${width}px;height:${wave?3:box.height}px`;
         if(item.title)node.title=item.title;decor.append(node);
       }
     }
@@ -144,11 +149,17 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
     const offset=input.selectionEnd,{line,col}=locate(offset);
     if(line!==active){const previous=active;active=line;decorate(previous);decorate(line);}
     structureAtCaret();
+    if(snippet&&!snippet.busy){
+      // Leaving the snippet's stops ends the session; clicking into another stop moves to it.
+      const at=input.selectionStart,to=input.selectionEnd,own=snippet.stops.find(stop=>stop.start<=at&&to<=stop.end&&stop.n);
+      if(own&&own.n!==snippet.order[snippet.index]&&snippet.stops.find(stop=>stop.n===own.n)===own){syncMirrors();snippet.index=snippet.order.indexOf(own.n);paintSnippet();}
+      else if(!own&&!(at===to&&snippet.stops.some(stop=>stop.start===at&&stop.end===at)))endSnippet();
+    }
     onCursor?.({offset,line:line+1,col:col+1});
   }
   function sync(silent=false){
     const current=input.value;
-    if(current!==text){text=current;render(current.split('\n'));checkBalance();queueDecorations();if(!silent)onChange?.(current);}
+    if(current!==text){const previous=text;text=current;if(snippet)followSnippet(previous,current);render(current.split('\n'));checkBalance();queueDecorations();if(!silent)onChange?.(current);}
     cursor();placeDiagnostics();
     el.dispatchEvent(new document.defaultView.Event('editor-change'));
   }
@@ -160,6 +171,12 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
       const node=nodes[line-1],message=problems.map(problem=>problem.message).join('\n'),end=rectAt(lineStarts()[line-1]+lines[line-1].length);
       const gutter=document.createElement('button');gutter.type='button';gutter.className='diagnostic-gutter';gutter.dataset.tip=message;gutter.setAttribute('aria-label',message);gutter.style.top=node.offsetTop+'px';gutter.style.height=node.offsetHeight+'px';
       gutter.addEventListener('click',()=>{input.focus();input.setSelectionRange(lineStarts()[line-1],lineStarts()[line-1]);cursor();});lenses.append(gutter);
+      // A line with a known fix gets a bulb in the gutter; it opens the same menu as Mod+.
+      if(onQuickFix&&problems.some(problem=>problem.fixable)){
+        const bulb=document.createElement('button');bulb.type='button';bulb.className='fix-bulb';bulb.innerHTML=icon('bulb',12);bulb.tabIndex=-1;bulb.style.top=node.offsetTop+'px';bulb.style.height=Math.min(node.offsetHeight,parseFloat(style().lineHeight)||node.offsetHeight)+'px';
+        bulb.addEventListener('pointerdown',event=>event.preventDefault());
+        bulb.addEventListener('click',event=>{event.stopPropagation();input.focus({preventScroll:true});input.setSelectionRange(lineStarts()[line-1],lineStarts()[line-1]);cursor();onQuickFix(line,bulb.getBoundingClientRect());});lenses.append(bulb);
+      }
       const error=problems.find(problem=>problem.severity==='error');
       if(error&&end){const lens=document.createElement('span');lens.className='error-lens';lens.textContent=error.message;lens.dataset.tip=message;lens.style.top=end.top+'px';lens.style.left=end.x+20+'px';lenses.append(lens);}
     }
@@ -211,9 +228,115 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
     }
     edit(start,end,'\n'+lead);
   }
+  // ---- snippets ---------------------------------------------------------------------------------
+  /** Replace [start, end) with a template; its first stop is selected and Tab moves on. */
+  function insertSnippet(start,end,template){
+    endSnippet();
+    const from=text.lastIndexOf('\n',start-1)+1,indentText=/^[ \t]*/.exec(text.slice(from,start))[0];
+    const {text:body,stops}=expandSnippet(template,{indent:indentText,unit:' '.repeat(options.tabSize)});
+    edit(start,end,body);
+    for(const stop of stops){stop.start+=start;stop.end+=start;}
+    const order=stopOrder(stops);
+    if(order.length<2){const last=stops.find(stop=>stop.n===0);select(last.start,last.end);return;}
+    snippet={stops,order,index:0,busy:false};goStop(0);
+  }
+  function followSnippet(previous,next){
+    let head=0;const max=Math.min(previous.length,next.length);
+    while(head<max&&previous[head]===next[head])head++;
+    let tail=0;while(tail<max-head&&previous[previous.length-1-tail]===next[next.length-1-tail])tail++;
+    const current=snippet.stops.find(stop=>stop.n===snippet.order[snippet.index]);
+    if(!shiftStops(snippet.stops,head,previous.length-head-tail,next.length-head-tail,snippet.editing||current))snippet=null,setDecorations('snippet',[]);
+  }
+  function paintSnippet(){
+    if(!snippet){setDecorations('snippet',[]);return;}
+    const current=snippet.order[snippet.index];
+    setDecorations('snippet',snippet.stops.filter(stop=>stop.n).map(stop=>({start:stop.start,end:stop.end,className:'deco-stop'+(stop.n===current?' on':'')})));
+  }
+  // Mirrors of the current stop take its text, as one edit per mirror (each undoable).
+  function syncMirrors(){
+    if(!snippet)return;
+    const n=snippet.order[snippet.index],[first,...mirrors]=snippet.stops.filter(stop=>stop.n===n);if(!first)return;
+    const value=text.slice(first.start,first.end);let from=input.selectionStart,to=input.selectionEnd;snippet.busy=true;
+    try{for(const mirror of mirrors)if(text.slice(mirror.start,mirror.end)!==value){
+      const delta=value.length-(mirror.end-mirror.start);if(mirror.end<=from){from+=delta;to+=delta;}
+      snippet.editing=mirror;edit(mirror.start,mirror.end,value);if(!snippet)return;snippet.editing=null;
+    }}
+    finally{if(snippet)snippet.busy=false;}
+    // The caret stays where it was; only the mirrors changed.
+    if(mirrors.length){input.setSelectionRange(from,to);reveal(to);}
+  }
+  function goStop(index){
+    if(!snippet)return;
+    syncMirrors();if(!snippet)return;
+    snippet.index=Math.max(0,Math.min(snippet.order.length-1,index));
+    const n=snippet.order[snippet.index],stop=snippet.stops.find(item=>item.n===n);
+    snippet.busy=true;select(stop.start,stop.end,{center:false});snippet.busy=false;
+    if(n===0)endSnippet();else paintSnippet();
+  }
+  function endSnippet(){if(!snippet)return;const ending=snippet;snippet.busy=true;syncMirrors();if(snippet===ending)snippet=null;setDecorations('snippet',[]);}
+  /** A snippet word alone on its line before the caret: fig, tab, … */
+  function snippetWord(){
+    const caret=input.selectionStart;if(caret!==input.selectionEnd)return null;
+    const word=/^[ \t]*([a-z]+)$/.exec(text.slice(text.lastIndexOf('\n',caret-1)+1,caret));
+    return word&&SNIPPETS[word[1]]?{name:word[1],start:caret-word[1].length,end:caret}:null;
+  }
+
+  // ---- line editing -----------------------------------------------------------------------------
+  function moveLines(direction){
+    const start=input.selectionStart,end=input.selectionEnd,[from,to]=lineRange(start,end),block=text.slice(from,to);
+    if(direction<0){
+      if(!from)return;
+      const above=text.lastIndexOf('\n',from-2)+1,line=text.slice(above,from-1),shift=from-above;
+      edit(above,to,block+'\n'+line,start-shift,end-shift);
+    }else{
+      if(to>=text.length)return;
+      let below=text.indexOf('\n',to+1);if(below<0)below=text.length;
+      const line=text.slice(to+1,below),shift=line.length+1;
+      edit(from,below,line+'\n'+block,start+shift,end+shift);
+    }
+  }
+  function duplicateLines(direction){
+    const start=input.selectionStart,end=input.selectionEnd,[from,to]=lineRange(start,end),block=text.slice(from,to),shift=direction>0?block.length+1:0;
+    edit(to,to,'\n'+block,start+shift,end+shift);
+  }
+  function deleteLines(){
+    const start=input.selectionStart,end=input.selectionEnd,[from,to]=lineRange(start,end);
+    const [a,b]=to<text.length?[from,to+1]:[Math.max(0,from-1),to],col=start-from,next=text.slice(b,text.indexOf('\n',b)<0?text.length:text.indexOf('\n',b));
+    const caret=a+(to<text.length?Math.min(col,next.length):0);
+    edit(a,b,'',to<text.length?caret:a,to<text.length?caret:a);
+  }
+  // Each press of Mod+L takes one more whole line.
+  function selectLines(){
+    const start=input.selectionStart,end=input.selectionEnd,whole=start!==end&&(start===0||text[start-1]==='\n')&&text[end-1]==='\n';
+    const [from,to]=whole?[start,(text.indexOf('\n',end)<0?text.length:text.indexOf('\n',end)+1)]:(([a,b])=>[a,Math.min(text.length,b+1)])(lineRange(start,end));
+    input.setSelectionRange(from,to);cursor();reveal(to);
+  }
+  // A textarea has one selection, so Mod+D selects the word at the caret, then jumps to its next occurrence.
+  function selectNext(){
+    const start=input.selectionStart,end=input.selectionEnd;
+    if(start===end){
+      const word=/[\\]?[\p{L}\p{N}_@]+$/u.exec(text.slice(0,start))?.[0]||'',after=/^[\p{L}\p{N}_@]*/u.exec(text.slice(start))[0];
+      if(word||after){input.setSelectionRange(start-word.length,start+after.length);cursor();}
+      return;
+    }
+    const needle=text.slice(start,end);let at=text.indexOf(needle,end);if(at<0)at=text.indexOf(needle);
+    if(at>=0&&at!==start){input.setSelectionRange(at,at+needle.length);cursor();reveal(at+needle.length,true);}
+  }
   function keydown(event){
     if(event.isComposing||event.keyCode===229)return;
     const start=input.selectionStart,end=input.selectionEnd,mod=event.ctrlKey||event.metaKey,key=event.key;
+    if(snippet&&!mod&&!event.altKey){
+      if(key==='Tab'){event.preventDefault();goStop(snippet.index+(event.shiftKey?-1:1));return;}
+      if(key==='Escape'){event.preventDefault();event.stopPropagation();endSnippet();return;}
+    }
+    if(key==='Tab'&&!mod&&!event.altKey&&!event.shiftKey){const word=snippetWord();if(word){event.preventDefault();insertSnippet(word.start,word.end,SNIPPETS[word.name]);return;}}
+    if((key==='ArrowUp'||key==='ArrowDown')&&event.altKey&&!mod){event.preventDefault();(event.shiftKey?duplicateLines:moveLines)(key==='ArrowUp'?-1:1);return;}
+    if(mod&&!event.altKey){
+      const letter=key.toLowerCase();
+      if(letter==='k'&&event.shiftKey){event.preventDefault();deleteLines();return;}
+      if(letter==='l'&&!event.shiftKey){event.preventDefault();selectLines();return;}
+      if(letter==='d'&&!event.shiftKey){event.preventDefault();selectNext();return;}
+    }
     if(key==='Escape'){if(onEscape?.()!==false)event.preventDefault();return;}
     if(key==='Tab'&&!mod&&!event.altKey){event.preventDefault();indent(event.shiftKey);return;}
     if(key==='Enter'&&!mod&&!event.altKey&&!event.shiftKey){event.preventDefault();newline();return;}
@@ -225,6 +348,8 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
   function beforeInput(event){
     if(editing||!options.autoClose||event.inputType!=='insertText'||event.isComposing||event.data?.length!==1)return;
     const start=input.selectionStart,end=input.selectionEnd,key=event.data,next=text[end],previous=text[start-1];
+    // A selection after a backslash becomes \( … \) or \[ … \].
+    if(previous==='\\'&&start!==end&&(key==='('||key==='[')){event.preventDefault();edit(start,end,key+text.slice(start,end)+'\\'+pairs[key],start+1,end+1);return;}
     if(previous==='\\')return;
     if(start!==end){
       if(pairs[key]){event.preventDefault();edit(start,end,key+text.slice(start,end)+pairs[key],start+1,end+1);}
@@ -262,6 +387,7 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
     if(line<0)return input.selectionEnd;
     const range=document.createRange();range.selectNodeContents(row);range.setEnd(node,offset);return lineStarts()[line]+range.toString().length;
   }
+  function select(start,end=start,{center=true}={}){input.focus({preventScroll:true});input.setSelectionRange(start,end);cursor();reveal(end,center);}
   configure({});input.value=value;sync(true);
   return {
     el,input,body,scroller,rectAt,rangeRects,configure,edit,offsetAtPoint,setDecorations,
@@ -275,7 +401,8 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
     get lineHeight(){return parseFloat(style().lineHeight)||20;},
     get gutter(){return parseFloat(style().paddingLeft)||0;},
     offsetOf:(line,col=1)=>Math.min(lineStarts()[Math.min(lines.length-1,Math.max(0,line-1))]+col-1,text.length),
-    select(start,end=start,{center=true}={}){input.focus({preventScroll:true});input.setSelectionRange(start,end);cursor();reveal(end,center);},
+    select,insertSnippet,
+    get snippetActive(){return !!snippet;},
     flash(line){
       const node=nodes[line-1];if(!node)return;
       clearTimeout(flashTimer);for(const other of layer.querySelectorAll('.flash'))other.classList.remove('flash');
@@ -287,6 +414,8 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
       for(const index of new Set([...previous.keys(),...markers.keys()]))decorate(index);
     },
     setDiagnostics(problems){diagnostics=problems;placeDiagnostics();},
-    destroy(){clearTimeout(flashTimer);clearTimeout(idleTimer);if(decorFrame)(globalThis.cancelAnimationFrame||clearTimeout)(decorFrame);for(const [target,type,handler] of listeners)target.removeEventListener(type,handler);el.remove();},
+    /** The problems on a 1-based line, with lines kept in step with edits since they were set. */
+    diagnosticsAt:line=>diagnostics.filter(problem=>problem.line===line),
+    destroy(){snippet=null;clearTimeout(flashTimer);clearTimeout(idleTimer);if(decorFrame)(globalThis.cancelAnimationFrame||clearTimeout)(decorFrame);for(const [target,type,handler] of listeners)target.removeEventListener(type,handler);el.remove();},
   };
 }

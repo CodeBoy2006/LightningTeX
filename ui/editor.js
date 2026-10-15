@@ -31,8 +31,11 @@ import {environmentAt} from '../core/brackets.js';
 import {parseBib,byline,plainField} from '../core/bib.js';
 import {createBreadcrumbs} from './breadcrumbs.js';
 import {createHoverCard} from './hovercard.js';
+import {quickFixes,packageEdit} from '../core/quick-fix.js';
+import {openTablePicker} from './table-picker.js';
+import {createPdfFind} from './pdf-find.js';
 
-const LEGACY_DRAFT='realtime-tex-web:draft:v1',LEGACY_CONSENT='realtime-tex-web:save-draft:v1';
+const LEGACY_DRAFT='realtime-tex-web:draft:v1',LEGACY_CONSENT='realtime-tex-web:save-draft:v1',TAB_PROJECT='lightningtex:project';
 const MAX_UPLOAD=20*1024*1024,ZOOMS=[0.5,0.67,0.8,0.9,1,1.1,1.25,1.5,1.75,2,2.5,3];
 const ACCENTS={bolt:'#f5b800',indigo:'#6366f1',teal:'#0d9488',rose:'#e5487d'};
 const mac=/Mac|iPhone|iPad/.test(globalThis.navigator?.platform||globalThis.navigator?.userAgent||'');
@@ -107,12 +110,14 @@ const shell=()=>`<div class="app">
       <button type="button" class="preview-error" data-id="preview-error" hidden></button>
       <div class="preview-body"><nav class="thumbs" data-id="thumbs" data-i18n-title="thumbs.title" hidden></nav><div class="preview" data-id="preview-viewport" tabindex="0" data-i18n-title="preview.locate">${SHEET}</div></div>
       <button type="button" class="marker-chip" data-id="marker-chip" hidden></button>
+      <span class="page-tag" data-id="page-tag" aria-hidden="true" hidden></span>
       <div class="zoombar" data-id="zoombar">
         <button type="button" class="icon-btn" data-action="zoom-out" data-i18n-title="zoom.out">${icon('minus')}</button>
-        <button type="button" class="zoom-label" data-action="zoom-menu" data-id="zoom-label" data-i18n-title="zoom.menu" aria-haspopup="menu"></button>
+        <button type="button" class="zoom-label" data-action="zoom-menu" data-id="zoom-label" data-i18n-title="zoom.menu" aria-haspopup="menu"></button><span class="zoom-note" data-id="zoom-note" hidden></span>
         <button type="button" class="icon-btn" data-action="zoom-in" data-i18n-title="zoom.in">${icon('plus')}</button>
         <button type="button" class="icon-btn" data-action="zoom-fit" data-i18n-title="zoom.fit">${icon('fit')}</button>
         <button type="button" class="icon-btn" data-action="toggle-thumbs" data-i18n-title="thumbs.toggle" data-keys="${keys('Mod+Alt+T')}">${icon('pages')}</button>
+        <button type="button" class="icon-btn" data-action="pdf-find" data-i18n-title="pdfFind.open" data-keys="${keys('Mod+F')}">${icon('search')}</button>
         <label class="page-nav" data-id="page-nav" hidden><input class="page-input" data-id="page-input" type="text" inputmode="numeric" autocomplete="off" data-i18n-title="page.jump"><span data-id="page-indicator"></span></label>
       </div>
     </section>
@@ -130,16 +135,19 @@ const shell=()=>`<div class="app">
 </div>`;
 
 // [label key, combo]; "Mod" is Command or Control.
-const EDITOR_SHORTCUTS=[['keys.comment','Mod+/'],['keys.indent','Tab / Shift+Tab'],['keys.escape','Esc']];
+const EDITOR_SHORTCUTS=[['keys.comment','Mod+/'],['keys.indent','Tab / Shift+Tab'],['keys.snippets','Tab'],['keys.stops','Tab / Shift+Tab'],
+  ['keys.moveLine','Alt+Up / Alt+Down'],['keys.dupLine','Shift+Alt+Down'],['keys.deleteLine','Mod+Shift+K'],['keys.selectLine','Mod+L'],['keys.selectNext','Mod+D'],
+  ['keys.follow','F12'],['keys.rename','F2'],['keys.refs','Shift+F12'],['keys.escape','Esc']];
 
-// [section, [key, kind, values?]…] — every row edits one setting and applies at once.
+// [category, section title, [key, kind, values?]…] — every row edits one setting, applies at once and says what it does.
 const SETTINGS=[
-  ['set.appearance',[['theme','choice',['system','light','dark']],['accent','swatch',Object.keys(ACCENTS)],['lang','choice',['auto','en','zh']],['darkPages','toggle']]],
-  ['set.editor',[['fontSize','step',[11,20]],['wrap','toggle'],['autoClose','toggle'],['tabSize','choice',[2,4]],['spellcheck','toggle']]],
-  ['set.preview',[['autoCompile','toggle'],['mathPreview','toggle'],['mathScale','choice',['s','m','l']],['follow','toggle']]],
-  ['set.storage',[['persist','toggle']]],
+  ['appearance','set.appearance',[['theme','choice',['system','light','dark']],['accent','swatch',Object.keys(ACCENTS)],['lang','choice',['auto','en','zh']],['darkPages','toggle']]],
+  ['editor','set.editor',[['fontSize','step',[11,20]],['wrap','toggle'],['autoClose','toggle'],['tabSize','choice',[2,4]],['spellcheck','toggle']]],
+  ['preview','set.preview',[['autoCompile','toggle'],['mathPreview','toggle'],['mathScale','choice',['s','m','l']],['follow','toggle'],['thumbs','toggle'],['spread','choice',['single','double','cover']]]],
+  ['storage','set.storage',[['persist','toggle']]],
 ];
-const choiceLabel={lang:{en:'English',zh:'中文',auto:'set.lang.auto'},theme:value=>'set.theme.'+value,mathScale:value=>'size.'+value};
+const SETTING_GROUPS=[...SETTINGS.map(([id,title])=>[id,title]),['shortcuts','keys.title']];
+const choiceLabel={lang:{en:'English',zh:'中文',auto:'set.lang.auto'},theme:value=>'set.theme.'+value,mathScale:value=>'size.'+value,spread:value=>'spread.short.'+value};
 
 /**
  * mountEditor({ root, source?, project?, store?, onCompile, onPreview?, onCancel?, onSourceChange?, renderPdf?,
@@ -148,7 +156,7 @@ const choiceLabel={lang:{en:'English',zh:'中文',auto:'set.lang.auto'},theme:va
  *   or {empty:true} for a document without pages; files are the project's other files as {path, data, rev}.
  *   Never return a fake PDF.
  * onPreview(request) uses the same input, returning true, 'reflow' (settle after idle), or false (full pass).
- * renderPdf({bytes, container, signal, zoom, viewport}) renders into an offscreen container; only a
+ * renderPdf({bytes, container, signal, zoom, viewport, width, dark}) renders into an offscreen container; only a
  *   successful render replaces the old preview. Page canvases carry data-page and data-base (CSS px at 100%).
  * typesetMath({found, source, scale, maxWidth}) resolves {canvas} or {state, message} for the formula popover.
  * store: {load, save, clear} persistence (default IndexedDB), or null to keep everything in memory.
@@ -165,6 +173,9 @@ export function mountEditor(options={}){
   let structure={headings:[],labels:[],paths:[]},wordTotal=0,wordSections=[],historyId=globalThis.crypto.randomUUID();
   let tabs=[],active=null,compileTimer,settleTimer,busyTimer,zoomTimer,saveTimer,metaTimer,barTimer,hoverFrame,hoverPoint,rendererAbort,pdfSequence=0,previewRun=0,store=null,saving=false,restoring=false,storageWarned=false;
   let pending=emptyPending(),panelAuto=false,lastPulse=0,panelMotion=null,inkTimer;const inks=new Map();
+  // Projects: `store` holds every project (or is a single-project store); `scoped` is the open project's view of it.
+  let scoped=null,currentId=null,switching=false;
+  const multi=()=>!!store?.listProjects,saver=()=>multi()?scoped:store;
   root.innerHTML=shell();
   const app=root.firstElementChild;
   const $=id=>root.querySelector(`[data-id="${id}"]`);
@@ -183,7 +194,8 @@ export function mountEditor(options={}){
   const focusEditor=()=>activeEditor()?.focus();
   function commands(){return [
     {label:'palette.open',key:'Mod+K',icon:'search',run:palette},
-    {label:'find.open',key:'Mod+F',icon:'search',run:()=>views.get(active)?.find?.open(),disabled:!activeEditor()},
+    {label:'find.open',key:'Mod+F',icon:'search',run:()=>previewFocused()?openPdfFind():views.get(active)?.find?.open(),disabled:!activeEditor()&&!state.pdf},
+    {label:'pdfFind.open',icon:'search',run:()=>openPdfFind(),disabled:!state.pdf},
     {label:'find.replaceOpen',key:'Mod+Shift+H',icon:'edit',run:()=>views.get(active)?.find?.open(true),disabled:!activeEditor()},
     {label:'compile.run',key:'Mod+Enter',icon:'play',run:()=>compile(),disabled:state.engine!=='ready'},
     {label:'keys.save',key:'Mod+S',icon:'check',run:()=>void flush()},
@@ -191,6 +203,7 @@ export function mountEditor(options={}){
     {label:'panel.toggle',key:'Mod+J',icon:'warning',run:()=>set('panel',!settings.panel)},
     {label:'layout.label',key:'Mod+\\',icon:'sidebar',run:()=>{const order=['split','source','preview'];setLayout(order[(order.indexOf(shownLayout())+1)%3]);}},
     {label:'settings.open',key:'Mod+,',icon:'settings',run:()=>toggleSettings()},
+    {label:'projects.open',key:'Mod+O',icon:'projects',run:()=>void openProjects()},
     {label:'project.new',icon:'template',run:()=>templateGallery()},
     {label:'project.import',icon:'upload',run:()=>$('zip-input').click()},
     {label:'export.open',icon:'download',run:exportMenu},
@@ -199,6 +212,11 @@ export function mountEditor(options={}){
     {label:'labels.title',icon:'hash',run:()=>showSide('labels',true)},
     {label:'words.title',icon:'hash',run:wordDetails},
     {label:'symbols.open',icon:'sigma',run:symbols,disabled:!activeEditor()},
+    {label:'table.title',icon:'table',run:()=>insertTable('table'),disabled:!activeEditor()||!isTex(active)},
+    {label:'matrix.title',icon:'table',run:()=>insertTable('matrix'),disabled:!activeEditor()||!isTex(active)},
+    {label:'fix.open',key:'Mod+.',icon:'bulb',run:()=>openFixes(),disabled:!activeEditor()},
+    {label:'rename.title',icon:'rename',run:()=>renameAt(active),disabled:!activeEditor()||!isTex(active)},
+    {label:'refs.find',icon:'hash',run:()=>referencesAt(active),disabled:!activeEditor()||!isTex(active)},
     {label:'history.open',icon:'history',run:history},
     {label:'insp.title',icon:'bolt',run:openInspector},
     {label:'thumbs.toggle',key:'Mod+Alt+T',icon:'pages',run:()=>set('thumbs',!settings.thumbs)},
@@ -255,10 +273,14 @@ export function mountEditor(options={}){
     for(const view of root.querySelectorAll('.side-view'))view.hidden=view.dataset.view!==settings.sideView;
     placeThumb(switcher);
   }
+  const darkPages=()=>settings.darkPages&&app.dataset.theme==='dark';
+  let pagesDark=false;
   function applyAppearance(){
     const theme=settings.theme==='system'?(darkQuery?.matches?'dark':'light'):settings.theme;
     for(const target of [app,document.documentElement]){target.dataset.theme=theme;target.dataset.accent=settings.accent;}
     app.dataset.darkPages=String(settings.darkPages);document.documentElement.lang=i18n.lang==='zh'?'zh-CN':'en';
+    // Dark pages are drawn into the page bitmaps, so a change redraws the pages.
+    if(darkPages()!==pagesDark){pagesDark=darkPages();if(state.pdf){clearTimeout(zoomTimer);zoomTimer=setTimeout(refreshPages,0);}}
   }
   const placeThumb=control=>{
     const thumb=control.querySelector('.seg-thumb'),on=control.querySelector('[aria-checked="true"],[aria-selected="true"]');
@@ -317,12 +339,33 @@ export function mountEditor(options={}){
     else if(key==='follow')placeMarker(true);
     syncSettings();
   }
+  // Settings: a dialog with categories on the left and a search across every row; changes apply at once.
+  let settingsGroup='appearance',settingsQuery='',settingsReturn=null;
   function renderSettings(){
-    const panel=$('settings');panel.replaceChildren();panel.setAttribute('aria-label',t('settings.open'));
-    for(const [title,rows] of SETTINGS){
-      const section=document.createElement('section');section.append(Object.assign(document.createElement('h3'),{textContent:t(title)}));
+    const panel=$('settings');panel.replaceChildren();panel.setAttribute('aria-modal','true');panel.setAttribute('aria-labelledby','settings-title');
+    const card=make('div','settings-card'),head=make('header','settings-head'),body=make('div','settings-body'),nav=make('nav','settings-nav'),pane=make('div','settings-pane');
+    const title=make('h2','',t('settings.open'));title.id='settings-title';
+    const search=make('label','settings-search');search.innerHTML=icon('search',14);
+    const query=make('input');query.type='search';query.placeholder=t('set.search');query.setAttribute('aria-label',t('set.search'));query.value=settingsQuery;search.append(query);
+    const close=make('button','icon-btn');close.type='button';close.innerHTML=icon('close');close.setAttribute('aria-label',t('common.close'));close.dataset.tip=t('common.close');close.onclick=()=>toggleSettings(false);
+    head.append(title,search,close);nav.setAttribute('role','tablist');nav.setAttribute('aria-orientation','vertical');
+    for(const [id,key] of SETTING_GROUPS){
+      const tab=make('button','settings-tab',t(key));tab.type='button';tab.setAttribute('role','tab');tab.dataset.group=id;
+      tab.onclick=()=>{settingsGroup=id;settingsQuery='';query.value='';filterSettings();};nav.append(tab);
+    }
+    nav.addEventListener('keydown',event=>{
+      if(event.key!=='ArrowDown'&&event.key!=='ArrowUp')return;event.preventDefault();
+      const ids=SETTING_GROUPS.map(([id])=>id),next=ids[(ids.indexOf(settingsGroup)+(event.key==='ArrowDown'?1:ids.length-1))%ids.length];
+      settingsGroup=next;settingsQuery='';query.value='';filterSettings();nav.querySelector(`[data-group="${next}"]`).focus();
+    });
+    const reset=make('button','text-btn settings-reset');reset.type='button';reset.innerHTML=icon('history',14);reset.append(t('set.reset'));
+    reset.addEventListener('click',()=>{for(const key of Object.keys(DEFAULT_SETTINGS))if(!['sidebarOpen','panel','panelTab','persist'].includes(key))set(key,DEFAULT_SETTINGS[key]);layoutPages();});
+    nav.append(make('span','spacer'),reset);
+    for(const [id,heading,rows] of SETTINGS){
+      const section=make('section');section.dataset.group=id;section.append(make('h3','',t(heading)));
       for(const [key,kind,values] of rows){
-        const row=document.createElement('div');row.className='setting';row.append(Object.assign(document.createElement('span'),{className:'setting-label',textContent:t('set.'+key)}));
+        const row=make('div','setting'),text=make('div','setting-text');text.append(make('span','setting-label',t('set.'+key)),make('span','setting-desc',t('set.'+key+'.desc')));row.append(text);
+        row.dataset.search=(t('set.'+key)+' '+t('set.'+key+'.desc')+' '+key).toLowerCase();
         const control=document.createElement(kind==='toggle'?'label':'div');control.dataset.setting=key;control.className=kind==='toggle'?'switch':kind==='step'?'stepper':'segmented';
         if(kind==='choice'||kind==='swatch'){control.setAttribute('role','radiogroup');control.setAttribute('aria-label',t('set.'+key));control.append(Object.assign(document.createElement('i'),{className:'seg-thumb'}));}
         if(kind==='toggle'){
@@ -339,16 +382,37 @@ export function mountEditor(options={}){
           const button=Object.assign(document.createElement('button'),{type:'button'});button.dataset.value=String(value);button.setAttribute('role','radio');
           if(kind==='swatch'){button.className='swatch';button.style.setProperty('--swatch',ACCENTS[value]);button.setAttribute('aria-label',value);}
           else{const label=choiceLabel[key];button.textContent=!label?String(value):typeof label==='function'?t(label(value)):label[value].includes('.')?t(label[value]):label[value];}
-          button.addEventListener('click',()=>set(key,value));control.append(button);
+          button.addEventListener('click',()=>key==='spread'?setSpread(value):set(key,value));control.append(button);
         }
         row.append(control);section.append(row);
       }
-      panel.append(section);
+      pane.append(section);
     }
-    const reset=Object.assign(document.createElement('button'),{type:'button',className:'text-btn',innerHTML:icon('history',14)}),shortcuts=Object.assign(document.createElement('button'),{type:'button',className:'text-btn',innerHTML:icon('keyboard',14)});
-    shortcuts.append(t('keys.short'));reset.append(t('set.reset'));shortcuts.addEventListener('click',()=>{toggleSettings(false);shortcutSheet();});
-    reset.addEventListener('click',()=>{for(const key of Object.keys(DEFAULT_SETTINGS))if(!['sidebarOpen','panel','panelTab','persist'].includes(key))set(key,DEFAULT_SETTINGS[key]);layoutPages();});
-    const foot=Object.assign(document.createElement('div'),{className:'settings-foot'});foot.append(shortcuts,reset);panel.append(foot);syncSettings();
+    // Keyboard shortcuts are a category of their own, searchable like the rest.
+    const keysSection=make('section');keysSection.dataset.group='shortcuts';keysSection.append(make('h3','',t('keys.title')));
+    const list=make('dl','keys');
+    for(const [label,combo] of [...commands().filter(c=>c.key).map(c=>[c.label,c.key]),...EDITOR_SHORTCUTS]){
+      const term=make('dt','',t(label)),cell=make('dd');term.dataset.search=cell.dataset.search=t(label).toLowerCase()+' '+combo.toLowerCase();
+      for(const part of combo.split(' / '))cell.append(Object.assign(document.createElement('kbd'),{textContent:keys(part)}));
+      list.append(term,cell);
+    }
+    keysSection.append(list);pane.append(keysSection,make('p','settings-empty',t('set.none')));
+    body.append(nav,pane);card.append(head,body);panel.append(card);
+    query.addEventListener('input',()=>{settingsQuery=query.value;filterSettings();});
+    query.addEventListener('keydown',event=>{if(event.key==='Escape'&&query.value){event.preventDefault();event.stopPropagation();query.value=settingsQuery='';filterSettings();}});
+    syncSettings();filterSettings();
+  }
+  // One category at a time; a search shows matching rows from every category under their headings.
+  function filterSettings(){
+    const panel=$('settings'),needle=settingsQuery.trim().toLowerCase();let any=false;
+    for(const tab of panel.querySelectorAll('.settings-tab')){const on=!needle&&tab.dataset.group===settingsGroup;tab.setAttribute('aria-selected',String(on));tab.tabIndex=on?0:-1;}
+    for(const section of panel.querySelectorAll('.settings-pane section')){
+      let shown=0;
+      for(const row of section.querySelectorAll('[data-search]')){const match=!needle||row.dataset.search.includes(needle);row.hidden=!match;if(match)shown++;}
+      section.hidden=needle?!shown:section.dataset.group!==settingsGroup;if(!section.hidden)any=true;
+    }
+    panel.querySelector('.settings-empty').hidden=any;
+    if(!panel.hidden)for(const control of panel.querySelectorAll('.segmented'))placeThumb(control);
   }
   function syncSettings(){
     for(const control of $('settings').querySelectorAll('[data-setting]')){
@@ -357,19 +421,18 @@ export function mountEditor(options={}){
       else{for(const button of control.querySelectorAll('button'))button.setAttribute('aria-checked',String(button.dataset.value===String(value)));placeThumb(control);}
     }
   }
-  function toggleSettings(show=$('settings').hidden){
-    const panel=$('settings');panel.hidden=!show;action('settings').setAttribute('aria-expanded',String(show));
-    if(show)panel.querySelector('button,input')?.focus({preventScroll:true});
+  function toggleSettings(show=$('settings').hidden,group){
+    const panel=$('settings');if(group){settingsGroup=group;settingsQuery='';const input=panel.querySelector('.settings-search input');if(input)input.value='';}
+    if(show===!panel.hidden){if(group)filterSettings();return;}
+    if(show)settingsReturn=document.activeElement;
+    panel.hidden=!show;action('settings').setAttribute('aria-expanded',String(show));
+    // Modal while open: the rest of the workspace is inert.
+    for(const node of app.children)if(node!==panel&&!node.classList.contains('toasts'))node.inert=show;
+    if(show){filterSettings();panel.querySelector('.settings-search input')?.focus({preventScroll:true});}
+    else settingsReturn?.focus?.({preventScroll:true});
   }
-  function shortcutSheet(){
-    const list=Object.assign(document.createElement('dl'),{className:'keys'});
-    for(const [label,combo] of [...commands().filter(c=>c.key).map(c=>[c.label,c.key]),...EDITOR_SHORTCUTS]){
-      const cell=document.createElement('dd');
-      for(const part of combo.split(' / '))cell.append(Object.assign(document.createElement('kbd'),{textContent:keys(part)}));
-      list.append(Object.assign(document.createElement('dt'),{textContent:t(label)}),cell);
-    }
-    openDialog(app,{title:t('keys.title'),content:list});
-  }
+  const shortcutSheet=()=>toggleSettings(true,'shortcuts');
+
 
   // ---- status -----------------------------------------------------------------------------------
   // ---- live inspector and PDF sync -------------------------------------------------------------
@@ -499,7 +562,7 @@ export function mountEditor(options={}){
     $('refs-tab').hidden=false;$('refs-count').textContent=String(found.length);openPanel('refs');
   }
   function renderProblems(){
-    const list=$('problems'),counts={error:0,warning:0,info:0},marksByFile=new Map(),rank={error:3,warning:2,info:1};list.replaceChildren();
+    const list=$('problems'),counts={error:0,warning:0,info:0},marksByFile=new Map(),rank={error:3,warning:2,info:1},context=fixContext();list.replaceChildren();
     for(const problem of state.problems){
       counts[problem.severity]=(counts[problem.severity]||0)+1;
       if(problem.line){
@@ -523,7 +586,7 @@ export function mountEditor(options={}){
     for(const [path,view] of views){
       if(!view.editor)continue;
       view.editor.setMarkers(marksByFile.get(path)||new Map());
-      view.editor.setDiagnostics(state.problems.filter(problem=>problem.file===path));
+      view.editor.setDiagnostics(state.problems.filter(problem=>problem.file===path).map(problem=>({...problem,fixable:isTex(path)&&quickFixes(problem,context).length>0})));
     }
     outline.update(structure.headings,state.problems,wordSections);nowKey=null;syncCursorViews();
   }
@@ -566,6 +629,7 @@ export function mountEditor(options={}){
           $('cursor-status').textContent=t('cursor',position);updateMath();syncCursorViews();updateWords();queueCrumbs();
           options.onCursor?.({path,offset:position.offset,line:position.line,main:path===project.main});
         },
+        onQuickFix:(line,at)=>openFixes(path,line,at),
         onEscape:()=>{
           if(popover?.dismiss())return;
           if(state.compiling){cancel();return;}
@@ -573,13 +637,19 @@ export function mountEditor(options={}){
         }});
       view.editor.input.addEventListener('blur',()=>popover?.hide());
       view.find=createFindBar(view.editor,t);
-      if(isTex(path))view.complete=createCompletion(view.editor,{t,context:()=>({files:new Map(project.files().map(f=>[f.path,f.text])),labels:structure.labels}),onVisible:visible=>{if(visible)popover?.hide();}});
+      if(isTex(path))view.complete=createCompletion(view.editor,{t,context:()=>({files:new Map(project.files().map(f=>[f.path,f.text])),labels:structure.labels,
+        bib:bibEntries().map(entry=>({key:entry.key,byline:byline(entry),title:plainField(entry.fields.title)}))}),onVisible:visible=>{if(visible)popover?.hide();}});
       wireInsertion(view.editor,path);view.edges=watchEdges(view.editor.scroller,view.editor.el);
       if(isTex(path)){
         view.card=createHoverCard(view.editor,{describe:(offset,config)=>describeTarget(path,offset,config)});
         // Command/Control-click or F12 follows what the source points to.
         view.editor.input.addEventListener('click',event=>{if((event.metaKey||event.ctrlKey)&&!event.altKey&&follow(path,view.editor.caret))event.preventDefault();});
-        view.editor.input.addEventListener('keydown',event=>{if(event.key==='F12'&&!event.metaKey&&!event.ctrlKey){event.preventDefault();if(!follow(path,view.editor.caret))notify('follow.none');}});
+        view.editor.input.addEventListener('keydown',event=>{
+          if(event.metaKey||event.ctrlKey||event.altKey)return;
+          if(event.key==='F12'&&event.shiftKey){event.preventDefault();referencesAt(path);}
+          else if(event.key==='F12'){event.preventDefault();if(!follow(path,view.editor.caret))notify('follow.none');}
+          else if(event.key==='F2'&&!event.shiftKey){event.preventDefault();renameAt(path);}
+        });
       }
       view.editor.scroller.addEventListener('scroll',()=>{if(active===path)queueCrumbs();},{passive:true});
       el.append(view.editor.el);return view;
@@ -791,6 +861,124 @@ export function mountEditor(options={}){
     crumbs.update({path:active,heading,environment,stuck:away&&!!heading&&heading.file===active&&heading.line<top});
   }
 
+  // ---- edits across files, rename and quick fixes -----------------------------------------------
+  /** Apply [{file, start, end, text}] as one edit per file. Open editors take theirs natively (one Mod+Z);
+   *  returns a function that restores every file that still holds what was written. */
+  function applyEdits(edits){
+    const byFile=new Map(),undo=[];
+    for(const edit of edits){const list=byFile.get(edit.file)||[];list.push(edit);byFile.set(edit.file,list);}
+    for(const [file,list] of byFile){
+      const source=project.get(file)?.text;if(typeof source!=='string')continue;
+      list.sort((a,b)=>a.start-b.start);
+      const from=list[0].start,to=Math.max(...list.map(edit=>edit.end));let written='',at=from;
+      for(const edit of list){if(edit.start<at)continue;written+=source.slice(at,edit.start)+edit.text;at=edit.end;}
+      written+=source.slice(at,to);
+      const before=source.slice(from,to);write(file,from,to,written);
+      undo.push(()=>{const now=project.get(file)?.text;if(typeof now==='string'&&now.slice(from,from+written.length)===written)write(file,from,from+written.length,before);});
+    }
+    return ()=>{for(const step of undo.reverse())step();};
+  }
+  function write(file,from,to,text){
+    const editor=views.get(file)?.editor;
+    // A file open in a background tab takes the edit on its own undo stack; the focus stays where it was.
+    if(editor&&editor.getValue()===project.get(file).text){const focused=document.activeElement;editor.edit(from,to,text);if(file!==active)focused?.focus?.({preventScroll:true});}
+    else{const source=project.get(file).text;project.write(file,source.slice(0,from)+text+source.slice(to));}
+  }
+  /** F2 on a \label or a reference: type the new name, see every affected line, Enter renames them all. */
+  function renameAt(path){
+    const editor=views.get(path)?.editor;if(!editor||!isTex(path))return;
+    const target=targetAt(editor.getValue(),editor.caret);
+    if(!target||target.kind!=='label'&&target.kind!=='ref'){notify('rename.none');return;}
+    const old=target.name,files=textFiles(),labels=findLabels(files);
+    const sites=[...labels.filter(label=>label.name===old).map(label=>({...label,command:'label'})),...findReferences(files).filter(ref=>ref.name===old)].sort((a,b)=>a.file.localeCompare(b.file)||a.start-b.start);
+    const box=make('div','rename'),head=make('div','rename-head'),input=make('input','field rename-input'),list=make('div','rename-list'),foot=make('div','rename-foot');
+    head.append(make('span','',t('rename.title')),make('code','',old));input.type='text';input.value=old;input.spellcheck=false;input.setAttribute('aria-label',t('rename.title'));
+    box.append(head,input,list,foot);
+    const count=new Set(sites.map(site=>site.file)).size;
+    function check(){
+      const next=input.value.trim();
+      if(!next)return t('rename.empty');
+      if(/[{}\\%#,]/.test(next))return t('rename.invalid');
+      if(next!==old&&labels.some(label=>label.name===next))return t('rename.taken',{name:next});
+      return '';
+    }
+    function paint(){
+      const next=input.value.trim()||old,problem=check();list.replaceChildren();
+      for(const site of sites.slice(0,60)){
+        const source=files.get(site.file),from=source.lastIndexOf('\n',site.start-1)+1,end=source.indexOf('\n',site.start),line=source.slice(from,end<0?source.length:end);
+        const row=make('div','rename-row'),code=make('code'),before=line.slice(0,site.start-from).trimStart(),after=line.slice(site.end-from);
+        code.append(make('span','',before.length>36?'…'+before.slice(-36):before),make('mark','',next),make('span','',after.length>40?after.slice(0,40)+'…':after));
+        row.append(make('span','rename-where',`${site.file}:${site.line}`),code);list.append(row);
+      }
+      foot.dataset.state=problem?'error':'';foot.textContent=problem||t('rename.hint',{n:sites.length,files:count});
+    }
+    const rect=editor.rectAt(target.start),origin=editor.body.getBoundingClientRect();
+    const at={left:origin.left+(rect?.x??0),top:origin.top+(rect?.top??0),bottom:origin.top+(rect?.bottom??0)};
+    const surface=openPopover(app,at,box,{className:'rename-pop',label:t('rename.title')});
+    input.addEventListener('input',paint);
+    input.addEventListener('keydown',event=>{
+      if(event.key!=='Enter'||event.isComposing)return;event.preventDefault();
+      const next=input.value.trim();if(check())return;
+      surface.close(false);editor.focus();
+      if(next===old)return;
+      const before=sites.filter(site=>site.file===path&&site.start<target.start).length,undo=applyEdits(sites.map(site=>({file:site.file,start:site.start,end:site.end,text:next})));
+      const at=target.start+before*(next.length-old.length);views.get(path)?.editor?.select(at,at+next.length,{center:false});
+      toast(t('rename.done',{from:old,to:next,n:sites.length}),{label:t('rename.undo'),run:undo});
+    });
+    paint();input.focus();input.select();
+  }
+  /** W3: a grid picker; the table or matrix goes in at the caret with its cells as tab stops. */
+  function insertTable(mode){
+    const editor=activeEditor(),path=active;if(!editor)return;
+    const start=editor.input.selectionStart,end=editor.input.selectionEnd,inMath=!!mathAt(editor.getValue(),start);
+    openTablePicker({host:app,t,mode,inMath,insert:(template,packages)=>{
+      let from=start,to=end;const added=[];
+      for(const pkg of packages){
+        const source=project.get(project.main)?.text,edit=typeof source==='string'&&packageEdit(project.main,source,pkg);if(!edit)continue;
+        applyEdits([edit]);added.push(pkg);if(project.main===path&&edit.start<=from){from+=edit.text.length;to+=edit.text.length;}
+      }
+      views.get(path)?.editor?.insertSnippet(from,to,template);
+      if(added.length)notify('table.added',{name:added.join(', ')});
+    }});
+  }
+  function referencesAt(path){
+    const editor=views.get(path)?.editor;if(!editor)return;
+    const target=targetAt(editor.getValue(),editor.caret);
+    if(target&&(target.kind==='label'||target.kind==='ref'))findAllReferences(target.name);else notify('rename.none');
+  }
+  function fixContext(){
+    const files=textFiles();
+    return {files,main:project.main,labels:findLabels(files).map(label=>label.name),bibKeys:bibEntries().map(entry=>entry.key),paths:project.paths(),
+      macros:[...files.values()].flatMap(text=>[...text.matchAll(/\\(?:re)?newcommand\*?\s*\{?\\([A-Za-z]+)|\\DeclareMathOperator\*?\s*\{?\\([A-Za-z]+)|\\def\s*\\([A-Za-z]+)/g)].map(match=>match[1]||match[2]||match[3]))};
+  }
+  /** Mod+. or the gutter bulb: the fixes for the problems on a line (default: the caret's), as a menu. */
+  function openFixes(path=active,line,at){
+    const editor=views.get(path)?.editor;if(!editor)return;
+    line??=views.get(path)?.position?.line||1;
+    const problems=editor.diagnosticsAt(line),context=fixContext(),items=[];
+    for(const problem of problems){
+      const fixes=quickFixes({...problem,file:path},context);if(!fixes.length)continue;
+      if(items.length)items.push('separator');
+      items.push({note:problem.message,noteIcon:problem.severity==='error'?'error':problem.severity==='warning'?'warning':'info',tone:problem.severity});
+      for(const fix of fixes)items.push({label:fixLabel(fix),icon:fix.kind==='package'?'plus':fix.kind==='unbalanced'?'target':fix.kind==='replace'?'edit':'bulb',
+        run:()=>{if(fix.go){reveal({path:fix.go.file,offset:fix.go.offset});return;}const undo=applyEdits(fix.edits);if(fix.edits.some(edit=>edit.file!==path))toast(t('fix.applied',{name:fixLabel(fix)}),{label:t('common.undo'),run:undo});}});
+    }
+    if(!items.length){notify(problems.length?'fix.unknown':'fix.none');return;}
+    const first=items.find(item=>item.run);if(first)first.hint='↵';
+    items.push('separator',{label:t('fix.panel'),icon:'warning',run:()=>openPanel('problems')});
+    let anchor=at;
+    if(!anchor){const rect=editor.rectAt(editor.offsetOf(line)),origin=editor.body.getBoundingClientRect();anchor={left:origin.left+(rect?.x??0),top:origin.top+(rect?.top??0),bottom:origin.top+(rect?.bottom??0)};}
+    openMenu(app,anchor,items);
+  }
+  function fixLabel(fix){
+    if(fix.kind==='package')return t('fix.package',{name:fix.label});
+    if(fix.kind==='replace')return t('fix.replace',{name:fix.label});
+    if(fix.kind==='math')return t('fix.math',{text:fix.label.length>24?fix.label.slice(0,24)+'…':fix.label});
+    if(fix.kind==='theorem')return t('fix.theorem',{name:/\{([^}]+)\}\{/.exec(fix.label)?.[1]||fix.label});
+    if(fix.kind==='unbalanced')return t('fix.unbalanced');
+    return fix.label;
+  }
+
   // ---- compile and preview ----------------------------------------------------------------------
   const scheduleCompile=(delay=options.previewIntervalMs??60)=>{
     if(compileTimer||state.previewing||state.compiling&&!options.onPreview||!settings.autoCompile||state.destroyed)return;
@@ -879,9 +1067,29 @@ export function mountEditor(options={}){
   function fadeInk(key,ink){inks.delete(key);delete ink.dataset.on;setTimeout(()=>{if(!('on' in ink.dataset))ink.remove();},320);}
   function clearInk(){clearTimeout(inkTimer);for(const ink of inks.values())ink.remove();inks.clear();}
   const fitWidth=()=>Math.max(240,viewport.clientWidth-48);
-  const pageWidth=base=>settings.zoom==='fit'?Math.min(fitWidth(),base*2.5):base*settings.zoom;
+  // Two-page spreads: pages share the width when fitting; too narrow for two at the chosen zoom falls back to one.
+  let spreadShown='single';
+  function spread(base=parseFloat(pages()[0]?.dataset.base)){
+    if(settings.spread==='single'||(pages().length||state.meta?.pages||0)<2)return {mode:'single',narrow:false};
+    const fits=settings.zoom==='fit'?(fitWidth()-16)/2>=260:!base||2*base*settings.zoom+16<=fitWidth();
+    return fits?{mode:settings.spread,narrow:false}:{mode:'single',narrow:true};
+  }
+  const pageWidth=base=>{const columns=spread(base).mode==='single'?1:2;return settings.zoom==='fit'?Math.min((fitWidth()-16*(columns-1))/columns,base*2.5):base*settings.zoom;};
   const currentZoom=()=>{const base=parseFloat(pages()[0]?.dataset.base);return settings.zoom==='fit'?(base?pageWidth(base)/base:1):settings.zoom;};
-  function updateZoomLabel(){$('zoom-label').textContent=settings.zoom==='fit'?t('zoom.fitLabel'):Math.round(settings.zoom*100)+'%';}
+  function applySpread(){
+    const {mode,narrow}=spread();spreadShown=mode;
+    if(mode==='single')delete viewport.dataset.spread;else viewport.dataset.spread=mode;
+    const note=$('zoom-note');note.hidden=!narrow;note.textContent=t('spread.narrow');
+  }
+  // The zoom percentage rolls to its new value: up when growing, down when shrinking.
+  let zoomShown='';
+  function updateZoomLabel(value){
+    const label=$('zoom-label'),text=value!=null?Math.round(value*100)+'%':settings.zoom==='fit'?t('zoom.fitLabel'):Math.round(settings.zoom*100)+'%';
+    if(text===zoomShown&&label.textContent===text)return;
+    const up=(parseFloat(text)||0)>=(parseFloat(zoomShown)||0);zoomShown=text;
+    const span=Object.assign(document.createElement('span'),{textContent:text});label.replaceChildren(span);
+    if(motion())span.animate?.([{transform:`translateY(${up?60:-60}%)`,opacity:0},{transform:'none',opacity:1}],{duration:180,easing:'cubic-bezier(.2,0,0,1)'});
+  }
   /** The rail shows for documents of two pages or more while the setting is on. */
   function applyThumbs(){const rail=$('thumbs'),show=settings.thumbs&&pages().length>1;if(rail.hidden===!show){if(show)thumbs.sync();return;}rail.hidden=!show;if(show)thumbs.sync();}
   function updatePage(){
@@ -929,8 +1137,28 @@ export function mountEditor(options={}){
   }
   /** Resize pages with CSS at once; refreshPages then redraws them sharp. */
   function layoutPages(){
+    applySpread();
     for(const canvas of pages()){const base=parseFloat(canvas.dataset.base);if(base)canvas.style.width=pageWidth(base)+'px';}
-    viewport.querySelectorAll('.hover-region').forEach(node=>node.remove());clearInk();placePagination();updateZoomLabel();updatePage();placeMarker();
+    viewport.querySelectorAll('.hover-region').forEach(node=>node.remove());clearInk();placePagination();updateZoomLabel();updatePage();placeMarker();placeTextLayers();
+  }
+  // Text layers sit over their pages and scale with them; under a page redrawn by a live update they wait for the PDF.
+  function placeTextLayers(){
+    for(const layer of viewport.querySelectorAll('.preview-content:not(.page-leave) .text-layer')){
+      const canvas=viewport.querySelector(`canvas[data-page="${layer.dataset.textPage}"]`);
+      if(!canvas){layer.hidden=true;continue;}
+      layer.hidden=false;layer.toggleAttribute('data-stale','live' in canvas.dataset);
+      if(!canvas.offsetWidth)continue;
+      layer.style.left=canvas.offsetLeft+'px';layer.style.top=canvas.offsetTop+'px';
+      layer.style.setProperty('--total-scale-factor',String(canvas.offsetWidth/parseFloat(layer.dataset.pageWidth)));
+    }
+  }
+  const previewFocused=()=>{const pane=root.querySelector('.preview-pane'),selection=document.getSelection?.();return pane.contains(document.activeElement)||!!selection&&!selection.isCollapsed&&viewport.contains(selection.anchorNode);};
+  const pdfFind=createPdfFind(root.querySelector('.preview-pane'),{t,
+    layers:()=>[...viewport.querySelectorAll('.preview-content:not(.page-leave) .text-layer:not([data-stale]):not([hidden])')],
+    reveal:mark=>{const box=mark.getBoundingClientRect(),view=viewport.getBoundingClientRect();if(box.top<view.top+48||box.bottom>view.bottom-64)viewport.scrollTo?.({top:viewport.scrollTop+box.top-view.top-viewport.clientHeight/3,behavior:'smooth'});}});
+  function openPdfFind(){
+    const selection=document.getSelection?.(),text=selection&&viewport.contains(selection.anchorNode)?selection.toString().trim():'';
+    pdfFind.open(text&&!text.includes('\n')?text:'');
   }
   // Provisional pages carry a corner pill and a dashed lower edge until a full pass settles them. Both persist
   // across live updates (moved, not rebuilt), show progress while that pass runs, and resolve with a check.
@@ -968,7 +1196,8 @@ export function mountEditor(options={}){
   function setZoom(zoom,point){
     const box=viewport.getBoundingClientRect(),px=point?point.x-box.left:viewport.clientWidth/2,py=point?point.y-box.top:viewport.clientHeight/2,x=viewport.scrollLeft+px,y=viewport.scrollTop+py;
     let target=null;
-    for(const canvas of pages())if(!target||canvas.offsetTop<=y)target=canvas;
+    // The page under the point: the last row starting above it, and in a spread the page it is over.
+    for(const canvas of pages())if(!target||canvas.offsetTop<=y&&(canvas.offsetTop>target.offsetTop||x>=canvas.offsetLeft))target=canvas;
     const fx=target?.offsetWidth?(x-target.offsetLeft)/target.offsetWidth:0,fy=target?.offsetHeight?(y-target.offsetTop)/target.offsetHeight:0;
     set('zoom',zoom==='fit'?'fit':clamp(Math.round(zoom*100)/100,0.25,4));layoutPages();
     if(target?.offsetHeight){viewport.scrollTop=target.offsetTop+fy*target.offsetHeight-py;viewport.scrollLeft=target.offsetLeft+fx*target.offsetWidth-px;}
@@ -981,7 +1210,47 @@ export function mountEditor(options={}){
   function zoomMenu(){
     const current=currentZoom();
     openMenu(app,$('zoom-label').getBoundingClientRect(),[{label:t('zoom.fit'),checked:settings.zoom==='fit',run:()=>setZoom('fit')},{label:t('zoom.fitPage'),checked:false,run:fitPage},'separator',
-      ...[0.5,0.75,1,1.25,1.5,2,3].map(value=>({label:Math.round(value*100)+'%',checked:settings.zoom!=='fit'&&Math.abs(current-value)<0.005,run:()=>setZoom(value)}))]);
+      ...[0.5,0.75,1,1.25,1.5,2,3].map(value=>({label:Math.round(value*100)+'%',checked:settings.zoom!=='fit'&&Math.abs(current-value)<0.005,run:()=>setZoom(value)})),'separator',
+      ...['single','double','cover'].map(value=>({label:t('spread.'+value),icon:value==='single'?'file':'twoPages',checked:settings.spread===value,run:()=>setSpread(value)}))]);
+  }
+  function setSpread(value){
+    set('spread',value);
+    // Keep the page at the top of the view in place across the change of layout.
+    const top=pages().find(canvas=>canvas.offsetTop+canvas.offsetHeight>viewport.scrollTop+8);
+    layoutPages();if(top)viewport.scrollTop=Math.max(0,top.offsetTop-12);
+    clearTimeout(zoomTimer);zoomTimer=setTimeout(refreshPages,220);
+  }
+  // Pinch: the page container scales with a transform while the gesture lasts (no layout per event);
+  // when it ends the zoom is committed once, anchored at the same point, and the pages are redrawn sharp.
+  let pinch=null,pinchTimer;
+  function pinchZoom(factor,point){
+    const content=viewport.querySelector('.preview-content:not(.page-leave)');
+    if(!content||!pages().length){setZoom(clamp(currentZoom()*factor,0.25,4),point);return;}
+    if(!pinch){
+      const box=content.getBoundingClientRect();
+      pinch={content,base:currentZoom(),scale:1,point,origin:{x:point.x-box.left,y:point.y-box.top}};
+      content.style.transformOrigin=`${pinch.origin.x}px ${pinch.origin.y}px`;content.style.willChange='transform';
+      viewport.querySelector('.hover-region')?.remove();$('page-tag').hidden=true;
+    }
+    pinch.scale=clamp(pinch.base*pinch.scale*factor,0.25,4)/pinch.base;
+    pinch.content.style.transform=`scale(${pinch.scale})`;
+    updateZoomLabel(pinch.base*pinch.scale);showZoombar();
+    clearTimeout(pinchTimer);pinchTimer=setTimeout(endPinch,180);
+  }
+  function endPinch(){
+    clearTimeout(pinchTimer);if(!pinch)return;
+    const {content,base,scale,point}=pinch;pinch=null;
+    content.style.transform=content.style.transformOrigin=content.style.willChange='';
+    setZoom(base*scale,point);
+  }
+  // Hovering a page shows its number at its foot, above the zoom bar.
+  function pageTag(point){
+    const tag=$('page-tag'),list=pages();
+    if(!point||list.length<2||pinch){tag.hidden=true;return;}
+    const canvas=list.find(item=>Number(item.dataset.page)===point.page);if(!canvas){tag.hidden=true;return;}
+    const pane=root.querySelector('.preview-pane').getBoundingClientRect(),box=canvas.getBoundingClientRect(),limit=pane.bottom-62;
+    tag.textContent=`${point.page} / ${list.length}`;tag.hidden=false;
+    tag.style.left=box.left+box.width/2-pane.left+'px';tag.style.top=Math.min(box.bottom-12,limit)-pane.top+'px';
   }
   const stepZoom=direction=>{const zoom=currentZoom();setZoom(direction>0?ZOOMS.find(value=>value>zoom+0.01)??ZOOMS.at(-1):[...ZOOMS].reverse().find(value=>value<zoom-0.01)??ZOOMS[0]);};
   async function setPdf(bytes,metadata={}){
@@ -991,7 +1260,7 @@ export function mountEditor(options={}){
     const data=bytes instanceof Uint8Array?bytes.slice():new Uint8Array(bytes);
     let newUrl,rendered;
     try{
-      if(options.renderPdf)rendered=await options.renderPdf({bytes:data.slice(),container,signal:rendererAbort.signal,zoom:settings.zoom,viewport});
+      if(options.renderPdf)rendered=await options.renderPdf({bytes:data.slice(),container,signal:rendererAbort.signal,zoom:settings.zoom,viewport,width:natural=>pageWidth(natural),dark:darkPages()});
       else{newUrl=URL.createObjectURL(new Blob([data],{type:'application/pdf'}));const frame=document.createElement('iframe');frame.title='Compiled PDF document';frame.src=newUrl;container.append(frame);}
       if(state.destroyed||sequence!==pdfSequence||metadata.revision!==undefined&&metadata.revision!==state.revision){if(newUrl)URL.revokeObjectURL(newUrl);return;}
       if(state.pdfUrl)URL.revokeObjectURL(state.pdfUrl);state.pdfUrl=newUrl;
@@ -1007,7 +1276,10 @@ export function mountEditor(options={}){
       viewport.scrollTop=scroll;viewport.scrollLeft=across;
       state.pdf=data;state.pdfRevision=metadata.revision??state.revision;state.previewRevision=state.pdfRevision;
       state.meta={pages:metadata.pages??rendered?.pages,durationMs:metadata.durationMs};
-      applyThumbs();updateDoc();updateStatus();updatePage();updateZoomLabel();placeMarker();
+      applyThumbs();applySpread();
+      // The first render of a spread could not know the page count; give the pages their spread widths now.
+      if(pages().some(canvas=>Math.abs(parseFloat(canvas.style.width)-pageWidth(parseFloat(canvas.dataset.base)))>1)){layoutPages();clearTimeout(zoomTimer);zoomTimer=setTimeout(refreshPages,60);}
+      updateDoc();updateStatus();updatePage();updateZoomLabel();placeMarker();placeTextLayers();pdfFind.refresh();describeProject();
       if(settled.length&&!state.failed)settlePagination(settled);
     }catch(error){if(newUrl)URL.revokeObjectURL(newUrl);if(sequence===pdfSequence&&!state.destroyed)api.setError(new Error(`PDF preview could not be rendered: ${error.message||error}`));}
   }
@@ -1015,7 +1287,7 @@ export function mountEditor(options={}){
   // ---- files ------------------------------------------------------------------------------------
   function emptyPending(){return {put:new Set(),remove:new Set(),reset:false};}
   function queueSave(change){
-    if(!store||!settings.persist||restoring||state.destroyed)return;
+    if(!saver()||!settings.persist||restoring||switching||state.destroyed)return;
     if(change?.type==='load'){pending=emptyPending();pending.reset=true;for(const path of project.paths())pending.put.add(path);}
     else if(change?.type==='remove')for(const path of change.paths){pending.put.delete(path);pending.remove.add(path);}
     else if(change?.type==='rename')for(const [from,to] of change.moved){pending.put.delete(from);pending.remove.add(from);pending.remove.delete(to);pending.put.add(to);}
@@ -1024,12 +1296,12 @@ export function mountEditor(options={}){
   }
   async function flush(){
     clearTimeout(saveTimer);saveTimer=null;
-    if(!store||!settings.persist||state.destroyed)return;
+    const target=saver();if(!target||!settings.persist||state.destroyed)return;
     if(saving){saveTimer=setTimeout(flush,200);return;}
     const job=pending;pending=emptyPending();saving=true;
     try{
-      await store.save({reset:job.reset,remove:[...job.remove],put:[...job.put].map(path=>project.get(path)).filter(Boolean).map(file=>typeof file.text==='string'?{path:file.path,text:file.text}:{path:file.path,data:file.data}),
-        meta:{main:project.main,folders:project.explicitFolders(),tabs,active,historyId}});
+      await target.save({reset:job.reset,remove:[...job.remove],put:[...job.put].map(path=>project.get(path)).filter(Boolean).map(file=>typeof file.text==='string'?{path:file.path,text:file.text}:{path:file.path,data:file.data}),
+        meta:{main:project.main,folders:project.explicitFolders(),tabs,active,historyId,title:documentTitle(mainText())||(project.main?basename(project.main):'')}});
       if(!saveTimer){state.save='saved';state.dirty=false;}
     }catch{
       state.save='failed';if(!storageWarned){storageWarned=true;notify('toast.storage');}
@@ -1037,6 +1309,7 @@ export function mountEditor(options={}){
   }
   async function persistChanged(){
     if(!store){state.save='off';updateSave();return;}
+    if(multi()&&!scoped){currentId=globalThis.crypto.randomUUID();scoped=store.project(currentId);remember(currentId);}
     if(settings.persist){queueSave({type:'load'});return;}
     clearTimeout(saveTimer);saveTimer=null;pending=emptyPending();state.save='off';updateSave();
     try{await store.clear();}catch{notify('toast.storage');}
@@ -1075,7 +1348,9 @@ export function mountEditor(options={}){
   }
   async function importArchive(file){
     try{
-      if(await replaceProject(await readArchive(file)))notify('toast.imported',{n:project.files().length});
+      const data=await readArchive(file);
+      // With projects kept in this browser an archive becomes a project of its own.
+      if(multi()&&settings.persist?await newProject(data):await replaceProject(data))notify('toast.imported',{n:project.files().length});
     }catch(error){notify('toast.zip',{message:error.message||error});}
   }
   function remove(path){
@@ -1088,7 +1363,17 @@ export function mountEditor(options={}){
     return store.addSnapshot({id:globalThis.crypto.randomUUID(),projectId:historyId,time:Date.now(),main:project.main,folders:project.explicitFolders(),files:project.files().filter(file=>typeof file.text==='string').map(({path,text})=>({path,text})),force});
   }
   function history(){
-    return openHistory({host:app,t,lang:i18n.lang,store,projectId:historyId,persist:settings.persist,notify,restore:async snapshot=>{
+    return openHistory({host:app,t,lang:i18n.lang,store,projectId:historyId,persist:settings.persist,notify,
+      current:()=>project.files().filter(file=>typeof file.text==='string').map(({path,text})=>({path,text})),
+      restoreFile:async(snapshot,path)=>{
+        const saved=snapshot.files.find(file=>file.path===path),now=project.get(path);
+        if(snapshot.projectId!==historyId||typeof saved?.text!=='string'||normalizePath(path)!==path||now&&typeof now.text!=='string')throw Error('Invalid snapshot file');
+        // The project as it is goes into history first, so restoring one file can be undone from there too.
+        const revision=state.revision;if(!await takeSnapshot(true)||state.revision!==revision)throw Error('Cannot safely restore a changed project');
+        if(now)write(path,0,now.text.length,saved.text);else project.write(path,saved.text);
+        openFile(path,{focus:true});await flush();return true;
+      },
+      restore:async snapshot=>{
       if(snapshot.projectId!==historyId||!Array.isArray(snapshot.files)||!snapshot.files.length||snapshot.files.some(file=>typeof file.text!=='string'||normalizePath(file.path)!==file.path)||new Set(snapshot.files.map(file=>file.path)).size!==snapshot.files.length)throw Error('Invalid snapshot');
       const revision=state.revision;if(!await takeSnapshot(true)||state.revision!==revision)throw Error('Cannot safely restore a changed project');
       const binary=project.files().filter(file=>typeof file.text!=='string'),occupied=new Set(binary.map(file=>file.path));
@@ -1133,12 +1418,124 @@ export function mountEditor(options={}){
     editor.input.addEventListener('paste',event=>{const files=images(event.clipboardData);if(!files.length)return;event.preventDefault();event.stopPropagation();void add(files,editor.input.selectionStart,editor.input.selectionEnd);});
   }
   const downloadFile=path=>{const file=project.get(path);if(file)download(fileBytes(file),basename(path),typeof file.text==='string'?'text/plain;charset=utf-8':'application/octet-stream');};
-  function projectMenu(){
-    openMenu(app,action('project-menu').getBoundingClientRect(),[{label:t('project.new'),icon:'template',run:templateGallery},
-      {label:t('project.import'),icon:'upload',run:()=>$('zip-input').click()},
-      {label:t('project.export'),icon:'archive',disabled:!project.files().length,run:exportZip}]);
+  async function projectMenu(){
+    const at=action('project-menu').getBoundingClientRect(),items=[];
+    if(multi()&&settings.persist){
+      const recent=(await store.listProjects().catch(()=>[])).slice(0,5);
+      if(recent.length>1||recent[0]?.id!==currentId){
+        items.push({heading:t('projects.recent')});
+        for(const item of recent)items.push({label:item.title||t('project.untitled'),checked:item.id===currentId,hint:when(item.updated),run:()=>void openProject(item.id)});
+        items.push('separator');
+      }
+      items.push({label:t('projects.all'),icon:'projects',hint:keys('Mod+O'),run:()=>void openProjects()});
+    }
+    items.push({label:t('project.new'),icon:'template',run:templateGallery},{label:t('project.import'),icon:'upload',run:()=>$('zip-input').click()},
+      {label:t('project.export'),icon:'archive',disabled:!project.files().length,run:exportZip});
+    openMenu(app,at,items);
   }
-  function templateGallery(){return openTemplateGallery({host:app,t,lang:i18n.lang,hasFiles:!!project.paths().length,readArchive,create:data=>void replaceProject(data,true),notify});}
+  // ---- projects ---------------------------------------------------------------------------------
+  const remember=id=>{try{sessionStorage.setItem(TAB_PROJECT,id);}catch{/* private mode */}void store?.remember?.(id).catch(()=>{});};
+  function when(time){
+    if(!time)return '';
+    const date=new Date(time),now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime(),locale=i18n.lang==='zh'?'zh-CN':'en';
+    if(time>=today)return t('time.today',{time:new Intl.DateTimeFormat(locale,{timeStyle:'short'}).format(date)});
+    if(time>=today-86400000)return t('time.yesterday');
+    return new Intl.DateTimeFormat(locale,{dateStyle:'medium'}).format(date);
+  }
+  /** Open another stored project: pending edits are saved first, then the workspace loads it as it was left. */
+  async function openProject(id,{force=false}={}){
+    if(!multi()||id===currentId&&!force)return false;
+    await flush();
+    const target=store.project(id),saved=await target.load().catch(()=>null);
+    if(!saved||state.destroyed){notify('projects.missing');return false;}
+    cancel();popover?.hide();toggleSettings(false);
+    currentId=id;scoped=target;remember(id);historyId=saved.historyId||globalThis.crypto.randomUUID();
+    switching=true;try{project.load(saved);}finally{switching=false;}
+    const wanted=(saved.tabs||[]).filter(path=>project.has(path));
+    tabs=wanted.length?wanted:project.main?[project.main]:project.paths().slice(0,1);
+    activate(tabs.includes(saved.active)?saved.active:tabs[0]??null);
+    state.dirty=false;state.save=settings.persist?'saved':'off';updateSave();
+    if(!saved.historyId)queueSave();
+    return true;
+  }
+  /** A new project from a template or an archive, opened at once. */
+  async function newProject(data){
+    await flush();
+    const main=data.main||data.files.find(file=>/\.tex$/i.test(file.path)&&/\\documentclass/.test(file.text||''))?.path;
+    const id=await store.createProject({...data,main,title:documentTitle(data.files.find(file=>file.path===main)?.text||'')}).catch(()=>null);
+    if(!id){notify('toast.storage');return false;}
+    return openProject(id);
+  }
+  async function deleteProject(id,refresh){
+    const deleting=id===currentId;
+    if(deleting){clearTimeout(saveTimer);saveTimer=null;pending=emptyPending();scoped=null;}
+    const record=await store.deleteProject(id).catch(()=>null);
+    if(!record){if(deleting)scoped=store.project(id);notify('toast.storage');return;}
+    if(deleting){
+      const next=(await store.listProjects()).find(item=>item.id!==id);
+      if(next)await openProject(next.id,{force:true});else await newProject(templateProject(TEMPLATES[0]));
+    }
+    refresh?.();
+    toast(t('projects.deleted',{name:record.project.title||t('project.untitled')}),{label:t('common.undo'),run:()=>void store.restoreProject(record).then(()=>refresh?.(),()=>notify('toast.storage'))},{key:'project-deleted',merged:n=>t('projects.deletedMany',{n})});
+  }
+  async function exportProject(id){
+    const saved=id===currentId?{files:project.files(),main:project.main}:await store.project(id).load().catch(()=>null);if(!saved)return;
+    download(zip(saved.files.map(file=>({path:file.path,data:fileBytes(file)}))),(saved.main?basename(saved.main).replace(/\.tex$/i,''):'project')+'.zip','application/zip');
+  }
+  // The project page: one card per project with its first page, title, last change and page count.
+  async function openProjects(){
+    if(!multi()||!settings.persist){
+      const body=make('div','dialog-body');body.append(make('p','',t(store?'projects.off':'projects.unavailable')));
+      const actions=make('div','dialog-actions'),ok=make('button','btn primary',t('common.close'));ok.type='button';actions.append(ok);body.append(actions);
+      const dialog=openDialog(app,{title:t('projects.title'),content:body});ok.onclick=dialog.close;return;
+    }
+    await flush();
+    const body=make('div','projects'),bar=make('div','projects-bar'),grid=make('div','projects-grid');grid.setAttribute('role','list');
+    const add=make('button','btn primary');add.type='button';add.innerHTML=icon('plus',14);add.append(t('project.new'));
+    const upload=make('button','btn');upload.type='button';upload.innerHTML=icon('upload',14);upload.append(t('project.import'));
+    bar.append(make('span','projects-count'),make('span','spacer'),upload,add);body.append(bar,grid);
+    const dialog=openDialog(app,{title:t('projects.title'),content:body,className:'projects-dialog'});
+    add.onclick=()=>{dialog.close();templateGallery();};upload.onclick=()=>{dialog.close();$('zip-input').click();};
+    async function paint(){
+      const list=await store.listProjects().catch(()=>[]);if(!dialog.el.isConnected)return;
+      grid.replaceChildren();bar.firstChild.textContent=t('projects.count',{n:list.length});
+      for(const item of list){
+        const card=make('div','project-card');card.setAttribute('role','listitem');if(item.id===currentId)card.dataset.current='';
+        const open=make('button','project-open');open.type='button';
+        const thumb=make('span','project-thumb');
+        if(item.thumb){const image=make('img');image.alt='';image.src=item.thumb;thumb.append(image);}else thumb.append(make('i','project-sheet'));
+        const name=make('b','',item.title||t('project.untitled')),meta=make('small','',[when(item.updated),item.pages?(item.pages===1?t('page'):t('pages',{n:item.pages})):null].filter(Boolean).join(' · '));
+        open.append(thumb,name,meta);if(item.id===currentId)open.append(make('span','project-badge',t('projects.current')));
+        open.onclick=()=>{dialog.close();void openProject(item.id);};
+        const more=make('button','icon-btn project-more');more.type='button';more.innerHTML=icon('more');more.setAttribute('aria-label',t('file.more'));
+        more.onclick=()=>openMenu(app,more.getBoundingClientRect(),[
+          {label:t('projects.openIt'),icon:'file',disabled:item.id===currentId,run:()=>{dialog.close();void openProject(item.id);}},
+          {label:t('projects.duplicate'),icon:'copyFile',run:async()=>{await flush();await store.duplicateProject(item.id,{title:t('projects.copyOf',{name:item.title||t('project.untitled')})}).catch(()=>notify('toast.storage'));void paint();}},
+          {label:t('project.export'),icon:'archive',run:()=>void exportProject(item.id)},'separator',
+          {label:t('file.delete'),icon:'trash',danger:true,run:()=>void deleteProject(item.id,paint)}]);
+        card.append(open,more);grid.append(card);
+      }
+      const blank=make('button','project-card project-new');blank.type='button';blank.innerHTML=icon('plus',18);blank.append(t('project.new'));blank.onclick=add.onclick;grid.append(blank);
+      grid.querySelector('[data-current] .project-open,.project-open')?.focus({preventScroll:true});
+    }
+    await paint();
+  }
+  // After a full render the project page gets the first page as its thumbnail, with the title and page count.
+  function describeProject(){
+    if(!multi()||!currentId||!settings.persist||!state.meta)return;
+    const details={pages:state.meta.pages,title:documentTitle(mainText())||(project.main?basename(project.main):'')},canvas=pages()[0];
+    try{
+      if(canvas?.width&&!canvas.dataset.dark&&!('live' in canvas.dataset)){
+        const thumb=document.createElement('canvas');thumb.width=180;thumb.height=Math.round(180*canvas.height/canvas.width);
+        const context=thumb.getContext('2d');context.fillStyle='#fff';context.fillRect(0,0,thumb.width,thumb.height);context.drawImage(canvas,0,0,thumb.width,thumb.height);details.thumb=thumb.toDataURL('image/jpeg',0.82);
+      }
+    }catch{/* no 2D canvas here */}
+    void store.describe(currentId,details).catch(()=>{});
+  }
+  function templateGallery(){
+    const separate=multi()&&settings.persist;
+    return openTemplateGallery({host:app,t,lang:i18n.lang,hasFiles:!separate&&!!project.paths().length,readArchive,create:data=>void(separate?newProject(data):replaceProject(data,true)),notify});
+  }
   function exportZip(){download(zip(project.files().map(file=>({path:file.path,data:fileBytes(file)}))),(project.main?basename(project.main).replace(/\.tex$/i,''):'project')+'.zip','application/zip');}
   // Export shows its own progress: a line under the button while the full pass runs, a check when the file is handed over.
   let exportTimer;
@@ -1159,6 +1556,8 @@ export function mountEditor(options={}){
   function capsuleMenu(){
     openMenu(app,action('capsule-menu').getBoundingClientRect(),[
       {label:t('compile.auto'),checked:settings.autoCompile,run:()=>set('autoCompile',!settings.autoCompile)},
+      {label:t('set.mathPreview'),checked:settings.mathPreview,run:()=>set('mathPreview',!settings.mathPreview)},
+      {label:t('set.follow'),checked:settings.follow,run:()=>set('follow',!settings.follow)},
       {label:t('compile.now'),icon:'play',hint:keys('Mod+Enter'),disabled:action('compile').disabled,run:()=>compile()},'separator',
       {label:t('insp.title'),icon:'bolt',run:openInspector},
       {label:t('panel.problems'),icon:'warning',hint:keys('Mod+J'),run:()=>openPanel('problems')},{label:t('panel.log'),icon:'file',run:()=>openPanel('log')}]);
@@ -1242,7 +1641,8 @@ export function mountEditor(options={}){
   for(const tab of $('panel').querySelectorAll('.panel-tab'))listen(tab,'click',()=>set('panelTab',tab.dataset.panel));
   listen(action('zoom-in'),'click',()=>stepZoom(1));listen(action('zoom-out'),'click',()=>stepZoom(-1));
   listen(action('zoom-fit'),'click',()=>setZoom(settings.zoom==='fit'?1:'fit'));listen(action('zoom-menu'),'click',zoomMenu);
-  listen(action('toggle-thumbs'),'click',()=>set('thumbs',!settings.thumbs));
+  listen(action('toggle-thumbs'),'click',()=>set('thumbs',!settings.thumbs));listen(action('pdf-find'),'click',openPdfFind);
+  listen(root.querySelector('.preview-pane'),'pdf-find-close',()=>viewport.focus({preventScroll:true}));
   listen($('page-input'),'focus',()=>$('page-input').select());listen($('page-input'),'blur',updatePage);
   listen($('page-input'),'keydown',event=>{
     if(event.key!=='Enter'&&event.key!=='Escape')return;
@@ -1254,18 +1654,41 @@ export function mountEditor(options={}){
   });
   listen(viewport,'wheel',event=>{
     if(!event.ctrlKey&&!event.metaKey)return;
-    event.preventDefault();setZoom(clamp(currentZoom()*Math.exp(-event.deltaY*0.01),0.25,4),{x:event.clientX,y:event.clientY});
+    event.preventDefault();pinchZoom(Math.exp(-event.deltaY*0.01),{x:event.clientX,y:event.clientY});
   },{passive:false});
+  // Safari reports trackpad pinches as gesture events rather than ctrl+wheel.
+  let gestureScale=1;
+  listen(viewport,'gesturestart',event=>{event.preventDefault();gestureScale=1;});
+  listen(viewport,'gesturechange',event=>{event.preventDefault();pinchZoom(event.scale/gestureScale,{x:event.clientX,y:event.clientY});gestureScale=event.scale;});
+  listen(viewport,'gestureend',event=>{event.preventDefault();endPinch();});
   listen(viewport,'scroll',()=>{updatePage();showZoombar();markerChip();},{passive:true});
   listen($('marker-chip'),'click',()=>{if(marker.isConnected)viewport.scrollTo?.({top:Math.max(0,marker.offsetTop-viewport.clientHeight/3),behavior:'smooth'});});
   const previewPoint=event=>{
-    const canvas=event.target.closest?.('canvas[data-page]');if(!canvas)return;
+    const layer=event.target.closest?.('.text-layer'),canvas=layer?viewport.querySelector(`canvas[data-page="${layer.dataset.textPage}"]`):event.target.closest?.('canvas[data-page]');if(!canvas)return;
     const box=canvas.getBoundingClientRect();
     return {page:Number(canvas.dataset.page),x:(event.clientX-box.left)/box.width,y:(event.clientY-box.top)/box.height};
   };
-  for(const type of ['click','dblclick'])listen(viewport,type,event=>{const point=previewPoint(event);if(point)options.onPreviewPick?.(point);});
-  listen(viewport,'pointermove',event=>{hoverPoint=previewPoint(event);if(hoverFrame)return;hoverFrame=requestAnimationFrame(()=>{hoverFrame=null;const region=hoverPoint&&options.onPreviewHover?.(hoverPoint);viewport.querySelector('.hover-region')?.remove();if(region)paintRegion(region,'hover-region');});});
-  listen(viewport,'pointerleave',()=>{hoverPoint=null;viewport.querySelector('.hover-region')?.remove();});
+  // A click jumps to the source; a drag over the text selects it instead (and then the click is not a jump).
+  for(const type of ['click','dblclick'])listen(viewport,type,event=>{
+    const selection=document.getSelection?.();if(selection&&!selection.isCollapsed&&viewport.contains(selection.anchorNode))return;
+    const point=previewPoint(event);if(point)options.onPreviewPick?.(point);
+  });
+  let drag=null;
+  listen(viewport,'pointerdown',event=>{
+    const point=event.button===0&&previewPoint(event);drag=point?{x:event.clientX,y:event.clientY,page:point.page,noted:false}:null;
+    event.target.closest?.('.text-layer')?.classList.add('selecting');
+  });
+  listen(viewport,'pointermove',event=>{
+    if(!drag||!event.buttons||drag.noted||Math.hypot(event.clientX-drag.x,event.clientY-drag.y)<6)return;
+    // Pages redrawn by a live update have no text yet; say so where the drag started.
+    const canvas=viewport.querySelector(`canvas[data-page="${drag.page}"]`);if(!canvas||!('live' in canvas.dataset))return;
+    drag.noted=true;viewport.querySelector('.text-note')?.remove();
+    const note=document.createElement('span');note.className='text-note';note.textContent=t('pdfFind.stale');
+    note.style.top=canvas.offsetTop+10+'px';note.style.left=canvas.offsetLeft+canvas.offsetWidth-10+'px';canvas.parentNode.append(note);setTimeout(()=>note.remove(),2200);
+  });
+  listen(document,'pointerup',()=>{drag=null;for(const layer of viewport.querySelectorAll('.text-layer.selecting'))layer.classList.remove('selecting');});
+  listen(viewport,'pointermove',event=>{hoverPoint=previewPoint(event);if(hoverFrame)return;hoverFrame=requestAnimationFrame(()=>{hoverFrame=null;pageTag(hoverPoint);if(pinch||event.buttons)return;const region=hoverPoint&&options.onPreviewHover?.(hoverPoint);viewport.querySelector('.hover-region')?.remove();if(region)paintRegion(region,'hover-region');});});
+  listen(viewport,'pointerleave',()=>{hoverPoint=null;viewport.querySelector('.hover-region')?.remove();$('page-tag').hidden=true;});
   for(const splitter of root.querySelectorAll('.splitter')){
     listen(splitter,'keydown',event=>{
       if(!['ArrowLeft','ArrowRight','Home'].includes(event.key))return;event.preventDefault();
@@ -1286,7 +1709,7 @@ export function mountEditor(options={}){
     listen(splitter,'dblclick',()=>{const key=splitter.dataset.split==='sidebar'?'sidebar':'split';set(key,DEFAULT_SETTINGS[key]);layoutPages();});
   }
   listen(document,'pointerdown',event=>{
-    if(!$('settings').hidden&&!$('settings').contains(event.target)&&!action('settings').contains(event.target))toggleSettings(false);
+    if(!$('settings').hidden&&event.target===$('settings'))toggleSettings(false);
     if(drawer&&narrowQuery?.matches&&!event.target.closest?.('.sidebar,.menu,.dialog-backdrop,[data-action="toggle-sidebar"]'))toggleSidebar(false);
   },true);
   listen(root,'keydown',event=>{
@@ -1330,7 +1753,7 @@ export function mountEditor(options={}){
     setSource(source){project.write(project.main||'main.tex',String(source));if(!active&&project.main)openFile(project.main);},
     getSource:mainText,
     getState:()=>({source:mainText(),root:project.main,revision:state.revision,filesRev:state.filesRev,ready:state.engine==='ready',compiling:state.compiling,pdfRevision:state.pdfRevision,previewRevision:state.previewRevision,
-      active,zoom:settings.zoom}),
+      active,zoom:settings.zoom,darkPages:darkPages()}),
     getSettings:()=>({...settings}),
     setLoadProgress({step,done,total,assets}={}){
       const list=$('load-steps');if(!list)return;
@@ -1343,8 +1766,8 @@ export function mountEditor(options={}){
       const targets=[...canvases].map(([page,canvas])=>[viewport.querySelector(`[data-page="${page}"]`),canvas]);
       if(targets.some(([target])=>!target))return false;
       for(const [target,canvas] of targets){for(const key of Object.keys(target.dataset))canvas.dataset[key]=target.dataset[key];canvas.style.cssText=target.style.cssText;canvas.setAttribute('aria-label',target.getAttribute('aria-label'));target.replaceWith(canvas);}
-      for(const [,canvas] of targets)canvas.classList.toggle('provisional',reflow);
-      if(regions.length)paintInk(regions);placePagination();thumbs.changed([...canvases.keys()]);
+      for(const [,canvas] of targets){canvas.classList.toggle('provisional',reflow);canvas.dataset.live='true';}
+      if(regions.length)paintInk(regions);placePagination();placeTextLayers();thumbs.changed([...canvases.keys()]);
       if(state.failed){state.failed=false;state.problems=state.problems.filter(problem=>problem.severity!=='error');renderProblems();}
       state.previewRevision=revision;if(canvases.size)state.livePages=[...canvases.keys()].sort((a,b)=>a-b);
       if(Number.isFinite(durationMs)&&canvases.size)api.setLiveStatus({state:reflow?'reflow':'live',ms:durationMs,revision});
@@ -1382,11 +1805,11 @@ export function mountEditor(options={}){
     clearLogs(){state.logs=[];$('logs').textContent='';},
     destroy(){
       state.destroyed=true;state.run++;pdfSequence++;previewRun++;
-      for(const timer of [compileTimer,settleTimer,busyTimer,zoomTimer,saveTimer,metaTimer,barTimer,inkTimer,exportTimer])clearTimeout(timer);inspector?.surface.close(false);
+      for(const timer of [compileTimer,settleTimer,busyTimer,zoomTimer,saveTimer,metaTimer,barTimer,inkTimer,exportTimer,pinchTimer])clearTimeout(timer);inspector?.surface.close(false);
       toaster.hide();tips.destroy();rendererAbort?.abort();if(state.pdfUrl)URL.revokeObjectURL(state.pdfUrl);
       if(hoverFrame)cancelAnimationFrame(hoverFrame);
       for(const path of [...views.keys()])dropView(path);
-      popover?.destroy();thumbs.destroy();removers.forEach(remove=>remove());root.replaceChildren();
+      popover?.destroy();thumbs.destroy();pdfFind.destroy();removers.forEach(remove=>remove());root.replaceChildren();
     },
   };
 
@@ -1423,8 +1846,17 @@ export function mountEditor(options={}){
   else api.ready=(async()=>{
     try{store=options.store??await openStore();}catch{store=null;}
     let saved=null;
-    if(store&&settings.persist)try{saved=await store.load();}catch{saved=null;}
+    if(store&&settings.persist)try{saved=multi()?await chooseProject():await store.load();}catch{saved=null;}
     start(saved);
   })();
+  // This tab's project if it had one (a reload keeps it), else the one opened last, else the newest; a first visit makes one.
+  async function chooseProject(){
+    let wanted=null;try{wanted=sessionStorage.getItem(TAB_PROJECT);}catch{/* private mode */}
+    const list=await store.listProjects();
+    const id=[wanted,await store.lastProject().catch(()=>null),list[0]?.id].find(candidate=>candidate&&list.some(item=>item.id===candidate));
+    if(id){const saved=await store.project(id).load();if(saved){currentId=id;scoped=store.project(id);remember(id);return saved;}}
+    const first=initialProject();currentId=await store.createProject({...first,title:documentTitle(first.files.find(file=>file.path===first.main)?.text||'')});
+    scoped=store.project(currentId);remember(currentId);return await scoped.load();
+  }
   return api;
 }

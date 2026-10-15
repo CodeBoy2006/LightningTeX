@@ -4,6 +4,7 @@ import {previewSource,inkBounds} from './core/math-preview.js';
 import {createDisplayListRenderer,CSS_PX_PER_SP} from './render/index.mjs';
 import {pageFlow} from './core/live-layout.js';
 import {parseEngineFont} from './render/type1-font.mjs';
+import {darkenCanvas} from './render/dark-page.mjs';
 import * as pdfjs from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 pdfjs.GlobalWorkerOptions.workerSrc=pdfWorkerUrl;
@@ -12,17 +13,26 @@ const pixelRatio=()=>Math.min(devicePixelRatio||1,2),projectPath=file=>String(fi
 let background,live,snapshot,pdfRenderWorker,generation=0,liveStart,fullReason,caret=null,restarts=0;
 
 // Page widths here and in the UI's zoom layout must agree: natural width is CSS px at 100%.
-async function renderPdf({bytes,container,signal,zoom,viewport}){
+// Each page also gets pdf.js's text layer (for selection and search), sized by one CSS variable so it follows zoom.
+async function renderPdf({bytes,container,signal,zoom,viewport,width:widthOf,dark=false}){
  const state=snapshot;
  const task=pdfjs.getDocument({data:bytes,worker:pdfRenderWorker??=new pdfjs.PDFWorker(),isEvalSupported:false,useSystemFonts:false});
  const abort=()=>task.destroy();signal.addEventListener('abort',abort,{once:true});
  try{const pdf=await task.promise,fit=Math.max(240,viewport.clientWidth-48);for(let i=1;i<=pdf.numPages;i++){
    if(signal.aborted)throw Error('PDF rendering cancelled');const page=await pdf.getPage(i);
-   const raw=page.getViewport({scale:1}),natural=raw.width*96/72,width=zoom==='fit'?Math.min(fit,natural*2.5):natural*zoom;
+   const raw=page.getViewport({scale:1}),natural=raw.width*96/72,width=widthOf?widthOf(natural):zoom==='fit'?Math.min(fit,natural*2.5):natural*zoom;
    // Large zooms stay within a safe canvas size by giving up device pixels first.
    const ratio=Math.min(pixelRatio(),Math.sqrt(24e6/(width*width*raw.height/raw.width))),view=page.getViewport({scale:width/raw.width*ratio});
    const canvas=document.createElement('canvas');canvas.dataset.page=String(i);canvas.dataset.base=String(natural);canvas.width=Math.ceil(view.width);canvas.height=Math.ceil(view.height);canvas.style.width=`${width}px`;canvas.setAttribute('aria-label',`PDF page ${i}`);container.append(canvas);
-   await page.render({canvasContext:canvas.getContext('2d'),viewport:view}).promise;page.cleanup();
+   await page.render({canvasContext:canvas.getContext('2d'),viewport:view}).promise;
+   if(dark){darkenCanvas(canvas);canvas.dataset.dark='true';}
+   try{
+     const layer=document.createElement('div'),text=await page.getTextContent();layer.className='textLayer text-layer';layer.dataset.textPage=String(i);layer.dataset.pageWidth=String(raw.width);
+     layer.style.setProperty('--total-scale-factor',String(width/raw.width));
+     const textLayer=new pdfjs.TextLayer({textContentSource:text,container:layer,viewport:page.getViewport({scale:width/raw.width})});
+     await textLayer.render();container.append(layer);
+   }catch{/* a page without a text layer still shows */}
+   page.cleanup();
    if(state===snapshot)state?.baseCanvases.set(i,canvas);
  }return {pages:pdf.numPages}}finally{signal.removeEventListener('abort',abort);await task.destroy()}
 }
@@ -74,12 +84,19 @@ const ui=mountEditor({renderPdf,typesetMath,
      for(const[k,v]of Object.entries(result.fonts))fonts.set(k,v);
      prepareLive(snapshot);syncMarker(false);
    }
-   ui.setProblems(parseTexLog(result.log,{root}));
+   ui.setProblems([...parseTexLog(result.log,{root}),...bibProblems(result.bibtex)]);
+   if(result.bibtex)ui.log(result.bibtex.log,result.bibtex.errors.length?'warning':'info');
    ui.setLiveStatus(fallback?{state:'full',reason:fallback}:{state:'ready'});
    ui.log(`Full LuaLaTeX: ${result.pages.length} page(s), ${result.durationMs.toFixed(0)} ms (${result.passes} pass${result.passes===1?'':'es'}).`);
    if(/undefined references|Rerun to get cross-references|Label\(s\) may have changed/i.test(result.log))ui.log('References may need another document pass; automatic compilation runs at most two passes per update.','warning');
    return {...result,pages:result.pages.length,revision};
  }});
+// BibTeX's own findings. A cited key without an entry is left to LaTeX's warning, which knows the line.
+function bibProblems(bibtex){
+ if(!bibtex)return [];
+ return [...bibtex.errors.map(message=>({severity:'error',message:'BibTeX: '+message,file:null,line:null})),
+  ...bibtex.warnings.filter(warning=>!warning.missing).map(warning=>({severity:'warning',message:'BibTeX: '+warning.message,file:warning.file??null,line:warning.line??null}))];
+}
 function prepareLive(state,{restart=false}={}){
  const gen=++generation;
  if(!crossOriginIsolated||typeof SharedArrayBuffer==='undefined'){liveStart=null;ui.setEngineInfo({live:'off'});ui.setLiveStatus({state:'off',reason:'Incremental mode requires COOP/COEP headers.'});return;}
@@ -89,19 +106,21 @@ function prepareLive(state,{restart=false}={}){
  void liveStart.then(()=>{if(gen===generation){ui.setEngineInfo({live:'ready'});ui.refreshMath();}},error=>{if(gen===generation){ui.setEngineInfo({live:'off'});ui.setLiveStatus({state:'off',reason:error.message});}});
 }
 async function drawLivePages(pages,units=snapshot.liveUnits){
- const state=snapshot,canvases=new Map(),flows=new Map();let pdfTask,pdf;
+ const state=snapshot,canvases=new Map(),flows=new Map(),dark=ui.getState().darkPages;let pdfTask,pdf;
  try{for(const [number,page] of pages){
    const target=document.querySelector(`[data-id="preview-viewport"] canvas[data-page="${number}"]`);
    if(!target)throw Error('Full page is not ready');
    const width=parseFloat(target.style.width),ratio=Math.min(pixelRatio(),Math.sqrt(24e6/(width*width*page.page_height/page.page_width)));
    let base=state.baseCanvases.get(number);
-   if(!base||base.width!==Math.ceil(width*ratio)){
+   if(!base||base.width!==Math.ceil(width*ratio)||(base.dataset.dark==='true')!==dark){
      // A zoom changes raster resolution, not the document; reuse its verified PDF.
      pdfTask??=pdfjs.getDocument({data:state.pdf.slice(),worker:pdfRenderWorker??=new pdfjs.PDFWorker(),isEvalSupported:false,useSystemFonts:false});
      pdf??=await pdfTask.promise;
      const sheet=await pdf.getPage(number),view=sheet.getViewport({scale:width/sheet.getViewport({scale:1}).width*ratio});
      base=document.createElement('canvas');base.width=Math.ceil(view.width);base.height=Math.ceil(view.height);
-     await sheet.render({canvasContext:base.getContext('2d'),viewport:view}).promise;sheet.cleanup();state.baseCanvases.set(number,base);
+     await sheet.render({canvasContext:base.getContext('2d'),viewport:view}).promise;sheet.cleanup();
+     if(dark){darkenCanvas(base);base.dataset.dark='true';}
+     state.baseCanvases.set(number,base);
    }
    const canvas=document.createElement('canvas');canvas.width=base.width;canvas.style.width=width+'px';
    const original=state.pages.find(page=>page.page===number),scale=width/page.page_width,options={zoom:scale/CSS_PX_PER_SP,devicePixelRatio:ratio,padding:0,background:'transparent'},layers=new Map(),patches=[];
@@ -121,7 +140,9 @@ async function drawLivePages(pages,units=snapshot.liveUnits){
    const height=Math.ceil(flow.height*pixel);
    if(canvas.width*height>24e6)throw Error('Reflow preview exceeds canvas size limit');
    canvas.height=height;
-   const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+   const ctx=canvas.getContext('2d');ctx.fillStyle=dark?'#1c1e22':'#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#fff';
+   // Dark pages: paper outside the slices is already dark; the rows to repaint start white like the PDF.
+   if(dark)for(const band of flow.bands)if(band.delta)ctx.fillRect(0,(band.y+band.shift)*pixel,canvas.width,Math.max(0,band.h+band.delta)*pixel);
    const slice=(top,bottom,shift)=>{if(bottom>top)ctx.drawImage(base,0,top*pixel,base.width,(bottom-top)*pixel,0,(top+shift)*pixel,base.width,(bottom-top)*pixel);};
    let top=0,shift=0;
    for(const band of flow.bands){
@@ -131,6 +152,14 @@ async function drawLivePages(pages,units=snapshot.liveUnits){
    }
    slice(top,original.page_height,shift);
    for(const band of flow.bands)ctx.drawImage(layers.get(band.uid),0,(band.shift+band.dy)*pixel);
+   // On dark pages only the freshly painted (white) parts need darkening; the slices come from the darkened base.
+   if(dark){
+     canvas.dataset.dark='true';
+     for(const band of flow.bands){
+       const y=(band.y+band.shift)*pixel,h=Math.max(0,band.h+band.delta)*pixel;
+       darkenCanvas(canvas,band.delta?{x:0,y,w:canvas.width,h}:{x:band.x*pixel,y,w:band.w*pixel,h});
+     }
+   }
    canvases.set(number,canvas);
    flows.set(number,flow);
  }return {canvases,flows};}finally{await pdfTask?.destroy();}

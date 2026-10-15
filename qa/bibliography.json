@@ -1,0 +1,29 @@
+{
+  "runtime": "actual browser Worker scripts and LuaHBTeX WASM in Node worker_threads (not browser UI)",
+  "first": {
+    "passes": 3,
+    "ms": 1797,
+    "bibcite": {
+      "golub1965": "1",
+      "golub2013": "2"
+    }
+  },
+  "edit": {
+    "passes": 1,
+    "ms": 483
+  },
+  "added": {
+    "passes": 3,
+    "ms": 1504
+  },
+  "missing": {
+    "passes": 3,
+    "warnings": [
+      "I didn't find a database entry for \"golub2031\""
+    ]
+  },
+  "nocite": {
+    "entries": 4,
+    "warning": "empty journal in broken"
+  }
+}

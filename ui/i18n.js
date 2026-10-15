@@ -27,7 +27,7 @@ const en={
   'set.appearance':'Appearance','set.theme':'Theme','set.theme.system':'System','set.theme.light':'Light','set.theme.dark':'Dark','set.accent':'Accent','set.lang':'Language','set.lang.auto':'Auto',
   'set.darkPages':'Dark pages','set.editor':'Editor','set.fontSize':'Font size','set.wrap':'Word wrap','set.autoClose':'Auto-close brackets','set.tabSize':'Indent width','set.spellcheck':'Spell check',
   'set.preview':'Compile & preview','set.autoCompile':'Auto compile','set.mathPreview':'Formula preview at cursor','set.mathScale':'Formula size','set.follow':'Preview follows cursor',
-  'set.storage':'Storage','set.persist':'Keep files in this browser','set.reset':'Reset settings',
+  'set.storage':'Storage','set.persist':'Keep projects in this browser','set.reset':'Reset settings',
   'size.s':'S','size.m':'M','size.l':'L',
   'view.split':'Split','layout.label':'Layout','project.menu':'Project','project.untitled':'Untitled',
   'compile.now':'Compile now','capsule.menu':'Compile options','export.more':'More export options','export.pdf':'PDF','export.file':'Download {name}','export.compileFirst':'compiles first',
@@ -60,7 +60,7 @@ const zh={
   'set.appearance':'外观','set.theme':'主题','set.theme.system':'跟随系统','set.theme.light':'浅色','set.theme.dark':'深色','set.accent':'强调色','set.lang':'语言','set.lang.auto':'自动',
   'set.darkPages':'深色页面','set.editor':'编辑器','set.fontSize':'字号','set.wrap':'自动换行','set.autoClose':'自动补全括号','set.tabSize':'缩进宽度','set.spellcheck':'拼写检查',
   'set.preview':'编译与预览','set.autoCompile':'自动编译','set.mathPreview':'光标处公式预览','set.mathScale':'公式大小','set.follow':'预览跟随光标',
-  'set.storage':'存储','set.persist':'在此浏览器中保留文件','set.reset':'恢复默认设置',
+  'set.storage':'存储','set.persist':'在此浏览器中保存项目','set.reset':'恢复默认设置',
   'size.s':'小','size.m':'中','size.l':'大',
   'view.split':'分栏','layout.label':'布局','project.menu':'项目','project.untitled':'未命名',
   'compile.now':'立即编译','capsule.menu':'编译选项','export.more':'更多导出选项','export.pdf':'PDF','export.file':'下载 {name}','export.compileFirst':'将先完整编译',
@@ -202,6 +202,78 @@ Object.assign(zh,{
 });
 Object.assign(en,{'thumbs.toggle':'Page thumbnails','thumbs.title':'Pages','thumbs.page':'Page {n}','marker.up':'↑ Caret · page {n}','marker.down':'↓ Caret · page {n}'});
 Object.assign(zh,{'thumbs.toggle':'页面缩略图','thumbs.title':'页面','thumbs.page':'第 {n} 页','marker.up':'↑ 光标位置 · 第 {n} 页','marker.down':'↓ 光标位置 · 第 {n} 页'});
+Object.assign(en,{
+  'keys.snippets':'Expand fig, tab, mat, eq or beg','keys.stops':'Next / previous placeholder','keys.moveLine':'Move line up / down','keys.dupLine':'Duplicate line',
+  'keys.deleteLine':'Delete line','keys.selectLine':'Select line','keys.selectNext':'Select next occurrence','keys.follow':'Go to definition','keys.rename':'Rename label','keys.refs':'Find all references',
+  'fix.open':'Quick fix','fix.package':'Add \\usepackage{{name}}','fix.replace':'Change to {name}','fix.math':'Wrap “{text}” in $…$','fix.theorem':'Define {name} with \\newtheorem',
+  'fix.unbalanced':'Go to the unclosed brace or environment','fix.panel':'Show in Problems','fix.none':'No problem on this line','fix.unknown':'No quick fix for this problem','fix.applied':'Applied: {name}',
+  'rename.title':'Rename label','rename.none':'Put the caret on a \\label or a reference','rename.empty':'Type a name','rename.invalid':'Labels cannot contain { } \\ % # or commas',
+  'rename.taken':'“{name}” is already a label','rename.hint':'↵ renames {n} place(s) in {files} file(s) · Esc cancels','rename.done':'Renamed {from} → {to} in {n} place(s)','rename.undo':'Undo rename',
+  'refs.find':'Find all references',
+  'table.title':'Insert table','matrix.title':'Insert matrix','table.insert':'Insert','table.size':'Rows and columns','table.align':'Columns','table.left':'Left','table.center':'Center','table.right':'Right',
+  'table.booktabs':'Three-line rules (booktabs)','table.float':'Table with caption and label','table.mode':'Table','matrix.mode':'Matrix','matrix.kind':'Delimiters','table.added':'Added \\usepackage{{name}}',
+  'history.restoreFile':'Restore this file','history.changes':'Changes','history.full':'Snapshot text','history.same':'No changes in this file since the snapshot.','history.tooBig':'This file is too large to compare.',
+  'history.direction':'Snapshot → now','history.unchanged':'… {n} unchanged line(s)','history.newFile':'Added since the snapshot','history.goneFile':'Deleted since the snapshot',
+  'history.fileConfirm':'Restore {name}?','history.fileBody':'Only this file goes back to the snapshot. The project as it is now is saved to history first.','history.fileRestored':'Restored {name}',
+  'history.delta':'+{added} −{removed} · {files} file(s)','history.identical':'Same as now',
+  'complete.cite':'citation',
+});
+Object.assign(zh,{
+  'keys.snippets':'展开 fig、tab、mat、eq、beg 片段','keys.stops':'下一个 / 上一个占位符','keys.moveLine':'上移 / 下移行','keys.dupLine':'复制行',
+  'keys.deleteLine':'删除行','keys.selectLine':'选中整行','keys.selectNext':'选中下一处相同文字','keys.follow':'跳到定义','keys.rename':'重命名标签','keys.refs':'查找所有引用',
+  'fix.open':'快速修复','fix.package':'添加 \\usepackage{{name}}','fix.replace':'改为 {name}','fix.math':'用 $…$ 包裹「{text}」','fix.theorem':'用 \\newtheorem 定义 {name}',
+  'fix.unbalanced':'跳到未闭合的括号或环境','fix.panel':'在问题面板中查看','fix.none':'这一行没有问题','fix.unknown':'这个问题没有可用的快速修复','fix.applied':'已应用：{name}',
+  'rename.title':'重命名标签','rename.none':'请把光标放在 \\label 或引用上','rename.empty':'请输入名称','rename.invalid':'标签不能包含 { } \\ % # 或逗号',
+  'rename.taken':'已存在名为「{name}」的标签','rename.hint':'↵ 重命名 {files} 个文件中的 {n} 处 · Esc 取消','rename.done':'已将 {from} 重命名为 {to}（{n} 处）','rename.undo':'撤销重命名',
+  'refs.find':'查找所有引用',
+  'table.title':'插入表格','matrix.title':'插入矩阵','table.insert':'插入','table.size':'行数与列数','table.align':'列对齐','table.left':'左','table.center':'居中','table.right':'右',
+  'table.booktabs':'三线表（booktabs）','table.float':'外包 table 环境（含标题与标签）','table.mode':'表格','matrix.mode':'矩阵','matrix.kind':'括号','table.added':'已添加 \\usepackage{{name}}',
+  'history.restoreFile':'只还原此文件','history.changes':'改动','history.full':'快照全文','history.same':'自此快照以来，这个文件没有改动。','history.tooBig':'文件太大，无法对比。',
+  'history.direction':'快照 → 现在','history.unchanged':'… {n} 行未变','history.newFile':'快照之后新建','history.goneFile':'快照之后已删除',
+  'history.fileConfirm':'还原 {name}？','history.fileBody':'只有这个文件会回到快照时的内容；当前项目会先保存为一个快照。','history.fileRestored':'已还原 {name}',
+  'history.delta':'+{added} −{removed} · {files} 个文件','history.identical':'与现在相同',
+  'complete.cite':'文献',
+});
+Object.assign(en,{
+  'pdfFind.open':'Search in PDF','pdfFind.placeholder':'Search the PDF','pdfFind.count':'Page {page} · {i} / {n}','pdfFind.noText':'No text to search yet','pdfFind.stale':'Text can be selected after the full pass',
+  'spread.single':'Single page','spread.double':'Two pages','spread.cover':'Two pages, cover alone','spread.narrow':'One page: too narrow for two',
+});
+Object.assign(zh,{
+  'pdfFind.open':'在 PDF 中搜索','pdfFind.placeholder':'搜索 PDF 文字','pdfFind.count':'第 {page} 页 · {i} / {n}','pdfFind.noText':'暂无可搜索的文字','pdfFind.stale':'完整排版后可选择文字',
+  'spread.single':'单页','spread.double':'双页','spread.cover':'双页（封面单独）','spread.narrow':'宽度不足，已改为单页',
+});
+Object.assign(en,{
+  'set.search':'Search settings','set.none':'No setting matches','set.thumbs':'Page thumbnails','set.spread':'Pages side by side',
+  'spread.short.single':'One','spread.short.double':'Two','spread.short.cover':'Cover',
+  'set.theme.desc':'Follow the system, or always light or dark','set.accent.desc':'The colour of live updates, selection and focus','set.lang.desc':'Interface language',
+  'set.darkPages.desc':'In the dark theme, pages go dark too; figures keep their colours','set.fontSize.desc':'Size of the source text','set.wrap.desc':'Wrap long lines at the edge of the editor',
+  'set.autoClose.desc':'Type the closing bracket, brace or $ for you','set.tabSize.desc':'Spaces per indent level','set.spellcheck.desc':'Underline misspelt words with the browser’s dictionary',
+  'set.autoCompile.desc':'Update the preview and the PDF when you pause typing','set.mathPreview.desc':'Typeset the formula at the caret with real LuaTeX','set.mathScale.desc':'Size of that formula preview',
+  'set.follow.desc':'Scroll the preview when the caret moves to another place','set.thumbs.desc':'A strip of page thumbnails beside the preview','set.spread.desc':'Two pages per row, optionally with the cover alone',
+  'set.persist.desc':'Keep projects and their history in this browser',
+});
+Object.assign(zh,{
+  'set.search':'搜索设置','set.none':'没有匹配的设置','set.thumbs':'页面缩略图','set.spread':'双页并排',
+  'spread.short.single':'单页','spread.short.double':'双页','spread.short.cover':'封面',
+  'set.theme.desc':'跟随系统，或固定浅色、深色','set.accent.desc':'实时更新、选中与焦点使用的颜色','set.lang.desc':'界面语言',
+  'set.darkPages.desc':'深色主题下页面也变暗，插图保持原色','set.fontSize.desc':'源码文字大小','set.wrap.desc':'长行在编辑器边缘换行',
+  'set.autoClose.desc':'自动补上右括号、右花括号与 $','set.tabSize.desc':'每级缩进的空格数','set.spellcheck.desc':'用浏览器词典标出拼写错误',
+  'set.autoCompile.desc':'停止输入后自动更新预览与 PDF','set.mathPreview.desc':'用真实 LuaTeX 排版光标所在公式','set.mathScale.desc':'公式预览的大小',
+  'set.follow.desc':'光标移到别处时滚动预览','set.thumbs.desc':'在预览旁显示页面缩略栏','set.spread.desc':'每行两页，可让封面单独一页',
+  'set.persist.desc':'在此浏览器中保存项目与历史',
+});
+Object.assign(en,{
+  'projects.open':'Projects…','projects.title':'Projects','projects.recent':'Recent projects','projects.all':'All projects…','projects.missing':'That project is no longer in this browser',
+  'projects.deleted':'Deleted {name}','projects.deletedMany':'Deleted {n} projects','projects.off':'Turn on “Keep projects in this browser” in Settings to keep more than one project.',
+  'projects.unavailable':'This browser cannot store projects, so only the open one is kept, in memory.','projects.count':'{n} project(s) in this browser','projects.current':'Open',
+  'projects.openIt':'Open','projects.duplicate':'Duplicate','projects.copyOf':'{name} (copy)','time.today':'Today {time}','time.yesterday':'Yesterday',
+});
+Object.assign(zh,{
+  'projects.open':'项目…','projects.title':'项目','projects.recent':'最近的项目','projects.all':'所有项目…','projects.missing':'这个项目已不在此浏览器中',
+  'projects.deleted':'已删除 {name}','projects.deletedMany':'已删除 {n} 个项目','projects.off':'在设置中打开“在此浏览器中保存项目”，即可保存多个项目。',
+  'projects.unavailable':'此浏览器无法保存项目，只在内存中保留当前项目。','projects.count':'此浏览器中有 {n} 个项目','projects.current':'当前',
+  'projects.openIt':'打开','projects.duplicate':'复制','projects.copyOf':'{name}（副本）','time.today':'今天 {time}','time.yesterday':'昨天',
+});
 const languages={en,zh};
 export function createI18n(preference='auto'){
   let lang='en';

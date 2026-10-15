@@ -46,5 +46,12 @@ const shapes={
   keyboard:stroke('M1.75 4.25h12.5v7.5H1.75zM4.25 6.9h.4M6.6 6.9h.4M9 6.9h.4M11.35 6.9h.4M5 9.4h6'),
   pages:stroke('M5.25 2.25h7.5v9.5h-7.5zM3.25 4.75v9h6.5'),
   hash:stroke('M6 2.5 5 13.5M11 2.5l-1 11M2.8 6h10.7M2.5 10h10.7'),
+  bulb:stroke('M6 12.25h4M6.6 14.25h2.8M8 1.75a4.25 4.25 0 0 0-2.5 7.7c.4.3.6.75.6 1.25v.55h3.8v-.55c0-.5.2-.95.6-1.25A4.25 4.25 0 0 0 8 1.75z'),
+  projects:stroke('M2 3.25h5v5H2zM9 3.25h5v5H9zM2 10.25h5v3H2zM9 10.25h5v3H9z'),
+  table:stroke('M2 3h12v10H2zM2 6.5h12M2 9.75h12M6 3v10M10 3v10'),
+  diff:stroke('M4 2v8M2 4h4M10 9.5h4M4 12.5a1.5 1.5 0 1 0 0 .01M12 2.5v4M12 6.5a1.5 1.5 0 1 0 0 .01'),
+  rename:stroke('M2.5 13.5h3l7.5-7.5-3-3-7.5 7.5zM8.5 4.5l3 3'),
+  twoPages:stroke('M1.75 3h5.5v10h-5.5zM8.75 3h5.5v10h-5.5z'),
+  copyFile:stroke('M5 4.75V2h6.5L14 4.5V12h-3M2 5h6.5L11 7.5V14H2z'),
 };
 export const icon=(name,size=16)=>`<svg class="icon icon-${name}" viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true">${shapes[name]||''}</svg>`;

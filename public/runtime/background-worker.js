@@ -1,6 +1,6 @@
 /* Browser-only TeX job worker; native shell execution disabled. */
-importScripts('./raw-loader.js');
-let engine,snapshot,lastPreamble,lastAux;const decoder=new TextDecoder();
+importScripts('./raw-loader.js','./bibtex.js');
+let engine,snapshot,lastPreamble,lastAux,lastBbl;const decoder=new TextDecoder(),latin1=new TextDecoder('latin1'),styles=new Map();
 function removeTree(fs,path){if(!fs.analyzePath(path).exists)return;for(const name of fs.readdir(path)){if(name==='.'||name==='..')continue;const p=path+'/'+name;fs.isDir(fs.stat(p).mode)?removeTree(fs,p):fs.unlink(p)}if(path!=='/project'&&path!=='/out')fs.rmdir(path)}
 async function init(data){
  engine=await loadRtexEngine({base:data.base,module:data.module,endpoint:data.endpoint,env:{TEXINPUTS:'/rtex/latex//:',LUAINPUTS:'/rtex//:',RTEX_CAPTURE_DIR:'/out',RTEX_UNIT_ENVS:'equation,equation*,align,align*,gather,gather*,multline,multline*,displaymath,theorem,lemma,proposition,corollary,remark',openout_any:'a',max_print_line:'100000',shell_escape:'f'},print:t=>postMessage({type:'log',text:t}),printErr:t=>postMessage({type:'log',text:t})});
@@ -15,16 +15,40 @@ function syncProject(fs,project){
  for(const path of project?.remove||[])if(fs.analyzePath('/project/'+path).exists)fs.unlink('/project/'+path);
  for(const {path,data} of project?.write||[])writeEngineFile(fs,'/project/'+path,data);
 }
+const readText=(fs,path,text=decoder)=>fs.analyzePath(path).exists&&!fs.isDir(fs.stat(path).mode)?text.decode(fs.readFile(path)):null;
+// A .bst style: the project's own, else TeX Live's through the same remote lookup (and cache) TeX uses (kpathsea format 7).
+function bibStyle(fs,name){
+ const own=readText(fs,'/project/'+name+'.bst',latin1);if(own!=null)return own;
+ if(styles.has(name))return styles.get(name);
+ const file=name+'.bst',cached=readText(fs,'/tmp/texlive_remote/7_'+file.replace(/[^a-zA-Z0-9._-]/g,'_'),latin1);
+ let text=cached;
+ const endpoint=engine.ENV?.TEXLIVE_REMOTE_ENDPOINT;
+ if(text==null&&endpoint&&typeof XMLHttpRequest!=='undefined'&&/^[A-Za-z0-9._-]+$/.test(name)){
+  try{const xhr=new XMLHttpRequest();xhr.open('GET',endpoint.replace(/\/?$/,'/')+'7/'+encodeURIComponent(file),false);xhr.responseType='arraybuffer';xhr.send();
+   if(xhr.status===200&&xhr.response?.byteLength){const bytes=new Uint8Array(xhr.response);engine.kpse_remote_register?.(file,7,bytes);text=latin1.decode(bytes);}}catch{/* offline: no style */}
+ }
+ if(text!=null)styles.set(name,text);
+ return text;
+}
+// BibTeX between passes: the citations in aux, the project's .bib files and the style give main.bbl.
+function bibliography(fs,aux){
+ const text=decoder.decode(aux);if(!/\\bibdata\{/.test(text))return null;
+ return runBibtex({aux:text,readAux:name=>readText(fs,'/out/'+name),
+  readBib:name=>{for(const file of [name+'.bib',name])for(const dir of ['/project/','/out/']){const found=readText(fs,dir+file);if(found!=null)return {text:found,file:dir==='/project/'?file:null};}return null;},
+  readStyle:name=>bibStyle(fs,name)});
+}
 function run(source,id,preamble,root='main.tex',project){
  const began=performance.now(),fs=engine.FS;syncProject(fs,project);removeTree(fs,'/out');fs.chdir('/project');writeEngineFile(fs,'/project/'+root,source);
  // \include writes its aux beside the output of the same relative path.
  mirrorDirs(fs,'/project','/out');
  const job=String.raw`\RequirePackage{rtex-capture}\input{`+root+'}';
  // Reuse only the last successful job's aux; a failed edit must not poison references.
- let priorAux=preamble!=null&&preamble===lastPreamble?lastAux:undefined;
+ let priorAux=preamble!=null&&preamble===lastPreamble?lastAux:undefined,bbl=preamble!=null&&preamble===lastPreamble?lastBbl:undefined;
  if(priorAux!==undefined)fs.writeFile('/out/main.aux',priorAux);
- const logs=[];let exit=0,passes=0,aux;
- for(let pass=0;pass<2;pass++){
+ if(bbl!==undefined)fs.writeFile('/out/main.bbl',bbl);
+ // A bibliography needs a third pass the first time: citations, then the .bbl, then its labels.
+ const logs=[];let exit=0,passes=0,aux,bib=null,limit=2;
+ for(let pass=0;pass<limit;pass++){
   fs.chdir('/project');
   const args=[...rtexLuaArgs(job).slice(0,-1),'--jobname=main','--output-directory=/out',job];
   try{exit=engine.callMain(args);engine._flush_streams()}catch(e){exit=typeof e.status==='number'?e.status:1;logs.push(String(e))}
@@ -34,11 +58,14 @@ function run(source,id,preamble,root='main.tex',project){
   passes++;
   if(exit)break;
   aux=fs.analyzePath('/out/main.aux').exists?fs.readFile('/out/main.aux'):new Uint8Array();
+  let bibChanged=false;
+  try{bib=bibliography(fs,aux)??bib;}catch(error){bib={bbl:null,log:'BibTeX failed: '+error.message,warnings:[],errors:[String(error.message)]};}
+  if(bib?.bbl!=null&&bib.bbl!==bbl){fs.writeFile('/out/main.bbl',bib.bbl);bbl=bib.bbl;bibChanged=true;limit=3;}
   const unchanged=priorAux!==undefined&&decoder.decode(aux)===decoder.decode(priorAux);
   // TOCs, outlines and other package files are rebuilt from scratch and still need two passes.
-  const otherAux=listFiles(fs,'/out').some(name=>!/^main\.(?:aux|log|pdf|rtex(?:-page\d+)?\.json)$/.test(name));
+  const otherAux=listFiles(fs,'/out').some(name=>!/^main(?:\.(?:aux|log|pdf|bbl|blg|run\.xml|rtex(?:-page\d+)?\.json)|-blx\.bib)$/.test(name));
   // Aux comparison also catches removed labels, which need not emit a rerun warning.
-  if(unchanged&&!otherAux&&!/Rerun to get|Label\(s\) may have changed/i.test(logs.at(-1)||''))break;
+  if(!bibChanged&&unchanged&&!otherAux&&!/Rerun to get|Label\(s\) may have changed/i.test(logs.at(-1)||''))break;
   priorAux=aux;
  }
  // A document without content ends normally but ships no page.
@@ -48,9 +75,10 @@ function run(source,id,preamble,root='main.tex',project){
   const page=JSON.parse(decoder.decode(fs.readFile(`/out/main.rtex-page${p}.json`)));pages.push(page);
   for(const font of Object.values(page.fonts||{}))if(font.filename&&!fonts[font.filename]&&fs.analyzePath(font.filename).exists)fonts[font.filename]=fs.readFile(font.filename);
  }
- const pdf=fs.readFile('/out/main.pdf');lastPreamble=preamble;lastAux=aux;
+ const pdf=fs.readFile('/out/main.pdf');lastPreamble=preamble;lastAux=aux;lastBbl=bbl;
  const packageMisses=JSON.parse(decoder.decode(fs.readFile('/tmp/texlive_remote/.misses.json')));
- return {type:'result',id,pdf,capture,pages,fonts,aux,passes,packageMisses,log:logs.at(-1)||'',durationMs:performance.now()-began};
+ const bibtex=bib&&{log:bib.log,warnings:bib.warnings,errors:bib.errors,style:bib.style};
+ return {type:'result',id,pdf,capture,pages,fonts,aux,passes,packageMisses,bibtex,log:logs.at(-1)||'',durationMs:performance.now()-began};
 }
 let jobs=Promise.resolve();
 onmessage=({data})=>{jobs=jobs.then(async()=>{try{if(data.type==='init')await init(data);else if(data.type==='compile'){

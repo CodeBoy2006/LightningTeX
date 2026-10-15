@@ -461,3 +461,117 @@ test('outline rows show words per section, problems replace the count, and label
     assert.match(labels[0].textContent,/2×/);
   }finally{h.cleanup();}
 });
+
+// ---- writing tools, preview search, settings and projects --------------------------------------
+const caretAt=(h,offset)=>{const input=h.q('source');input.focus();input.setSelectionRange(offset,offset);h.event(input,'keyup');};
+test('snippets expand on Tab and Tab walks their placeholders',()=>{
+  const h=setup({source:'Text\nfig'});
+  try{h.auto(false);const input=h.q('source');caretAt(h,input.value.length);
+    h.event(input,'keydown',{key:'Tab'});
+    assert.match(input.value,/^Text\n\\begin\{figure\}\[t\]\n  \\centering\n  \\includegraphics\[width=0\.8\\linewidth\]\{figures\/\}\n  \\caption\{\}\\label\{fig:\}\n\\end\{figure\}\n$/);
+    assert.equal(input.selectionStart,input.value.indexOf('figures/}')+8,'the first placeholder is selected');
+    h.type('p');h.type('l');h.event(input,'keydown',{key:'Tab'});
+    assert.equal(input.selectionStart,input.value.indexOf('\\caption{')+9,'Tab moves to the caption');
+    h.event(input,'keydown',{key:'Tab',shiftKey:true});assert.equal(input.value.slice(input.selectionStart,input.selectionEnd),'pl','Shift+Tab goes back');
+    h.event(input,'keydown',{key:'Escape'});h.event(input,'keydown',{key:'Tab'});assert.match(input.value,/\{figures\/  pl\}|\{figures\/pl\}/);
+  }finally{h.cleanup();}
+});
+test('line keys move, duplicate, delete and select lines, and Mod+D selects the next match',()=>{
+  const h=setup({source:'one\ntwo\nthree\ntwo'});
+  try{h.auto(false);const input=h.q('source'),key=(k,extra={})=>h.event(input,'keydown',{key:k,...extra});
+    caretAt(h,5);key('ArrowDown',{altKey:true});assert.equal(input.value,'one\nthree\ntwo\ntwo');
+    key('ArrowUp',{altKey:true});assert.equal(input.value,'one\ntwo\nthree\ntwo');
+    key('ArrowDown',{altKey:true,shiftKey:true});assert.equal(input.value,'one\ntwo\ntwo\nthree\ntwo');
+    key('k',{metaKey:true,shiftKey:true});assert.equal(input.value,'one\ntwo\nthree\ntwo');
+    caretAt(h,0);key('l',{metaKey:true});assert.equal(input.value.slice(input.selectionStart,input.selectionEnd),'one\n');
+    key('l',{metaKey:true});assert.equal(input.value.slice(input.selectionStart,input.selectionEnd),'one\ntwo\n');
+    caretAt(h,5);key('d',{metaKey:true});assert.equal(input.value.slice(input.selectionStart,input.selectionEnd),'two');
+    key('d',{metaKey:true});assert.equal(input.selectionStart,input.value.lastIndexOf('two'));
+    input.setSelectionRange(0,3);input.value=input.value.slice(0,3)==='one'?'\\one\ntwo\nthree\ntwo':input.value;h.event(input,'input');input.setSelectionRange(1,4);h.type('(');assert.match(input.value,/^\\\(one\\\)/,'a selection after a backslash becomes \\( … \\)');
+  }finally{h.cleanup();}
+});
+test('F2 renames a label and its references in every file, and the notice undoes it',()=>{
+  const main='\\documentclass{article}\n\\begin{document}\n\\input{part}\n\\begin{equation}\\label{eq:a}x\\end{equation}\nSee \\eqref{eq:a}.\n\\end{document}';
+  const h=setup({project:{main:'main.tex',files:[{path:'main.tex',text:main},{path:'part.tex',text:'Also \\ref{eq:a} and \\ref{eq:b}.\\label{eq:b}'}]}});
+  try{h.auto(false);const input=h.q('source');caretAt(h,main.indexOf('eq:a')+1);h.event(input,'keydown',{key:'F2'});
+    const box=h.root.querySelector('.rename-pop'),name=box.querySelector('input');assert.equal(name.value,'eq:a');
+    assert.equal(box.querySelectorAll('.rename-row').length,3,'the label and both references are listed');
+    name.value='eq:b';h.event(name,'input');assert.match(box.querySelector('.rename-foot').textContent,/“eq:b” is already a label/);assert.equal(box.querySelector('.rename-foot').dataset.state,'error');
+    name.value='eq:sum';h.event(name,'input');assert.match(box.querySelector('.rename-foot').textContent,/3 place/);
+    name.dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+    assert.equal((h.ui.getSource().match(/eq:sum/g)||[]).length,2);assert.equal(h.ui.project.get('part.tex').text,'Also \\ref{eq:sum} and \\ref{eq:b}.\\label{eq:b}');
+    assert.equal(input.value.slice(input.selectionStart,input.selectionEnd),'eq:sum','the renamed name stays selected');
+    h.root.querySelector('.toast-action').click();
+    assert.equal((h.ui.getSource().match(/eq:a/g)||[]).length,2);assert.equal(h.ui.project.get('part.tex').text,'Also \\ref{eq:a} and \\ref{eq:b}.\\label{eq:b}');
+  }finally{h.cleanup();}
+});
+test('Mod+. and the gutter bulb offer quick fixes for the problems on a line',()=>{
+  const h=setup({source:'\\documentclass{article}\n\\begin{document}\n$\\mathbb{R}$\n\\end{document}'});
+  try{h.auto(false);h.ui.setProblems([{severity:'error',message:'Undefined control sequence \\mathbb',file:'main.tex',line:3}]);
+    assert.ok(h.root.querySelector('.fix-bulb'),'a fixable line has a bulb');
+    caretAt(h,h.ui.getSource().indexOf('\\mathbb'));h.event(h.q('source'),'keydown',{key:'.',metaKey:true});
+    const menu=h.root.querySelector('[role="menu"]');assert.match(menu.querySelector('.menu-note').textContent,/Undefined control sequence/);
+    menu.querySelector('button').click();assert.match(h.ui.getSource(),/^\\documentclass\{article\}\n\\usepackage\{amssymb\}\n/);
+    caretAt(h,0);h.event(h.q('source'),'keydown',{key:'.',metaKey:true});assert.match(h.root.querySelector('.toast').textContent,/No problem on this line/);
+  }finally{h.cleanup();}
+});
+test('citation completion lists keys with authors and titles from the project bibliography',()=>{
+  const h=setup({project:{main:'main.tex',files:[{path:'main.tex',text:'\\cite{'},{path:'refs.bib',text:'@book{golub2013, author={Golub, Gene H. and Van Loan, Charles F.}, title={Matrix Computations}, year=2013}'}]}});
+  try{h.auto(false);const input=h.q('source');caretAt(h,6);h.type('m');
+    const item=h.root.querySelector('.completion-item.cite');assert.ok(item,'a title word finds the entry');
+    assert.equal(item.querySelector('b').textContent,'golub2013');assert.equal(item.querySelector('small').textContent,'Golub & Van Loan · 2013');assert.equal(item.querySelector('.completion-title').textContent,'Matrix Computations');
+    h.event(input,'keydown',{key:'Enter'});assert.equal(h.ui.getSource(),'\\cite{golub2013');
+  }finally{h.cleanup();}
+});
+test('settings are one dialog: categories, descriptions and a search across every row',()=>{
+  const h=setup();
+  try{const panel=h.q('settings');h.a('settings').click();assert.equal(panel.hidden,false);
+    const visible=()=>[...panel.querySelectorAll('.setting')].filter(row=>!row.hidden&&!row.closest('section').hidden).map(row=>row.querySelector('[data-setting]').dataset.setting);
+    assert.deepEqual(visible(),['theme','accent','lang','darkPages']);
+    assert.ok(panel.querySelector('.setting-desc').textContent.length>10,'every row says what it does');
+    panel.querySelector('[data-group="editor"]').click();assert.deepEqual(visible(),['fontSize','wrap','autoClose','tabSize','spellcheck']);
+    const search=panel.querySelector('.settings-search input');search.value='preview';h.event(search,'input');assert.deepEqual(visible(),['autoCompile','mathPreview','mathScale','follow','thumbs']);
+    search.value='zzzz';h.event(search,'input');assert.equal(panel.querySelector('.settings-empty').hidden,false);
+    search.value='';h.event(search,'input');panel.querySelector('[data-group="shortcuts"]').click();assert.ok([...panel.querySelectorAll('.keys dt')].some(term=>term.textContent==='Rename label'));
+    h.event(panel,'pointerdown');assert.equal(panel.hidden,true,'a press on the backdrop closes it');
+    h.a('capsule-menu').click();const labels=[...h.root.querySelectorAll('[role="menu"] [role="menuitemcheckbox"]')].map(item=>item.textContent);
+    assert.ok(labels.includes('Formula preview at cursor')&&labels.includes('Preview follows cursor'),'the common toggles are one click away');
+  }finally{h.cleanup();}
+});
+test('PDF search marks matches in the text layer and counts them by page',async()=>{
+  const h=setup({renderPdf:async({container})=>{
+    for(const page of [1,2]){const canvas=document.createElement('canvas');canvas.dataset.page=String(page);canvas.dataset.base='600';container.append(canvas);
+      const layer=document.createElement('div');layer.className='textLayer text-layer';layer.dataset.textPage=String(page);layer.dataset.pageWidth='612';
+      for(const text of page===1?['Hello ','world']:['say ','hello ','again'])layer.append(Object.assign(document.createElement('span'),{textContent:text}));container.append(layer);}
+    return {pages:2};}});
+  try{await h.ui.setPdf(bytes(1));h.a('pdf-find').click();const bar=h.root.querySelector('.pdf-find'),query=bar.querySelector('input');
+    query.value='HELLO';h.event(query,'input');
+    assert.equal(bar.querySelector('output').textContent,'Page 1 · 1 / 2');assert.equal(h.root.querySelectorAll('mark.pdf-hit').length,2);
+    query.dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));assert.equal(bar.querySelector('output').textContent,'Page 2 · 2 / 2');
+    assert.equal(h.root.querySelector('mark.pdf-hit.current').textContent,'hello');
+    query.dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+    assert.equal(h.root.querySelectorAll('mark.pdf-hit').length,0,'closing restores the text');assert.equal(h.root.querySelector('[data-text-page="2"]').textContent,'say hello again');
+  }finally{h.cleanup();}
+});
+test('a two-page spread too narrow for two pages falls back to one and says so',async()=>{
+  const h=setup({renderPdf:async({container})=>{for(const page of [1,2,3]){const canvas=document.createElement('canvas');canvas.dataset.page=String(page);canvas.dataset.base='600';container.append(canvas);}return {pages:3};}});
+  try{await h.ui.setPdf(bytes(1));h.a('zoom-menu').click();[...h.root.querySelectorAll('[role="menu"] button')].find(button=>button.textContent.includes('Two pages')&&!button.textContent.includes('cover')).click();
+    assert.equal(h.ui.getSettings().spread,'double');assert.equal(h.q('zoom-note').hidden,false);assert.equal(h.q('preview-viewport').dataset.spread,undefined);
+  }finally{h.cleanup();}
+});
+test('without project storage the project page explains why there is one project',()=>{
+  const h=setup();
+  try{h.event(h.q('source'),'keydown',{key:'o',metaKey:true});assert.match(h.root.querySelector('.dialog').textContent,/only the open one is kept/);}finally{h.cleanup();}
+});
+test('history shows changes against now per file and can restore one file',async()=>{
+  const store=memoryStore();store.snapshots=[];store.addSnapshot=async row=>{store.snapshots.push(row);return true;};store.listSnapshots=async id=>store.snapshots.filter(row=>row.projectId===id).reverse();
+  const h=setup({store,onCompile:async()=>({pdf:bytes(1)}),project:{main:'main.tex',files:[{path:'main.tex',text:'a\nb\nc\nd\ne\nf\ng'},{path:'notes.tex',text:'keep'}]}});
+  try{await h.ui.ready;h.auto(false);await h.ui.compile();h.edit('a\nb\nc\nd\nE\nf\ng');
+    h.a('history').click();await tick();const dialog=h.root.querySelector('.history-dialog');
+    const chip=dialog.querySelector('.history-file[aria-selected="true"]');assert.match(chip.textContent,/main\.tex\+1−1/,'the one changed file opens, with its counts');
+    assert.equal(dialog.querySelector('.diff-line.del code').textContent,'e');assert.equal(dialog.querySelector('.diff-line.add code').textContent,'E');
+    assert.ok(dialog.querySelector('.diff-fold'),'long unchanged runs fold');assert.match(dialog.querySelector('.history-list small').textContent,/\+1 −1/);
+    dialog.querySelector('.restore-file').click();await tick();h.root.querySelector('[role="alertdialog"] .primary').click();await tick();await tick();
+    assert.equal(h.ui.getSource(),'a\nb\nc\nd\ne\nf\ng');assert.equal(h.ui.project.get('notes.tex').text,'keep');
+  }finally{h.cleanup();}
+});

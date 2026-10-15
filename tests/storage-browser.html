@@ -2,21 +2,56 @@
 import {openStore} from '../ui/storage.js';
 const output=document.querySelector('#result'),name='lightningtex-test-'+crypto.randomUUID(),lines=[];
 const check=(condition,label)=>{if(!condition)throw Error(label);lines.push('PASS · '+label);output.textContent=lines.join('\n');};
-let store;
+let store,other;
 try{
+  // A database written by the single-project version (v1 layout) becomes the first project.
   const old=await new Promise((resolve,reject)=>{const req=indexedDB.open(name,1);req.onupgradeneeded=()=>{req.result.createObjectStore('files');req.result.createObjectStore('meta');};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
-  await new Promise((resolve,reject)=>{const tx=old.transaction(['files','meta'],'readwrite');tx.objectStore('files').put({path:'main.tex',text:'existing draft'},'main.tex');tx.objectStore('meta').put({main:'main.tex'},'project');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});old.close();
-  store=await openStore(name);check(!!store,'v1 database upgrades to v2');const loaded=await store.load();check(loaded.files[0].text==='existing draft','upgrade preserves existing files and metadata');
-  const snapshot={id:'first',projectId:'one',time:1000000,main:'main.tex',files:[{path:'main.tex',text:'snapshot'}]};
-  check(await store.addSnapshot(snapshot),'first snapshot stored');check(!await store.addSnapshot({...snapshot,id:'soon',time:1000001}),'five-minute spacing enforced');
-  await Promise.all([store.addSnapshot({...snapshot,id:'parallel-a',time:1300000}),store.addSnapshot({...snapshot,id:'parallel-b',time:1300001})]);check((await store.listSnapshots('one')).length===2,'concurrent writes cannot bypass spacing');
-  check(await store.addSnapshot({...snapshot,id:'recovery',time:1300002,force:true}),'recovery snapshot bypasses spacing');
-  await store.addSnapshot({...snapshot,id:'other',projectId:'two',time:1300003});check((await store.listSnapshots('two')).length===1,'history is scoped to its project');
-  for(let i=0;i<35;i++)await store.addSnapshot({...snapshot,id:'retention-'+i,time:2000000+i*300000});
-  check((await store.listSnapshots('one')).length===30,'retention keeps the newest 30 snapshots');
-  store.close();store=await openStore(name);check((await store.listSnapshots('one')).length===30,'snapshots survive reopening');check((await store.load()).files[0].text==='existing draft','history writes leave the current project untouched');
-  await store.clear();check((await store.listSnapshots('one')).length===0&&(await store.load())===null,'turning persistence off clears files and history');
-  output.dataset.status='passed';output.textContent+='\n\nAll 11 checks passed.';
+  await new Promise((resolve,reject)=>{const tx=old.transaction(['files','meta'],'readwrite');tx.objectStore('files').put({path:'main.tex',text:'existing draft'},'main.tex');tx.objectStore('files').put({path:'fig.png',data:new Uint8Array([1,2,3])},'fig.png');tx.objectStore('meta').put({main:'main.tex',historyId:'one',tabs:['main.tex']},'project');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});old.close();
+  store=await openStore(name);check(!!store,'v1 database upgrades to v3');
+  const projects=await store.listProjects();check(projects.length===1,'migration creates exactly one project');
+  const first=projects[0].id,loaded=await store.project(first).load();
+  check(loaded.files.find(f=>f.path==='main.tex').text==='existing draft'&&loaded.main==='main.tex'&&loaded.historyId==='one','migration keeps files and metadata');
+  check(loaded.files.find(f=>f.path==='fig.png').data[2]===3,'migration keeps binary files');
+  check(await store.lastProject()===first,'the migrated project is the last opened');
+  store.close();store=await openStore(name);check((await store.listProjects()).length===1,'reopening does not migrate twice');
+
+  // Projects are isolated from each other.
+  const second=await store.createProject({main:'main.tex',files:[{path:'main.tex',text:'second'}],title:'Second'});
+  await store.project(second).save({put:[{path:'notes.tex',text:'only here'}],meta:{main:'main.tex',tabs:['notes.tex']}});
+  check(!(await store.project(first).load()).files.some(f=>f.path==='notes.tex'),'a file saved in one project stays out of another');
+  await store.project(first).save({reset:true,put:[{path:'main.tex',text:'reset first'}],meta:{main:'main.tex'}});
+  check((await store.project(second).load()).files.length===2,'resetting one project leaves the other intact');
+  check((await store.listProjects())[0].id===first,'the most recently changed project lists first');
+
+  // Two tabs: two connections save different projects at the same time.
+  other=await openStore(name);
+  await Promise.all([store.project(first).save({put:[{path:'a.tex',text:'tab A'}]}),other.project(second).save({put:[{path:'b.tex',text:'tab B'}]})]);
+  const [a,b]=await Promise.all([other.project(first).load(),store.project(second).load()]);
+  check(a.files.some(f=>f.path==='a.tex')&&!a.files.some(f=>f.path==='b.tex')&&b.files.some(f=>f.path==='b.tex')&&!b.files.some(f=>f.path==='a.tex'),'two tabs editing different projects do not interfere');
+
+  // History is kept per project and goes with it.
+  const historyId=(await store.project(second).load()).historyId;
+  for(let i=0;i<35;i++)await store.addSnapshot({id:'s'+i,projectId:historyId,time:1000000+i*400000,files:[]});
+  await store.addSnapshot({id:'first-only',projectId:'one',time:9e12,files:[]});
+  check((await store.listSnapshots(historyId)).length===30&&(await store.listSnapshots('one')).length===1,'retention counts snapshots per project');
+  check(!await store.addSnapshot({id:'soon',projectId:historyId,time:1000000+34*400000+1000,files:[]}),'five-minute spacing still applies');
+
+  // Delete and undo.
+  const record=await store.deleteProject(second);
+  check(!(await store.listProjects()).some(p=>p.id===second)&&!(await store.project(second).load())&&(await store.listSnapshots(historyId)).length===0,'deleting removes the project, its files and its history');
+  await store.restoreProject(record);
+  const back=await store.project(second).load();
+  check(back&&back.files.length===3&&(await store.listSnapshots(historyId)).length===30,'undo restores files and history');
+
+  // Duplicate and describe.
+  const copy=await store.duplicateProject(second,{title:'Copy'});const copied=await store.project(copy).load();
+  check(copied.files.length===3&&copied.historyId!==back.historyId&&copied.title==='Copy','a duplicate copies files under a new history');
+  const before=(await store.listProjects()).find(p=>p.id===first).updated;
+  await store.describe(first,{pages:13,thumb:'data:,x'});const described=(await store.listProjects()).find(p=>p.id===first);
+  check(described.pages===13&&described.thumb==='data:,x'&&described.updated===before,'describing a project does not count as a change');
+
+  await store.clear();check((await store.listProjects()).length===0&&(await store.listSnapshots('one')).length===0,'turning persistence off clears every project and all history');
+  output.dataset.status='passed';output.textContent+=`\n\nAll ${lines.length} checks passed.`;
 }catch(error){output.dataset.status='failed';output.textContent+='\nFAIL · '+error.stack;}
-finally{store?.close();indexedDB.deleteDatabase(name);}
+finally{store?.close();other?.close();indexedDB.deleteDatabase(name);}
 </script></html>

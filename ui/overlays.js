@@ -5,7 +5,7 @@ import {icon} from './icons.js';
 function leave(node,ms=110){node.removeAttribute('role');node.classList.add('closing');node.inert=true;setTimeout(()=>node.remove(),ms);}
 
 let dismissMenu=null;
-/** items: {label, icon?, hint?, checked?, danger?, disabled?, run} | 'separator' | {heading}. at: DOMRect-like or {x,y}. */
+/** items: {label, icon?, hint?, checked?, danger?, disabled?, run} | 'separator' | {heading} | {note, noteIcon?, tone?}. at: DOMRect-like or {x,y}. */
 export function openMenu(host,at,items){
   dismissMenu?.();
   const menu=document.createElement('div');menu.className='menu';menu.setAttribute('role','menu');menu.tabIndex=-1;
@@ -26,6 +26,7 @@ export function openMenu(host,at,items){
   for(const item of items){
     if(item==='separator'){menu.append(Object.assign(document.createElement('div'),{className:'menu-separator'}));continue;}
     if(item.heading){menu.append(Object.assign(document.createElement('div'),{className:'menu-heading',textContent:item.heading}));continue;}
+    if(item.note){const note=Object.assign(document.createElement('div'),{className:'menu-note'});note.innerHTML=icon(item.noteIcon||'error',13);note.append(item.note);if(item.tone)note.dataset.tone=item.tone;menu.append(note);continue;}
     const button=document.createElement('button');button.type='button';button.setAttribute('role','menuitem');button.disabled=!!item.disabled;
     if(item.danger)button.classList.add('danger');
     if(item.checked!==undefined){button.setAttribute('role','menuitemcheckbox');button.setAttribute('aria-checked',String(!!item.checked));}
@@ -69,7 +70,8 @@ export function openDialog(host,{title,content,className='',onClose,hideTitle=fa
   dismissMenu?.();
   const backdrop=document.createElement('div');backdrop.className='dialog-backdrop';
   backdrop.innerHTML='<div class="dialog" role="dialog" aria-modal="true"><h2></h2></div>';
-  const dialog=backdrop.firstChild,previous=document.activeElement,background=[...host.children].map(node=>[node,node.inert]);let closed=false;
+  // Notices stay usable above a dialog, so an Undo offered from inside it can be taken.
+  const dialog=backdrop.firstChild,previous=document.activeElement,background=[...host.children].filter(node=>!node.classList.contains('toasts')).map(node=>[node,node.inert]);let closed=false;
   for(const [node] of background)node.inert=true;
   if(className)dialog.classList.add(className);
   if(hideTitle)dialog.firstChild.remove();else dialog.firstChild.textContent=title;dialog.setAttribute('aria-label',title);dialog.append(content);
