@@ -7,13 +7,15 @@ import {BackgroundEngine} from '../engine/client.js';
 
 const root=new URL('../',import.meta.url),base=new URL('public/',root);
 globalThis.Worker=BrowserWorker;
-const engine=new BackgroundEngine({base}),worker=new PDFWorker(),results=[];
+let captureWrites=0,userHooks=0;
+const engine=new BackgroundEngine({base,onLog:text=>{if(/rtex-capture: .* pages written/.test(text))captureWrites++;if(text==='USER-TAIL')userHooks++;}}),worker=new PDFWorker(),results=[];
 const document=body=>String.raw`\documentclass{article}
 \usepackage{amsmath}
 \begin{document}
 `+body+String.raw`
 \end{document}`;
 async function compile(name,source,passes,pattern,options){
+  captureWrites=0;userHooks=0;
   const result=await engine.compile(source,options);
   assert.equal(result.passes,passes,name);
   const task=getDocument({data:result.pdf.slice(),worker,isEvalSupported:false});
@@ -27,6 +29,7 @@ async function compile(name,source,passes,pattern,options){
   return result;
 }
 try {
+  await assert.rejects(engine.compile(document('\\undefinedColdStart')),/Undefined control sequence/);
   const initial=document(String.raw`Inline $x^2=81$.
 
 \[\frac{1}{2}+\sqrt{4}=42.\]
@@ -36,6 +39,7 @@ See Equation~\ref{eq:value}.
 
 \begin{align}a&=20,\\b&=30.\end{align}`);
   await compile('initial math and references',initial,2,/See Equation\s+1/);
+  assert.equal(captureWrites,1,'only the final cold pass writes page captures');
   const generation=engine.generation;
   let source=initial.replace('81','82');
   await compile('inline math edit',source,1,/82/);
@@ -47,12 +51,14 @@ See Equation~\ref{eq:value}.
   await compile('align edit',source,1,/31/);
   const missing=source.replace('\\label{eq:value}','');
   const removed=await compile('removed label cannot survive in cached aux',missing,2,/See Equation\s+\?\?/);
+  assert.equal(captureWrites,2,'a warm first pass may be final, so it retains capture');
   assert.match(removed.log,/undefined references/);
   await compile('restored label converges',source,2,/See Equation\s+1/);
   await assert.rejects(engine.compile(source.replace('x^2','x^{')),/./);
   await compile('unfinished math recovery preserves last good aux',source.replace('82','83'),1,/83/);
   const newPreamble=source.replace('{article}','[12pt]{article}');
   await compile('preamble changes invalidate cached aux',newPreamble,2,/See Equation\s+1/);
+  assert.equal(captureWrites,1,'a changed preamble again has a mandatory preparation pass');
   const contents=document(String.raw`\tableofcontents
 \section{First heading}
 Some prose.`);
@@ -91,11 +97,19 @@ See Section~\ref{child}.`);
   await compile('stable figure and table lists',lists,1,/Table title[\s\S]*Table title/);
   await compile('changed figure and table lists',lists.replaceAll('title','revised'),2,/Figure revised[\s\S]*Figure revised/);
 
-  const custom=document(String.raw`\newwrite\custom\immediate\openout\custom=main.custom
+  const custom=document(String.raw`\AddToHook{enddocument/afterlastpage}[qa-check]{\typeout{USER-TAIL}}
+\newwrite\custom\immediate\openout\custom=main.custom
 \immediate\write\custom{Stable custom output}\immediate\closeout\custom
 Custom prose.`);
-  await compile('unknown output stays conservative',custom,2,/Custom prose/);
-  await compile('unknown output still uses two passes',custom,2,/Custom prose/);
+  await compile('unknown output stays conservative',custom,2,/Custom prose/,{root:'custom.tex'});
+  assert.equal(captureWrites,1);assert.equal(userHooks,2,'preparation preserves other end-document hooks');
+  await compile('unknown output still uses two passes',custom,2,/Custom prose/,{root:'custom.tex'});
+  assert.equal(captureWrites,2);assert.equal(userHooks,2);
+  const nofiles=document('No auxiliary file.').replace('\\begin{document}','\\nofiles\n\\begin{document}');
+  await compile('cold nofiles still finishes with a captured PDF',nofiles,2,/No auxiliary file/);
+  assert.equal(captureWrites,1);
+  await compile('warm nofiles keeps its one-pass capture',nofiles,1,/No auxiliary file/);
+  assert.equal(captureWrites,1);
   assert.equal(engine.generation,generation,'full edits must reuse the loaded worker');
   await fs.writeFile(new URL('qa/full-preview.json',root),JSON.stringify({runtime:'actual WASM and PDF.js in Node; not browser latency',results},null,2));
   console.log(JSON.stringify(results,null,2));

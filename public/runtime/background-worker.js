@@ -43,7 +43,7 @@ function run(source,id,preamble,root='main.tex',project){
  const began=performance.now(),fs=engine.FS;syncProject(fs,project);removeTree(fs,'/out');fs.chdir('/project');writeEngineFile(fs,'/project/'+root,source);
  // \include writes its aux beside the output of the same relative path.
  mirrorDirs(fs,'/project','/out');
- const job=String.raw`\RequirePackage{rtex-capture}\input{`+root+'}';
+ const input=String.raw`\input{`+root+'}';
  // Reuse only successful output from the same root/preamble; failed edits cannot poison it.
  if(project?.reset||project?.remove?.length||root!==lastRoot){lastAuxFiles=undefined;lastBbl=undefined;}
  let priorFiles=preamble!=null&&preamble===lastPreamble?lastAuxFiles:undefined,bbl=preamble!=null&&preamble===lastPreamble?lastBbl:undefined;
@@ -53,6 +53,10 @@ function run(source,id,preamble,root='main.tex',project){
  const logs=[];let exit=0,passes=0,aux,auxFiles,bib=null,limit=2;
  for(let pass=0;pass<limit;pass++){
   fs.chdir('/project');
+  // The cold first pass must rerun; only its page traversal and JSON would be discarded.
+  const prepare=pass===0&&priorFiles===undefined
+   ?String.raw`\RemoveFromHook{enddocument/afterlastpage}[rtex-capture]`+String.raw`\AddToHookNext{begindocument/end}{\directlua{luatexbase.remove_from_callback("pre_shipout_filter","rtex-capture")}}`:'';
+  const job=String.raw`\RequirePackage{rtex-capture}`+prepare+input;
   const args=[...rtexLuaArgs(job).slice(0,-1),'--jobname=main','--output-directory=/out',job];
   try{exit=engine.callMain(args);engine._flush_streams()}catch(e){exit=typeof e.status==='number'?e.status:1;logs.push(String(e))}
   if(fs.analyzePath('/out/main.log').exists)logs.push(decoder.decode(fs.readFile('/out/main.log')));

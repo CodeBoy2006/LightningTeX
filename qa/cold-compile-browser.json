@@ -1,0 +1,72 @@
+{
+  "status": "PASS",
+  "scope": "Codex in-app browser. Three alternating rounds; actual browser workers, offline bundled fonts, TOC/nested include and 120 paragraphs. Exact capture, display-list and aux signatures agree. Compilation excludes load; totalMs includes load. No UI rendering or input scheduling.",
+  "results": [
+    {
+      "round": 0,
+      "mode": "before",
+      "passes": 2,
+      "captures": 2,
+      "pages": 5,
+      "ms": 1525.9299999922514,
+      "loadMs": 389.52500000596046,
+      "totalMs": 1921.719999998808,
+      "signature": "6c88d2c280072c2ef8b45d4d8627e28fc2e2ab900f782b4d2dfc948ffdd225d9"
+    },
+    {
+      "round": 0,
+      "mode": "after",
+      "passes": 2,
+      "captures": 1,
+      "pages": 5,
+      "ms": 1246,
+      "loadMs": 300.69499999284744,
+      "totalMs": 1549.5450000017881,
+      "signature": "6c88d2c280072c2ef8b45d4d8627e28fc2e2ab900f782b4d2dfc948ffdd225d9"
+    },
+    {
+      "round": 1,
+      "mode": "after",
+      "passes": 2,
+      "captures": 1,
+      "pages": 5,
+      "ms": 1250.859999999404,
+      "loadMs": 302.54999999701977,
+      "totalMs": 1556.0250000059605,
+      "signature": "6c88d2c280072c2ef8b45d4d8627e28fc2e2ab900f782b4d2dfc948ffdd225d9"
+    },
+    {
+      "round": 1,
+      "mode": "before",
+      "passes": 2,
+      "captures": 2,
+      "pages": 5,
+      "ms": 1463.4249999970198,
+      "loadMs": 297.9050000011921,
+      "totalMs": 1764.050000011921,
+      "signature": "6c88d2c280072c2ef8b45d4d8627e28fc2e2ab900f782b4d2dfc948ffdd225d9"
+    },
+    {
+      "round": 2,
+      "mode": "before",
+      "passes": 2,
+      "captures": 2,
+      "pages": 5,
+      "ms": 1462.734999999404,
+      "loadMs": 322.95499999821186,
+      "totalMs": 1788.469999998808,
+      "signature": "6c88d2c280072c2ef8b45d4d8627e28fc2e2ab900f782b4d2dfc948ffdd225d9"
+    },
+    {
+      "round": 2,
+      "mode": "after",
+      "passes": 2,
+      "captures": 1,
+      "pages": 5,
+      "ms": 1306.280000001192,
+      "loadMs": 317.8400000035763,
+      "totalMs": 1627.4950000047684,
+      "signature": "6c88d2c280072c2ef8b45d4d8627e28fc2e2ab900f782b4d2dfc948ffdd225d9"
+    }
+  ]
+}
