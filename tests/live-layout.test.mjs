@@ -21,6 +21,14 @@ test('changed row count or height requires full pagination',()=>{
  const taller=structuredClone(live);taller.lines[0].h++;
  assert.throws(()=>replaceUnitRows(pages(),unit,baseline,taller),/Line height/);
 });
+test('duplicate font descriptors retain the last matching ID and reserve all captured IDs',()=>{
+ const before=pages();before[0].fonts[7]={...font,id:7};
+ const output=structuredClone(live);output.fonts[2]=font;output.lines[0].items.push(['g',2,65,1,30,20,10,0]);
+ const page=replaceUnitRows(before,unit,baseline,output).get(1);
+ assert.deepEqual(page.lines[0].items.map(item=>item[1]),[8,7]);
+ assert.deepEqual(Object.keys(page.fonts),['1','7','8']);assert.deepEqual(page.fonts[7],before[0].fonts[7]);
+ assert.equal(page.fonts[8].filename,'math.pfb');assert.equal(before[0].fonts[8],undefined);
+});
 test('glyph counts skip sparse row slots and include surrounding drawing',()=>{
  const before=pages(),sparse=structuredClone(live);
  before[0].lines[1].items.length=3;sparse.lines[0].items.length=3;

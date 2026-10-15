@@ -2,6 +2,7 @@
 export class DisplayListError extends Error {
   constructor(message, offset) { super(`${message}${offset == null ? '' : ` at byte ${offset}`}`); this.name = 'DisplayListError'; this.offset = offset; }
 }
+const decoder = new TextDecoder('utf-8', { fatal: true });
 class Reader {
   constructor(bytes, base = 0) { this.bytes = bytes; this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength); this.pos = 0; this.base = base; }
   need(n) { if (n > this.bytes.length - this.pos) throw new DisplayListError('Truncated record', this.base + this.pos); }
@@ -10,7 +11,7 @@ class Reader {
   u32() { return this.number('getUint32', 4); } i32() { return this.number('getInt32', 4); }
   f64() { const v = this.number('getFloat64', 8); if (!Number.isFinite(v)) throw new DisplayListError('Non-finite float', this.base + this.pos - 8); return v; }
   take(n) { this.need(n); const b = this.bytes.subarray(this.pos, this.pos + n); this.pos += n; return b; }
-  str() { const b = this.take(this.u16()); try { return new TextDecoder('utf-8', { fatal: true }).decode(b); } catch { throw new DisplayListError('Invalid UTF-8', this.base + this.pos - b.length); } }
+  str() { const b = this.take(this.u16()); try { return decoder.decode(b); } catch { throw new DisplayListError('Invalid UTF-8', this.base + this.pos - b.length); } }
 }
 export function asBytes(input) {
   if (input instanceof ArrayBuffer) return new Uint8Array(input);

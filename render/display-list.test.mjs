@@ -61,6 +61,12 @@ test('decodes resource, color, literal, math, unsupported and matrix records', (
   assert.deepEqual(dl.other[5], ['M', 'set', 10, 20, '1 0 0 1']);
   assert.equal(Object.getPrototypeOf(dl.flags), Object.prototype); assert.equal(dl.flags.__proto__, 1);
 });
+test('invalid UTF-8 does not affect later strings or display lists', () => {
+  assert.throws(() => decodeDisplayList(binary([rec(3, u16(1), u8(0xc3), i32(1))])), { name: 'DisplayListError', offset: 23 });
+  const dl = decodeDisplayList(binary([rec(3, str('déjà'), i32(1)), rec(3, str('字体'), i32(2))]));
+  assert.equal(dl.flags['déjà'], 1); assert.equal(dl.flags['字体'], 2);
+  assert.equal(decodeDisplayList(sample()).fonts[27].filename, 'font.otf');
+});
 const jsonDL = items => ({ kind: 'paragraph', unit: 'sp', width: 6553600, height: 655360, depth: 0, fonts: { 1: { filename: 'fixture.otf', size: 655360, format: 'opentype', slant: 100, extend: 1100 } }, flags: {}, other: [], lines: [{ par: 0, i: 1, x: 0, y: 500000, w: 6553600, h: 500000, d: 100000, items }], glyphs: 1 });
 function fakeCanvas() {
   const calls = []; const ctx = new Proxy({}, { get: (_, key) => (...args) => calls.push([key, ...args]), set: (_, key, value) => { calls.push(['set', key, value]); return true; } });

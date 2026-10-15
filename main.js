@@ -43,7 +43,7 @@ const renderer=createDisplayListRenderer({
 // Files the preamble can read: the persistent engine needs them next to its copy of the preamble.
 function supportFiles(preamble,files){
  const wanted=new Set();
- for(const match of preamble.matchAll(/\\(?:input|include)\s*\{([^{}]+)\}/g)){wanted.add(match[1].trim());wanted.add(match[1].trim()+'.tex');}
+ for(const match of preamble.matchAll(/\\(?:input|include)\s*\{([^{}]+)\}/g)){const name=match[1].trim();wanted.add(name);wanted.add(name+'.tex');}
  return files.filter(file=>typeof file.data==='string'&&(wanted.has(file.path)||/\.(sty|cls|def|cfg|clo|fd|ldf|lua)$/i.test(file.path)));
 }
 // A paragraph context to typeset standalone formulas in: the first one the engine can replay.
@@ -88,7 +88,7 @@ const ui=mountEditor({renderPdf,typesetMath,
    if(result.bibtex)ui.log(result.bibtex.log,result.bibtex.errors.length?'warning':'info');
    ui.setLiveStatus(fallback?{state:'full',reason:fallback}:{state:'ready'});
    ui.log(`Full LuaLaTeX: ${result.pages.length} page(s), ${result.durationMs.toFixed(0)} ms (${result.passes} pass${result.passes===1?'':'es'}).`);
-   if(/undefined references|Rerun to get cross-references|Label\(s\) may have changed/i.test(result.log))ui.log('References may need another document pass; automatic compilation runs at most two passes per update.','warning');
+   if(/undefined references|Rerun to get cross-references|Label\(s\) may have changed/i.test(result.log))ui.log('References may need another document pass; automatic compilation runs at most two passes, or three after a bibliography update.','warning');
    return {...result,pages:result.pages.length,revision};
  }});
 // BibTeX's own findings. A cited key without an entry is left to LaTeX's warning, which knows the line.
@@ -264,10 +264,10 @@ function syncMarker(scroll=true){
  const unit=span?.unit??placed.findLast(unit=>unit.begin_line<=position.line);
  const first=unit?.placements?.[0],page=first&&state.pages.find(page=>page.page===first.page);
  if(!page){ui.setMarker(null);return;}
- const rows=state.drawnPages.find(page=>page.page===first.page).lines.filter(row=>row.unit===unit.uid),flow=state.flows.get(first.page),height=flow?.height??page.page_height;
+ const drawn=state.drawnPages.find(page=>page.page===first.page),rows=drawn.lines.filter(row=>row.unit===unit.uid),flow=state.flows.get(first.page),height=flow?.height??page.page_height;
  if(!rows.length){ui.setMarker(null);return;}
  const offset=flowOffset(flow,rows[0]);
- ui.setMarker({page:first.page,uid:unit.uid,top:(Math.min(...rows.map(row=>row.y-row.h))+offset)/height,bottom:(Math.max(...rows.map(row=>row.y+row.d))+offset)/height,...column(state.drawnPages.find(sheet=>sheet.page===first.page),unit.uid)},{scroll});
+ ui.setMarker({page:first.page,uid:unit.uid,top:(Math.min(...rows.map(row=>row.y-row.h))+offset)/height,bottom:(Math.max(...rows.map(row=>row.y+row.d))+offset)/height,...column(drawn,unit.uid)},{scroll});
 }
 // The horizontal extent of a unit's rows on its page, as fractions of the page width.
 function column(sheet,uid){

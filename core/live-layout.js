@@ -40,8 +40,8 @@ export function replaceUnitRows(pages,unit,baseline,live,{allowReflow=false}={})
       page=structuredClone(pages.find(page=>page.page===reference.page));changed.set(reference.page,page);
       if(reflow){page.lines=page.lines.filter(row=>row.unit!==unit.uid);page.reflowUnits??=[];page.reflowUnits.push(unit.uid);}
       ids=new Map();fontIds.set(reference.page,ids);
-      const keys=new Map(Object.entries(page.fonts).map(([id,desc])=>[fontKey(desc),Number(id)]));
-      let next=Math.max(0,...Object.keys(page.fonts).map(Number));
+      const keys=new Map();let next=0;
+      for(const [id,desc] of Object.entries(page.fonts)){const number=Number(id);keys.set(fontKey(desc),number);next=Math.max(next,number);}
       for(const [id,desc] of Object.entries(live.fonts)){
         const key=fontKey(desc);let target=keys.get(key);
         if(target===undefined){target=++next;page.fonts[target]={...desc,id:target};keys.set(key,target);}

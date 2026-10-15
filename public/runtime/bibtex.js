@@ -324,7 +324,7 @@ function runBibtex({aux,readAux:readNested=()=>null,readBib=()=>null,readStyle=(
   if(styleText==null){errors.push(`I couldn't open style file ${info.style}.bst`);return {bbl:null,log:errors.join('\n'),warnings,errors,style:info.style,databases:info.databases,citations:info.citations};}
   const commands=parseStyle(styleText);
   // Name space: fields, entry variables, globals, functions and macros share one table, case-insensitively.
-  const fns=new Map(),globals=new Map(),entryInts=[],entryStrs=[],fields=['crossref'],macros=new Map();
+  const fns=new Map(),globals=new Map(),fields=['crossref'],macros=new Map();
   let entries=[],current=null,output='',bbl=[],preambles=[];
   const flushLine=()=>{
     let text=output.replace(/[ \t]+$/,'');output='';
@@ -414,7 +414,7 @@ function runBibtex({aux,readAux:readNested=()=>null,readBib=()=>null,readStyle=(
   define('entry.max$',{builtin:()=>stack.push(ENTRY_MAX)});define('global.max$',{builtin:()=>stack.push(GLOBAL_MAX)});
   const entryVar=(name,int)=>define(name,{entryVar:true,int,builtin(){if(!current)throw new BstError(`${name} outside an entry`);const v=current.vars.get(name);stack.push(v??(int?0:''));}});
   entryVar('sort.key$',false);
-  const fieldFn=name=>define(name,{field:true,builtin:()=>stack.push(fieldOf(name))});
+  const fieldFn=name=>define(name,{builtin:()=>stack.push(fieldOf(name))});
   fieldFn('crossref');
   let read=false;
   function readDatabases(){
@@ -458,8 +458,8 @@ function runBibtex({aux,readAux:readNested=()=>null,readBib=()=>null,readStyle=(
     for(const command of commands){
       if(command.name==='entry'){
         for(const name of command.fields)if(!fields.includes(name)){fields.push(name);fieldFn(name);}
-        for(const name of command.ints){entryInts.push(name);entryVar(name,true);}
-        for(const name of command.strs){entryStrs.push(name);entryVar(name,false);}
+        for(const name of command.ints)entryVar(name,true);
+        for(const name of command.strs)entryVar(name,false);
       }else if(command.name==='integers')for(const name of command.ids){globals.set(name,0);define(name,{global:true,int:true,builtin:()=>stack.push(globals.get(name))});}
       else if(command.name==='strings')for(const name of command.ids){globals.set(name,'');define(name,{global:true,int:false,builtin:()=>stack.push(globals.get(name))});}
       else if(command.name==='macro')macros.set(command.id,command.value);

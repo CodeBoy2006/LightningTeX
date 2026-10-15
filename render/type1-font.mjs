@@ -16,7 +16,7 @@ export function type1FontPdf(bytes,psname,encoding) {
     lengths[phase]+=length;parts.push(bytes.subarray(offset,offset+length));offset+=length;
   }
   if(!lengths[0]||!lengths[1])throw Error('PFB font has no charstrings');
-  const encode=value=>new TextEncoder().encode(value),join=items=>{
+  const encoder=new TextEncoder(),encode=value=>encoder.encode(value),join=items=>{
     const out=new Uint8Array(items.reduce((sum,item)=>sum+item.length,0));let at=0;
     for(const item of items){out.set(item,at);at+=item.length;}return out;
   };
