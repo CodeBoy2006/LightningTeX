@@ -376,6 +376,7 @@ test('find replaces literal and regex matches through the editor and retains sel
  const h=setup({source:'alpha ALPHA beta 12 beta 34'});try{h.auto(false);h.event(h.q('source'),'keydown',{key:'h',ctrlKey:true,shiftKey:true});
   const bar=h.root.querySelector('.find-bar'),query=bar.querySelector('.find-query'),replacement=bar.querySelector('.find-replacement');query.value='alpha';h.event(query,'input');assert.equal(h.root.querySelectorAll('.code-matches mark').length,2);
   replacement.value='new';bar.querySelector('[aria-label="Replace all"]').click();assert.equal(h.ui.getSource(),'new new beta 12 beta 34');
+  assert.equal(h.root.querySelectorAll('.code-matches mark').length,0);assert.equal(bar.querySelector('[aria-label="Replace all"]').disabled,true);assert.equal(document.activeElement,query);
   query.value='beta (\\d+)';replacement.value='$1 beta';bar.querySelector('[aria-label="Regular expression"]').click();h.event(query,'input');bar.querySelector('[aria-label="Replace all"]').click();assert.equal(h.ui.getSource(),'new new 12 beta 34 beta');
   query.value='beta';h.event(query,'input');h.event(query,'keydown',{key:'Enter'});h.event(query,'keydown',{key:'Escape'});assert.equal(document.activeElement,h.q('source'));assert.equal(h.q('source').value.slice(h.q('source').selectionStart,h.q('source').selectionEnd),'beta');
  }finally{h.cleanup();}

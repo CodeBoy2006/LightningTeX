@@ -133,7 +133,7 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
   function checkBalance(){
     clearTimeout(idleTimer);setDecorations('balance',[]);
     if(!structure)return;
-    idleTimer=setTimeout(()=>setDecorations('balance',unbalanced(text).map(item=>({start:item.start,end:item.kind==='brace'?item.end:item.end,className:'deco-wave'}))),600);
+    idleTimer=setTimeout(()=>setDecorations('balance',unbalanced(text).map(item=>({start:item.start,end:item.end,className:'deco-wave'}))),600);
   }
   function reveal(offset=input.selectionEnd,center=false){
     const box=rectAt(offset);if(!box)return;
@@ -206,7 +206,8 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
   function indent(outdent){
     const start=input.selectionStart,end=input.selectionEnd,unit=' '.repeat(options.tabSize);
     if(start===end&&!outdent){edit(start,end,unit);return;}
-    editLines(block=>block.map(line=>outdent?line.replace(new RegExp(`^(?: {1,${options.tabSize}}|\\t)`),''):line?unit+line:line));
+    const prefix=outdent&&new RegExp(`^(?: {1,${options.tabSize}}|\\t)`);
+    editLines(block=>block.map(line=>outdent?line.replace(prefix,''):line?unit+line:line));
   }
   function toggleComment(){
     editLines(block=>{
@@ -303,7 +304,7 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
     const start=input.selectionStart,end=input.selectionEnd,[from,to]=lineRange(start,end);
     const [a,b]=to<text.length?[from,to+1]:[Math.max(0,from-1),to],col=start-from,next=text.slice(b,text.indexOf('\n',b)<0?text.length:text.indexOf('\n',b));
     const caret=a+(to<text.length?Math.min(col,next.length):0);
-    edit(a,b,'',to<text.length?caret:a,to<text.length?caret:a);
+    edit(a,b,'',caret);
   }
   // Each press of Mod+L takes one more whole line.
   function selectLines(){
@@ -393,7 +394,6 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
     el,input,body,scroller,rectAt,rangeRects,configure,edit,offsetAtPoint,setDecorations,
     /** 1-based line at a content y coordinate (for the line at the top of the view, pass scrollTop). */
     lineAtY(y){let low=0,high=nodes.length-1;while(low<high){const middle=(low+high+1)>>1;if(nodes[middle].offsetTop<=y)low=middle;else high=middle-1;}return low+1;},
-    lineTop:line=>nodes[line-1]?.offsetTop??0,
     getValue:()=>text,
     setValue(next){input.value=next;sync(true);},
     focus(){input.focus({preventScroll:true});placeDiagnostics();},
@@ -402,7 +402,6 @@ export function createCodeEditor({value='',settings,label='',describedBy,onChang
     get gutter(){return parseFloat(style().paddingLeft)||0;},
     offsetOf:(line,col=1)=>Math.min(lineStarts()[Math.min(lines.length-1,Math.max(0,line-1))]+col-1,text.length),
     select,insertSnippet,
-    get snippetActive(){return !!snippet;},
     flash(line){
       const node=nodes[line-1];if(!node)return;
       clearTimeout(flashTimer);for(const other of layer.querySelectorAll('.flash'))other.classList.remove('flash');

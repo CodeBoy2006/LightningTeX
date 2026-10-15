@@ -508,7 +508,7 @@ export function mountEditor(options={}){
   }
   function updateProject(){
     $('project-name').textContent=documentTitle(mainText())||(project.main?basename(project.main):t('project.untitled'));
-    const files=new Map(project.files().filter(file=>typeof file.text==='string').map(file=>[file.path,file.text]));structure=parseOutline(files,project.main);
+    const files=textFiles();structure=parseOutline(files,project.main);
     wordTotal=structure.paths.reduce((n,path)=>n+wordCount(files.get(path)||''),0);
     wordSections=structure.headings.map((h,i)=>({heading:h,n:wordCount((files.get(h.file)||'').slice(h.offset,structure.headings.slice(i+1).find(next=>next.file===h.file)?.offset))}));
     structure.references=referenceCounts(files);nowKey=null;
@@ -1052,9 +1052,9 @@ export function mountEditor(options={}){
   // Local updates leave a thin accent edge. Typing on in the same paragraph keeps the same edge lit and only
   // moves it as the paragraph grows; it fades once the typing stops or moves elsewhere. Nothing restarts per keystroke.
   function paintInk(regions){
-    const lit=new Set();
+    const lit=new Set(),list=pages();
     for(const region of regions){
-      const canvas=pages().find(canvas=>Number(canvas.dataset.page)===region.page);if(!canvas)continue;
+      const canvas=list.find(canvas=>Number(canvas.dataset.page)===region.page);if(!canvas)continue;
       const key=region.page+':'+(region.uid??Math.round(region.top*1e3));lit.add(key);
       let ink=inks.get(key);
       if(!ink||ink.parentNode!==canvas.parentNode){ink?.remove();ink=document.createElement('div');ink.className='ink-region';inks.set(key,ink);placeRegion(ink,canvas,region);canvas.parentNode.append(ink);void ink.offsetWidth;}
@@ -1536,7 +1536,7 @@ export function mountEditor(options={}){
     const separate=multi()&&settings.persist;
     return openTemplateGallery({host:app,t,lang:i18n.lang,hasFiles:!separate&&!!project.paths().length,readArchive,create:data=>void(separate?newProject(data):replaceProject(data,true)),notify});
   }
-  function exportZip(){download(zip(project.files().map(file=>({path:file.path,data:fileBytes(file)}))),(project.main?basename(project.main).replace(/\.tex$/i,''):'project')+'.zip','application/zip');}
+  function exportZip(){void exportProject(currentId);}
   // Export shows its own progress: a line under the button while the full pass runs, a check when the file is handed over.
   let exportTimer;
   function exportState(value){const button=action('export-menu');clearTimeout(exportTimer);if(value)button.dataset.state=value;else delete button.dataset.state;if(value==='done')exportTimer=setTimeout(()=>exportState(null),1400);}

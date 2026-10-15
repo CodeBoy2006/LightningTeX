@@ -63,7 +63,7 @@ export function openTablePicker({host,t,mode='table',inMath=false,insert}){
   }
   for(const [value,key] of [['table','table.mode'],['matrix','matrix.mode']]){
     const button=document.createElement('button');button.type='button';button.setAttribute('role','radio');button.textContent=t(key);button.dataset.value=value;
-    button.onclick=()=>{state.mode=value;for(const other of modes.children)other.setAttribute('aria-checked',String(other===button));dialog.el.querySelector('h2').textContent=t(value==='matrix'?'matrix.title':'table.title');options();paint();};
+    button.onclick=()=>{state.mode=value;dialog.el.querySelector('h2').textContent=t(value==='matrix'?'matrix.title':'table.title');options();paint();};
     modes.append(button);
   }
   function paint(){

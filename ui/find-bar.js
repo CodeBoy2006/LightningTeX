@@ -47,7 +47,7 @@ export function createFindBar(editor,t){
     if(!matches.length)return;const source=editor.getValue(),selected=every?matches:[matches[current]];let result='',at=selected[0].index;
     const start=at;
     for(const match of selected){result+=source.slice(at,match.index)+(flags.regex?replacementText(replacement.value,match,source):replacement.value);at=match.index+match[0].length;}
-    editor.edit(start,at,result);refresh();query.focus();
+    editor.edit(start,at,result);query.focus();
   }
   function close(){el.hidden=true;overlay.replaceChildren();select();editor.focus();}
   const input=()=>refresh(),keys=event=>{

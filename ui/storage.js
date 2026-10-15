@@ -40,8 +40,8 @@ export async function openStore(name='lightningtex'){
     database.onversionchange=()=>database.close();
     await adoptLegacy(database);
   }catch{return null;}
-  const transact=(mode,work,stores=STORES)=>new Promise((resolve,reject)=>{
-    const transaction=database.transaction(stores,mode),get=name=>transaction.objectStore(name);let result;
+  const transact=(mode,work)=>new Promise((resolve,reject)=>{
+    const transaction=database.transaction(STORES,mode),get=name=>transaction.objectStore(name);let result;
     transaction.oncomplete=()=>resolve(result);transaction.onerror=transaction.onabort=()=>reject(transaction.error||Error('Storage transaction failed'));
     result=work(get);
   });

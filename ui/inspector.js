@@ -19,10 +19,9 @@ export function createInspector({t}){
     // Bars are keyed by update id: old ones scroll off the left, only a new one grows in.
     const entries=data.timeline.slice(-24),ids=new Set(entries.map(entry=>String(entry.id)));
     for(const bar of [...timeline.children])if(!ids.has(bar.dataset.id))bar.remove();
-    const have=new Set([...timeline.children].map(bar=>bar.dataset.id));
     for(const entry of entries){
       let bar=timeline.querySelector(`[data-id="${entry.id}"]`);
-      if(!have.has(String(entry.id))){bar=document.createElement('i');bar.dataset.id=String(entry.id);if(drawn)bar.classList.add('new');timeline.append(bar);}
+      if(!bar){bar=document.createElement('i');bar.dataset.id=String(entry.id);if(drawn)bar.classList.add('new');timeline.append(bar);}
       bar.dataset.kind=entry.kind;bar.style.setProperty('--h',String(entry.kind==='waiting'?.08:height(entry.ms)));bar.title=`${t('insp.kind.'+entry.kind)} · ${formatMs(entry.ms)}`;
     }
     drawn=1;timeline.setAttribute('aria-label',t('insp.timeline',{n:entries.length}));
@@ -41,7 +40,7 @@ export function createInspector({t}){
     const fact=(label,value,state)=>{const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;if(state)dd.dataset.state=state;facts.append(dt,dd);};
     fact(t('insp.engine'),t('insp.engine.'+(data.engine.live||'off'))+' · '+t('insp.restarts',{n:data.engine.restarts||0}),data.engine.live==='ready'?'ok':data.engine.live==='warming'?'busy':'');
     fact('PDF',data.compiling?t('pdf.updating'):data.lag?t('pdf.behind',{n:data.lag})+(data.settling?' · '+t('insp.settle'):''):t('pdf.synced'),data.lag?'lag':'ok');
-    const total=data.timeline.filter(entry=>entry.kind==='live'||entry.kind==='reflow'),median=total.length?[...total.map(entry=>entry.ms)].sort((a,b)=>a-b)[total.length>>1]:null;
+    const total=data.timeline.filter(entry=>entry.kind==='live'||entry.kind==='reflow'),median=total.length?total.map(entry=>entry.ms).sort((a,b)=>a-b)[total.length>>1]:null;
     if(median!=null)fact(t('insp.median'),formatMs(median)+' · '+t('insp.count',{n:total.length}));
   }
   return {el,render};

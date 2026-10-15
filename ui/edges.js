@@ -14,5 +14,5 @@ export function watchEdges(scroller,host=scroller.parentElement){
   const observer=globalThis.ResizeObserver?new ResizeObserver(queue):null;
   observer?.observe(scroller);if(scroller.firstElementChild)observer?.observe(scroller.firstElementChild);
   queue();
-  return {refresh:queue,destroy(){scroller.removeEventListener('scroll',queue);observer?.disconnect();if(frame)(globalThis.cancelAnimationFrame||clearTimeout)(frame);}};
+  return {destroy(){scroller.removeEventListener('scroll',queue);observer?.disconnect();if(frame)(globalThis.cancelAnimationFrame||clearTimeout)(frame);}};
 }
