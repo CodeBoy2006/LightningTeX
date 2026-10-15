@@ -1,0 +1,48 @@
+{
+  "status": "PASS",
+  "scope": "Codex in-app browser; actual Web Workers, offline bundled fonts, three-page TOC and nested include. Exact page display lists agree before/after for all three phases. One observation per phase; engine compilation only, no UI rendering or input scheduling.",
+  "results": [
+    {
+      "mode": "before",
+      "phase": "initial",
+      "passes": 2,
+      "pages": 3,
+      "ms": 1515.2049999982119
+    },
+    {
+      "mode": "before",
+      "phase": "edit",
+      "passes": 2,
+      "pages": 3,
+      "ms": 1133.4000000059605
+    },
+    {
+      "mode": "before",
+      "phase": "rename",
+      "passes": 2,
+      "pages": 3,
+      "ms": 1140.2300000041723
+    },
+    {
+      "mode": "after",
+      "phase": "initial",
+      "passes": 2,
+      "pages": 3,
+      "ms": 1382.7950000017881
+    },
+    {
+      "mode": "after",
+      "phase": "edit",
+      "passes": 1,
+      "pages": 3,
+      "ms": 585.9900000095367
+    },
+    {
+      "mode": "after",
+      "phase": "rename",
+      "passes": 2,
+      "pages": 3,
+      "ms": 1101.9299999922514
+    }
+  ]
+}

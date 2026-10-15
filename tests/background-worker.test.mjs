@@ -4,6 +4,16 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 
 const script=await fs.readFile(new URL('../public/runtime/background-worker.js',import.meta.url),'utf8');
+test('auxiliary convergence compares every file and byte, independent of directory order',()=>{
+  const context=vm.createContext({TextDecoder,Uint8Array,importScripts(){}});
+  vm.runInContext(script,context);
+  const files=new Map([['main.aux',new Uint8Array([65])],['chapters/one.aux',new Uint8Array([255])]]);
+  assert.equal(context.sameAux(undefined,files),false);
+  assert.equal(context.sameAux(files,new Map([...files].reverse())),true);
+  assert.equal(context.sameAux(files,new Map([['main.aux',new Uint8Array([65])]])),false);
+  assert.equal(context.sameAux(files,new Map([...files,['main.toc',new Uint8Array()]])),false);
+  assert.equal(context.sameAux(files,new Map([...files,['chapters/one.aux',new Uint8Array([254])]])),false);
+});
 test('full jobs wait for package persistence before the next job mutates the filesystem',async()=>{
   const events=[],sent=[];let finishSave;
   const context=vm.createContext({TextDecoder,Uint8Array,Set,importScripts(){},postMessage:(message,transfer)=>sent.push({message,transfer})});

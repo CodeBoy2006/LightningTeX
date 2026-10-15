@@ -60,7 +60,7 @@ Ctrl / Command + Enter 完整编译；编译时再次点击顶栏状态胶囊可
 - 真正增量：首次完整编译捕获布局；首次编辑某个单元时校验原文字形与坐标，之后只向常驻引擎发送修改的单元。几何不变时沿用精确行替换；换行、公式增高、段落拆分/删除、相邻普通段落合并时，使用真实 TeX 字形即时重排受影响页面
 - 局部路径还支持已捕获的 itemize/enumerate/description、quote/quotation、section 等标题，以及 proof、abstract、theorem/lemma/proposition/corollary/remark、行内/独立公式、equation、align、gather、multline。定理环境保留标题、共享编号和内部列表。主文件、`\input`（含嵌套引用）和 `\include` 的文本子文件按各自源位置跟踪，包括返回父文件后才结束的末段。快速切换文件产生的多处待更新内容会逐项核验、统一提交预览；任一项失败或版本过期都不会留下半批更新。标题、标签/引用、编号变化会标记待校准；不完整输入保留上一张成功预览
 - 即时重排暂时伸缩页面并移动下方的 PDF 底图，保留正文、插图和页脚；跨页单元暂沿用已捕获的分页位置。停顿后由原有全文引擎恢复精确分页、页码、引用和辅助文件。没有新增分页引擎，也不把临时预览作为导出的 PDF
-- 常驻 LuaTeX 和 PDF.js Worker 复用。完整排版复用同一前言下上次成功的 aux；稳定时执行一遍，引用变化或目录等辅助文件需要时执行两遍
+- 常驻 LuaTeX 和 PDF.js Worker 复用。完整排版复用同一主文件和前言下上次成功的主／子文件 aux、目录、书签、图表清单与参考文献；逐字节比较辅助文件，稳定时只执行一遍，内容变化或日志要求重跑时才继续。切换主文件、重置项目或删除项目文件时清除复用状态，失败编译不覆盖成功状态；未知宏包输出仍保守执行两遍
 - 绘制使用真实字体与整数 scaled-point 坐标。OpenType/TrueType 使用引擎 glyph index；Type 1 字体使用已安装的 PDF.js 转换原 PFB 轮廓，支持直接映射和静态 256 字符重编码（包括 Latin Modern 的 T1 与数学字体），按字体文件及编码缓存，没有新增依赖或另一套公式排版器
 - 已编译 PDF 作为页面底图，只清除并重绘通过边界校验的区域；缩放重放最新局部结果。前言/宏定义、文件结构、不能隔离的跨文件段落、复杂绘图、并列栏相交区域或不受支持的字体/色彩仍走完整编译。预览与 PDF 分别记录版本，迟到的全文结果不能覆盖更新的预览
 - 不含原项目所有 Rust Session 功能；没有承诺与原生版所有包和环境完全等价
@@ -121,6 +121,8 @@ Node 回归测试使用 `tests/fixtures/tex-packages.json.gz` 中的少量已下
 浏览器输入 benchmark：运行开发服务器后打开 `/tests/browser-input.html`，通过项目 ZIP 导入完整论文及插图；待全文编译完成，展开 `Input benchmark`，点击 `Reset measurements`，再用键盘连续编辑。面板统计真实输入事件、Live 状态、全文请求及 Live Worker 启动次数，`Download trace` 导出记录。恢复基准原稿后可重复同一操作；面板只在该测试页面加载。
 
 `tests/runtime-helpers.mjs` 提供 Node 的浏览器 Worker 适配；增量服务直接由 WASM 装载。`tests/engine-binary.test.mjs` 检查二进制哈希、嵌入源码一致性和资源裁剪；`node tests/engine-benchmark.mjs output.json [reference.json]` 测量冷启动、全文和预热局部请求，并逐项比较固定样例的排版签名。
+
+`node tests/full-compile-benchmark.mjs output.json [reference.json]` 单独测量全量编译：三轮数学多页、目录／书签、子文件和参考文献文档，分别记录初次编译、正文编辑和重复编译的耗时；与基线比较排版坐标、PDF 文字、书签及 aux 签名。计时不包含引擎启动、网络下载与页面绘制。`npm run test:preview` 验证辅助文件复用、标题／标签增删、图表清单和失败恢复。
 
 独立模块用 `createEngine({endpoint})` 指定包服务地址；设为 `''` 可关闭远程查找及远程文件缓存恢复。网页在 `main.js` 的 `createEngine` 调用中传入该选项；默认地址仍在 `public/runtime/raw-loader.js` 中。自托管服务必须实现 BusyTeX 的 `GET /<format_id>/<filename>` 接口并使用配套的 TeX Live 2026 文件树，不能直接填写 CTAN 地址。完整编译（包括下载）最多 120 秒，可随时取消。浏览器清理网站数据会删除宏包缓存；只缓存成功下载的文件，不持久化缺失结果。随应用打包的字体不查询不存在的可选替代格式；完整编译遇到的 404 结果在当前会话内传给实时引擎，避免局部编辑重复等待网络。首次完整编译、引擎预热与后续局部更新的耗时不同；修改前言或不支持的内容仍会触发全文排版，局部重排后的精确分页也由全文编译完成。
 

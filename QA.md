@@ -211,3 +211,24 @@
 - **Found and fixed while verifying:** in Source-only and Preview-only layouts the remaining pane kept its split share of `flex-grow` and filled only part of the window (from the batch-2 layout work); notices were made inert under dialogs, so an Undo offered from the project page could not be clicked; quick-fix spelling suggestions included substring matches such as `\in` for `\includegraphics`.
 - **Not verified:** pdf.js rendering stalls while the in-app browser pane is hidden (it schedules with `requestAnimationFrame`), so some checks waited for the pane to be visible; Safari's `gesture*` pinch events, Firefox, touch devices and real trackpad pinches were not exercised; hover cards and the quick-fix bulb were driven by script rather than a physical pointer.
 - **Tests:** 196 unit/DOM/renderer tests pass (new: `tests/writing.test.mjs` for the diff, quick fixes, BibTeX and templates; ten DOM tests for snippets, line keys, rename, quick fix, citation completion, settings, PDF search, spreads, project fallback and history). Production build passes with the existing bundle-size warning.
+
+## Full compilation auxiliary reuse — 2026-10-15
+
+- Replaced the blanket second pass for known auxiliary files with byte-for-byte comparison and reuse of the last successful aux, TOC, bookmarks and figure/table lists. Nested include aux files are included. Root changes, explicit project reset and project-file removal clear reuse; failed TeX jobs do not update saved output. Unknown output extensions retain two passes, and the existing two-pass/three-after-BibTeX limits remain. No dependency or WASM binary change.
+- The [latexmk manual](https://tug.ctan.org/support/latexmk/latexmk.pdf), section on custom dependencies (p. 56), describes content-based rerun detection. This worker applies that principle to its existing, bounded pass loop; it does not introduce latexmk or a dependency scheduler. LuaTeX draft mode was considered but omitted because the job must return a complete PDF and capture, and the final pass is not known in advance.
+- Profiling the original worker on a multi-page TOC document found warm TeX calls around 636–655 ms per pass and memory reset around 1.9–2.1 ms. The heap reset was left unchanged.
+- Baseline is commit e704674's worker. Three sequential rounds use fresh workers per document, identical offline assets and 36 initial/edit/repeat jobs per version. Final records are in qa/full-compile-{before,after}.json; all exact display-list, PDF text, bookmark and aux signatures match. Timings exclude initialization, network, PDF.js and UI rendering.
+
+| Full compile after a prose edit, median of three | Before | After | Passes |
+| --- | ---: | ---: | ---: |
+| Multi-page math | 598 ms | 615 ms | 1 → 1 |
+| Contents and bookmarks | 1429 ms | 715 ms | 2 → 1 |
+| Nested include | 1255 ms | 622 ms | 2 → 1 |
+| Bibliography | 567 ms | 538 ms | 1 → 1 |
+
+- Contents/bookmark and include edits improve by about 50%; already single-pass math and bibliography do not have an established speedup. Initial compile pass counts are unchanged; small timing differences there are not claimed as gains.
+- qa/full-compile-regressions.json records 32 successful real-WASM/PDF-text scenarios, plus the suite checks two failed-edit recoveries. Covers changed/deleted/restored labels and headings, a deleted include file whose statement remains, root changes, lists, and unknown custom output. The 200 existing unit/DOM/renderer tests passed; the added byte-comparison case and existing serialization case passed in a focused rerun. BibTeX tests passed with first-run three passes and unchanged-bibliography one pass.
+- The final relocated standalone package passed its eight live edits, exact full-layout comparison, module reuse and live/full recovery checks. The separate multi-file/formula test and production build also passed. Historical generated QA files were restored; only this task's new evidence is added.
+- A separate Codex in-app browser check used real Web Workers and bundled fonts with networking disabled. A three-page TOC/include document matched exact page display lists before/after for initial, edited and renamed-heading cases. Prose editing took 1,133 → 586 ms (2 → 1 passes); heading changes retained two passes. This is one browser observation, not a universal latency guarantee. Data: qa/full-compile-browser.json. Temporary page, worker and server were removed/stopped.
+- test:live-project remains blocked by its existing UI stub: main.js calls ui.setEngineInfo, which the test does not provide. Reproduced the same error using the original worker from e704674. That harness was not changed in this task.
+- Limits: no Safari/Firefox/mobile, long-paper rerun, complete macro-package compatibility or PDF pixel-equivalence acceptance. The existing production bundle-size advisory remains.

@@ -13,13 +13,14 @@ const document=body=>String.raw`\documentclass{article}
 \begin{document}
 `+body+String.raw`
 \end{document}`;
-async function compile(name,source,passes,pattern){
-  const result=await engine.compile(source);
+async function compile(name,source,passes,pattern,options){
+  const result=await engine.compile(source,options);
   assert.equal(result.passes,passes,name);
   const task=getDocument({data:result.pdf.slice(),worker,isEvalSupported:false});
   try {
-    const pdf=await task.promise,content=await (await pdf.getPage(1)).getTextContent();
-    const text=content.items.map(item=>item.str).join(' ');
+    const pdf=await task.promise,texts=[];
+    for(let page=1;page<=pdf.numPages;page++)texts.push((await (await pdf.getPage(page)).getTextContent()).items.map(item=>item.str).join(' '));
+    const text=texts.join(' ');
     assert.match(text,pattern,name);
     results.push({name,passes:result.passes,pages:pdf.numPages,durationMs:result.durationMs,text});
   }finally{await task.destroy();}
@@ -56,7 +57,45 @@ See Equation~\ref{eq:value}.
 \section{First heading}
 Some prose.`);
   await compile('table of contents',contents,2,/First heading[\s\S]*First heading/);
-  await compile('unchanged aux cannot suppress TOC regeneration',contents.replace('Some prose','Revised prose'),2,/First heading[\s\S]*First heading/);
+  await compile('stable TOC is reused',contents.replace('Some prose','Revised prose'),1,/First heading[\s\S]*First heading/);
+  const renamed=contents.replace('First heading','Renamed heading');
+  await compile('changed TOC is regenerated',renamed,2,/Renamed heading[\s\S]*Renamed heading/);
+  await compile('removed heading disappears from TOC',renamed.replace('\\section{Renamed heading}',''),2,/Contents\s+Some prose/);
+  await compile('restored heading reappears in TOC',contents,2,/First heading[\s\S]*First heading/);
+  await assert.rejects(engine.compile(contents.replace('Some prose','\\undefinedCommand')),/./);
+  await compile('failed edit preserves successful TOC',contents,1,/First heading[\s\S]*First heading/);
+
+  const linked=contents.replace('\\usepackage{amsmath}','\\usepackage{amsmath,hyperref}');
+  await compile('initial bookmarks',linked,2,/First heading[\s\S]*First heading/);
+  await compile('stable bookmarks and TOC',linked.replace('Some prose','Revised prose'),1,/Revised prose/);
+  await compile('renamed bookmarks and TOC',linked.replace('First heading','New bookmark'),2,/New bookmark[\s\S]*New bookmark/);
+
+  const included=document(String.raw`\include{chapters/one}
+See Section~\ref{child}.`);
+  const child=String.raw`\section{Child heading}\label{child} Child prose.`;
+  const project=data=>({files:[{path:'chapters/one.tex',data}]});
+  await compile('initial include reference',included,2,/See Section\s+1/,project(child));
+  await compile('included file edit reuses nested aux',included,1,/Revised prose[\s\S]*See Section\s+1/,project(child.replace('Child prose','Revised prose')));
+  await compile('removed child label cannot survive',included,2,/See Section\s+\?\?/,project(child.replace('\\label{child}','')));
+  await compile('restored child label resolves',included,2,/See Section\s+1/,project(child));
+  await compile('deleted include file cannot retain its labels',included,2,/See Section\s+\?\?/);
+  await compile('restored include file restores its labels',included,2,/See Section\s+1/,project(child));
+  await compile('removed include cannot retain child reference',included.replace('\\include{chapters/one}',''),2,/See Section\s+\?\?/);
+  await compile('root change invalidates aux',included,2,/See Section\s+1/,{...project(child),root:'other.tex'});
+  await compile('same root reuses aux',included,1,/See Section\s+1/,{...project(child),root:'other.tex'});
+
+  const lists=document(String.raw`\listoffigures\listoftables
+\begin{figure}\centering Figure body.\caption{Figure title}\end{figure}
+\begin{table}\centering Table body.\caption{Table title}\end{table}`);
+  await compile('initial figure and table lists',lists,2,/Figure title[\s\S]*Figure title/);
+  await compile('stable figure and table lists',lists,1,/Table title[\s\S]*Table title/);
+  await compile('changed figure and table lists',lists.replaceAll('title','revised'),2,/Figure revised[\s\S]*Figure revised/);
+
+  const custom=document(String.raw`\newwrite\custom\immediate\openout\custom=main.custom
+\immediate\write\custom{Stable custom output}\immediate\closeout\custom
+Custom prose.`);
+  await compile('unknown output stays conservative',custom,2,/Custom prose/);
+  await compile('unknown output still uses two passes',custom,2,/Custom prose/);
   assert.equal(engine.generation,generation,'full edits must reuse the loaded worker');
   await fs.writeFile(new URL('qa/full-preview.json',root),JSON.stringify({runtime:'actual WASM and PDF.js in Node; not browser latency',results},null,2));
   console.log(JSON.stringify(results,null,2));

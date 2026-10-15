@@ -1,0 +1,229 @@
+{
+  "runtime": "actual WASM and PDF.js in Node; not browser latency",
+  "results": [
+    {
+      "name": "initial math and references",
+      "passes": 2,
+      "pages": 1,
+      "durationMs": 1344.5156670000001,
+      "text": "Inline   x 2   = 81 .  1 2  +   √ 4 = 42 . y   = 10   (1) See Equation 1.  a   = 20 ,   (2)  b   = 30 .   (3) 1"
+    },
+    {
+      "name": "inline math edit",
+      "passes": 1,
+      "pages": 1,
+      "durationMs": 537.753708,
+      "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 42 . y   = 10   (1) See Equation 1.  a   = 20 ,   (2)  b   = 30 .   (3) 1"
+    },
+    {
+      "name": "display fraction and radical edit",
+      "passes": 1,
+      "pages": 1,
+      "durationMs": 556.8442500000001,
+      "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 43 . y   = 10   (1) See Equation 1.  a   = 20 ,   (2)  b   = 30 .   (3) 1"
+    },
+    {
+      "name": "numbered equation edit",
+      "passes": 1,
+      "pages": 1,
+      "durationMs": 538.9574170000001,
+      "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 43 . y   = 11   (1) See Equation 1.  a   = 20 ,   (2)  b   = 30 .   (3) 1"
+    },
+    {
+      "name": "align edit",
+      "passes": 1,
+      "pages": 1,
+      "durationMs": 540.270458,
+      "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 43 . y   = 11   (1) See Equation 1.  a   = 20 ,   (2)  b   = 31 .   (3) 1"
+    },
+    {
+      "name": "removed label cannot survive in cached aux",
+      "passes": 2,
+      "pages": 1,
+      "durationMs": 1035.2396660000004,
+      "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 43 . y   = 11   (1) See Equation   ?? .  a   = 20 ,   (2)  b   = 31 .   (3) 1"
+    },
+    {
+      "name": "restored label converges",
+      "passes": 2,
+      "pages": 1,
+      "durationMs": 1037.1894579999998,
+      "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 43 . y   = 11   (1) See Equation 1.  a   = 20 ,   (2)  b   = 31 .   (3) 1"
+    },
+    {
+      "name": "unfinished math recovery preserves last good aux",
+      "passes": 1,
+      "pages": 1,
+      "durationMs": 520.4684590000006,
+      "text": "Inline   x 2   = 83 .  1 2  +   √ 4 = 43 . y   = 11   (1) See Equation 1.  a   = 20 ,   (2)  b   = 31 .   (3) 1"
+    },
+    {
+      "name": "preamble changes invalidate cached aux",
+      "passes": 2,
+      "pages": 1,
+      "durationMs": 1132.2283339999994,
+      "text": "Inline   x 2   = 82 .  1 2  +   √ 4 = 43 . y   = 11   (1) See Equation 1.  a   = 20 ,   (2)  b   = 31 .   (3) 1"
+    },
+    {
+      "name": "table of contents",
+      "passes": 2,
+      "pages": 1,
+      "durationMs": 839.1416250000002,
+      "text": "Contents  1   First heading   1  1   First heading  Some prose. 1"
+    },
+    {
+      "name": "stable TOC is reused",
+      "passes": 1,
+      "pages": 1,
+      "durationMs": 424.60675000000083,
+      "text": "Contents  1   First heading   1  1   First heading  Revised prose. 1"
+    },
+    {
+      "name": "changed TOC is regenerated",
+      "passes": 2,
+      "pages": 1,
+      "durationMs": 851.0190419999999,
+      "text": "Contents  1   Renamed heading   1  1   Renamed heading  Some prose. 1"
+    },
+    {
+      "name": "removed heading disappears from TOC",
+      "passes": 2,
+      "pages": 1,
+      "durationMs": 828.2672920000005,
+      "text": "Contents  Some prose. 1"
+    },
+    {
+      "name": "restored heading reappears in TOC",
+      "passes": 2,
+      "pages": 1,
+      "durationMs": 831.0788339999999,
+      "text": "Contents  1   First heading   1  1   First heading  Some prose. 1"
+    },
+    {
+      "name": "failed edit preserves successful TOC",
+      "passes": 1,
+      "pages": 1,
+      "durationMs": 417.67912499999875,
+      "text": "Contents  1   First heading   1  1   First heading  Some prose. 1"
+    },
+    {
+      "name": "initial bookmarks",
+      "passes": 2,
+      "pages": 1,
+      "durationMs": 999.3900839999988,
+      "text": "Contents  1   First heading   1  1   First heading  Some prose. 1"
+    },
+    {
+      "name": "stable bookmarks and TOC",
+      "passes": 1,
+      "pages": 1,
+      "durationMs": 502.03341700000055,
+      "text": "Contents  1   First heading   1  1   First heading  Revised prose. 1"
+    },
+    {
+      "name": "renamed bookmarks and TOC",
+      "passes": 2,
+      "pages": 1,
+      "durationMs": 1050.1280829999996,
+      "text": "Contents  1   New bookmark   1  1   New bookmark  Some prose. 1"
+    },
+    {
+      "name": "initial include reference",
+      "passes": 2,
+      "pages": 2,
+      "durationMs": 892.4317499999997,
+      "text": "1   Child heading  Child prose. 1 See Section 1. 2"
+    },
+    {
+      "name": "included file edit reuses nested aux",
+      "passes": 1,
+      "pages": 2,
+      "durationMs": 425.3533750000006,
+      "text": "1   Child heading  Revised prose. 1 See Section 1. 2"
+    },
+    {
+      "name": "removed child label cannot survive",
+      "passes": 2,
+      "pages": 2,
+      "durationMs": 838.2997499999983,
+      "text": "1   Child heading  Child prose. 1 See Section   ?? . 2"
+    },
+    {
+      "name": "restored child label resolves",
+      "passes": 2,
+      "pages": 2,
+      "durationMs": 838.677083999999,
+      "text": "1   Child heading  Child prose. 1 See Section 1. 2"
+    },
+    {
+      "name": "deleted include file cannot retain its labels",
+      "passes": 2,
+      "pages": 1,
+      "durationMs": 851.3392500000009,
+      "text": "See Section   ?? . 1"
+    },
+    {
+      "name": "restored include file restores its labels",
+      "passes": 2,
+      "pages": 2,
+      "durationMs": 899.9857919999995,
+      "text": "1   Child heading  Child prose. 1 See Section 1. 2"
+    },
+    {
+      "name": "removed include cannot retain child reference",
+      "passes": 2,
+      "pages": 1,
+      "durationMs": 853.4639999999999,
+      "text": "See Section   ?? . 1"
+    },
+    {
+      "name": "root change invalidates aux",
+      "passes": 2,
+      "pages": 2,
+      "durationMs": 866.5855419999971,
+      "text": "1   Child heading  Child prose. 1 See Section 1. 2"
+    },
+    {
+      "name": "same root reuses aux",
+      "passes": 1,
+      "pages": 2,
+      "durationMs": 428.03895900000134,
+      "text": "1   Child heading  Child prose. 1 See Section 1. 2"
+    },
+    {
+      "name": "initial figure and table lists",
+      "passes": 2,
+      "pages": 1,
+      "durationMs": 852.3349579999995,
+      "text": "Figure body. Figure 1: Figure title Table body. Table 1: Table title  List of Figures  1   Figure title   . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .   1  List of Tables  1   Table title . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .   1 1"
+    },
+    {
+      "name": "stable figure and table lists",
+      "passes": 1,
+      "pages": 1,
+      "durationMs": 438.4385829999992,
+      "text": "Figure body. Figure 1: Figure title Table body. Table 1: Table title  List of Figures  1   Figure title   . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .   1  List of Tables  1   Table title . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .   1 1"
+    },
+    {
+      "name": "changed figure and table lists",
+      "passes": 2,
+      "pages": 1,
+      "durationMs": 888.3895840000005,
+      "text": "Figure body. Figure 1: Figure revised Table body. Table 1: Table revised  List of Figures  1   Figure revised . . . . . . . . . . . . . . . . . . . . . . . . . . . . .   1  List of Tables  1   Table revised   . . . . . . . . . . . . . . . . . . . . . . . . . . . . .   1 1"
+    },
+    {
+      "name": "unknown output stays conservative",
+      "passes": 2,
+      "pages": 1,
+      "durationMs": 824.3589170000014,
+      "text": "Custom prose. 1"
+    },
+    {
+      "name": "unknown output still uses two passes",
+      "passes": 2,
+      "pages": 1,
+      "durationMs": 822.6124999999993,
+      "text": "Custom prose. 1"
+    }
+  ]
+}
