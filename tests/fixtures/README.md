@@ -1,9 +1,9 @@
-# Offline TeX package fixture
+# Offline Test Fixtures
 
-`tex-packages.json.gz` is a gzip-compressed JSON array of `[BusyTeX cache filename, base64 bytes]` pairs. It contains nine unmodified microtype/booktabs files fetched from `https://texlive2026.texlyre.org` on 2026-10-12, including the Lua module stored as `51_microtype`. Other filenames start with format `26`.
+This directory contains TeX Live 2026 files used by the Node regression suites (`tests/worker-harness.cjs` and `tests/bibliography.mjs`) so that all automated tests run deterministically offline. These files are used only during testing and are excluded from production builds.
 
-These are the files used by the runtime and incremental regression documents with the shipped basic dataset. The Node worker harness registers them through BusyTeX's existing remote-file API because Node has no browser XMLHttpRequest. Tests therefore stay offline without requiring the recommended collection. The fixture is outside `public` and is not shipped to browsers. Actual browser cold-download and cache-reuse checks are recorded in the root `QA.md`.
+## Contents
 
-Original license and copyright headers are retained inside the files. Microtype and booktabs use the LaTeX Project Public License; upstream sources and complete distributions are available at <https://ctan.org/pkg/microtype> and <https://ctan.org/pkg/booktabs>.
-
-`plain.bst` is an unmodified copy of BibTeX's standard `plain` style (Howard Trickey and Oren Patashnik; unlimited copying of the unmodified file is permitted, see its header), fetched from the same endpoint as `7/plain.bst`. The bibliography regression passes it as a project file, because the offline Node harness has no remote lookup.
+- **`tex-packages.json.gz`**: Gzip-compressed JSON array of `[cacheFilename, base64Bytes]` pairs containing nine unmodified `microtype` and `booktabs` files from TeX Live 2026 (including the Lua module `51_microtype` and format `26` TeX input files). `tests/worker-harness.cjs` registers these entries via `kpse_remote_register`.
+  - License: LaTeX Project Public License (LPPL). Upstream sources: <https://ctan.org/pkg/microtype> and <https://ctan.org/pkg/booktabs>.
+- **`plain.bst`**: Unmodified copy of BibTeX's standard `plain` bibliography style (by Howard Trickey and Oren Patashnik, Kpathsea format `7/plain.bst`), used by `npm run test:bibliography`.

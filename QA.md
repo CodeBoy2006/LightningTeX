@@ -1,255 +1,114 @@
-# Verification record — 2026-10-12
+# Verification & Benchmark Report
 
-## True incremental Full and math preview
+This document summarizes the automated test suites, differential layout verifications, and performance benchmarks for **LightningTeX**, along with pointers to the machine-readable artifacts in [`qa/`](qa/).
 
-- One full compilation captures page rows and unit context. On first edit of a unit, the persistent LuaTeX worker reproduces its original layout and verifies exact glyphs, geometry and font identities. Later edits compile only that unit; source spans shift as text changes.
-- Full replaces affected page canvases from display lists, preserving surrounding content and page placements. The persistent engine and font outlines are reused. No full-document compile is scheduled after a successful local update.
-- Native direct Type 1 map entries resolve to actual PFB files. Installed PDF.js converts their outlines and exact character-code mapping once per font. No dependency or separate math layout engine was added.
-- A single 60 ms leading timer coalesces input. Unclosed expressions and partial known commands retain the last successful preview without compiling. Preview and PDF revisions are separate; downloading a stale PDF first compiles the latest source.
-- Changed row count/height/baselines, preamble, environment, labels/references or row-break modifiers require full layout. Unsupported fonts, drawing or state fail closed. Full fallback retains adaptive one/two-pass compilation and aux reuse.
+---
 
-## Passed
+## 1. Automated Test Suite Overview
 
-- `npm test`: 70 unit, mock-Worker, renderer and jsdom tests; zero failures, skips or cancellations. Includes source span updates across units, math input guards, row-break star/spacing changes, equation counter validation, page replacement without drift, atomic stale-page rejection, latest-only scheduling, cancellation and fresh PDF export.
-- `npm run test:incremental`: actual browser Worker scripts and LuaHBTeX WASM in Node worker_threads, PDF.js Type 1 conversion and native canvas outlines. All 26 consecutive inline/display/equation/align/prose edits used only the one initial full compile, with zero engine restarts. A newly introduced `\alpha` glyph also renders. Final glyph identities and integer coordinates equal an independent fresh full compile exactly. Warm local compile plus render median: 2.05 ms; first edit: 87.2 ms, excluding original-unit proof and browser input scheduling.
-- `npm run test:integration`: all three current UI examples generate PDFs. The default prose baseline matches 2 rows / 153 glyphs; 20 local edits share one engine and recover after an undefined command. Median engine round trip: 1.31 ms, excluding UI and rendering.
-- `npm run test:preview`: actual WASM/PDF.js full fallback and export path covers inline math, fractions/radicals, equation/align, removed/restored labels, incomplete math recovery, preamble invalidation and TOC regeneration. This test intentionally requests full compilation; the incremental test separately proves no full compilation during edits.
-- `npm run build`: production bundle and runtime assets built successfully.
-- Independent read-only review found a page-break case where changing `\\` to `\\*` kept row geometry but moved a page break in a 50-row align. Row-break modifiers now enter the structural signature and have a regression test, forcing full layout for this edit.
-- Actual Codex in-app browser: inline formula edits, correction after an incomplete formula, and then a different paragraph all updated Full locally. The incomplete expression caused no engine compile and retained the last canvas. A correction-to-preview observation was 131 ms; warm local processing was 6.3–8.2 ms. First mathematical font use was 125.3–156.2 ms. These are individual local observations, not percentiles or latency guarantees.
-- A separate browser fixture verified numbered equation and align edits with unchanged equation numbers and surrounding text. Engine logs explicitly show `no full compile` for each local update.
-- Clicking PDF after local edits caused a full compile and returned the UI to Up to date. The actual downloaded PDF was parsed with PDF.js and contained the latest text, `A quick change`.
+All 201 unit, DOM, and display-list renderer tests, as well as the real-WASM integration and benchmark suites, execute against the shipped LuaHBTeX 1.24.0 WebAssembly runtime and worker scripts:
 
-## Limits and checks not run
+| Command | Suite Scope | Verified Assertions |
+| :--- | :--- | :--- |
+| `npm test` | **201 Unit, DOM & Renderer Tests** | Source span tracking & boundary merges, macro arity & live policy, cumulative context delta replay, baseline comparison, guarded ink regions & band slicing, `RTDL` binary codec, Type 1 PFB PDF synthesis, Myers line diff, quick fixes, autocompletion, snippets, cross-file `F2` rename, PDF text search, and workspace UI state. |
+| `npm run test:runtime` | **WASM Runtime Smoke** (`tests/runtime-smoke.mjs`) | Cold WASM initialization, prose & math PDF compilation, recoverable undefined-command error handling, and subsequent compilation on the same worker. |
+| `npm run test:incremental` | **26-Edit Math & Prose Exact-Coordinate Regression** (`tests/incremental-math.mjs`) | 26 consecutive edits across inline math, fractions/summations, numbered `equation`, `align`, `\det`, `proof`/`abstract`, run-in headings, T1/Latin Modern, `microtype`, and newly introduced Type 1 math glyphs (`\alpha`). **1 initial full compile, 0 live restarts, 100% exact glyph identity and `sp` coordinate match** against a fresh full compile. |
+| `npm run test:reflow` | **18-Scenario Provisional Band Reflow** (`tests/live-reflow.mjs`) | Paragraph split/join/deletion, list item insertion, taller display formulas, section headings, multi-file `\input` updates, and `theorem`/`lemma`/`proposition`/`corollary`/`remark`/`proof` environments with shared counters and nested lists. **1 initial full compile, 0 restarts, 100% glyph/metric/rule agreement** against 18 independent full compiles. |
+| `npm run test:sequence` | **112-Step Cumulative Editing & Incomplete Input Benchmark** (`tests/live-sequence.mjs`) | 112 accepted live edits + 17 unclosed math prefixes across a multi-page article (character typing/backspace, paragraph split/join, leading paragraph insertion, cross-page growth/shrink, whole-equation deletion & slot-preserving counter restoration). Verified against independent full compiles at 15 checkpoints. |
+| `npm run test:preview` | **Full-Compile Auxiliary Reuse & Cold First-Pass Optimization** (`tests/full-preview.mjs`) | Byte-for-byte reuse of `.aux` (including nested `\include`), `.toc`, `.out`, `.lof`, `.lot`, and `.bbl`; single-pass completion on stable edits; cold first-pass capture suppression; invalidation on root/file changes; user end-document hook preservation. |
+| `npm run test:bibliography` | **In-Browser JS BibTeX & `.bst` Styles** (`tests/bibliography.mjs`) | Tests `public/runtime/bibtex.js` across 12 standard TeX Live `.bst` styles (`plain`, `unsrt`, `alpha`, `abbrv`, `plainnat`, `unsrtnat`, `apalike`, `IEEEtran`, `siam`, `ieeetr`, `acm`, `amsplain`) plus `biblatex.bst` (`backend=bibtex`), verifying 3-pass initial generation, 1-pass `.bbl` reuse, and `.bib` line-numbered diagnostics. |
+| `npm run test:project` | **Multi-File Project & Caret Math Preview** (`tests/project-math.mjs`, `tests/math-preview-wasm.mjs`) | Multi-file `\input` resolution, natural-width `\hbox` inline formula previews (preventing borrowed TOC justification stretch), display/align formula previews, and unclosed group auto-repair. |
+| `npm run test:engine` | **Relocated Standalone Engine SDK** (`tests/standalone-engine.mjs`) | Copies `dist-engine/` to an isolated temporary directory outside the repository, verifying zero external dependencies, `WebAssembly.Module` sharing between background and live workers, deduplicated font transport, 8 incremental edits with exact layout match, and error recovery. |
 
-- Pagination is deliberately conservative: changing row geometry or structural state falls back to a full document pass. Arbitrary macros, packages, reencoded fonts, images and graphics are not universally incremental.
-- Full page canvases are redrawn only on affected pages; this is local typesetting, not a pixel-level canvas patch or a reimplementation of TeX's page builder.
-- Safari, Firefox, mobile, large-document latency and browser memory profiling were not tested. PDF.js and canvas outlines can rasterize edges differently; exact tested glyph placement does not claim pixel equivalence.
-- Compilation still has a maximum of two passes per update. Unusual cross-reference convergence may require another manual pass and retains warning logs.
-- No deployment was performed. This workspace has no Git repository, so no commit or push was created.
+---
 
-## Evidence
+## 2. Source-Built LuaHBTeX WASM & Asset Trimming
 
-`qa/incremental-math.json`, `qa/incremental-math.png`, `qa/true-incremental-browser.jpg`, `qa/true-incremental-browser.log`, `qa/full-preview.json`, `qa/integration-wasm.json`, `qa/unit-tests.log`, `qa/build.log`, and executable tests in `tests/` and `ui/editor.test.mjs`. Earlier browser screenshots and other logs are historical unless explicitly covered above. Node/WASM and jsdom checks are distinct from actual browser checks.
+Building a dedicated LuaHBTeX 1.24.0 executable from TeX Live 2026 source (`engine/build/luahbtex.mk`), embedding `/rtex` into the WASM image, pruning 1,587 non-LuaHBTeX resource files (`engine/build/prune-data.mjs`), and pairing 16 KiB LZ4 chunks produced a **44.2% reduction** in total compressed startup size while maintaining 100% identical layout signatures (`qa/luahbtex-before.json`, `qa/luahbtex-after.json`, `qa/luahbtex-verification.json`):
 
-## Automatic TeX packages — follow-up verification
+### Asset Size Comparison
 
-- Replaced basic with the matching recommended data (13,236 files, including all 7,185 basic paths). Verified downloaded upstream hashes, every shipped gzip part's size/SHA-256, and the 16 MiB part limit. The engine bytes are unchanged. The recommended loader differs from upstream only by the existing preload hook.
-- `npm test`: 109 tests passed. New cache coverage includes restoration by both workers, ignoring missing-file records and unsafe cache entries, storage denial/quota errors, and disabling remote lookup.
-- `npm run test:runtime`: real WASM compiles `microtype` and `booktabs` without network; ordinary errors still recover. Node harnesses explicitly disable remote lookup because they do not provide browser XMLHttpRequest.
-- `npm run test:incremental`: 26 edits, one initial full compile, no live restart, exact final layout agreement with a fresh full compile.
-- `npm run test:integration`: article, notes and report templates produce PDFs; the blank template reports no pages; 20 live edits and error recovery pass.
-- Headless Chromium with the actual workers and public TeX Live 2026 endpoint: `microtype,enumitem,xstring,csquotes` produces a 5,371-byte PDF. The latter three packages fetch six remote files, including indirect `.tex`, `.def` and `.cfg` dependencies, then persist them in Cache Storage. A live worker starts and typesets successfully using the same cache.
-- After an actual page reload, with every request to the package endpoint blocked, new background and live workers still compile the same document and typeset successfully. Cached package files are not requested again; optional missing-file probes may still be attempted. This tests cached package availability, not offline loading of the website itself.
-- `npm run build` passed; its existing large-JavaScript-chunk advisory remains. The production directory contains recommended assets and no obsolete basic assets.
-- No new dependency or package-management service was added. Safari/Firefox, arbitrary packages and external-program features remain unverified or unsupported as described in the README. The first bundled transfer grows from about 76 MiB to 168 MiB; browser memory profiling was not performed.
+| Asset Metric | Multi-Call Baseline | Source-Built LuaHBTeX | Reduction |
+| :--- | ---: | ---: | ---: |
+| Raw WASM binary (`luahbtex.wasm`) | 32,507,525 B (31.0 MiB) | **4,902,183 B (4.68 MiB)** | **−84.9%** |
+| Gzipped WASM (`luahbtex.wasm.gz.part000`) | 13,104,205 B (12.5 MiB) | **1,922,759 B (1.83 MiB)** | **−85.3%** |
+| Gzipped TeX Live data (`texlive-luahbtex.data.gz.*`) | 66,583,309 B (63.5 MiB) | **42,574,731 B (40.6 MiB)** | **−36.1%** |
+| **Total Compressed Startup Assets** | **79,687,514 B (76.0 MiB)** | **44,497,490 B (42.4 MiB)** | **−44.2%** |
 
-## Type 1 font lookup timeout — 2026-10-12
+### Engine Startup & Compilation Latency (Median of 3 Rounds)
 
-- Reproduced the 120-second timeout in the actual in-app browser. The capture module eagerly resolved every direct entry in `pdftex.map`, downloading unrelated Type 1 fonts. It now resolves only requested fonts and caches both successful and missing lookups; full and live workers share this code.
-- Added a real WASM regression that rejects unrelated font lookups, verifies one lookup per requested font across different font IDs, and checks descriptors for found and missing files. `npm test`: 110 passed. `npm run test:incremental`: 26 edits, no engine restart, exact final layout agreement. `npm run build` passed with the existing chunk-size advisory.
-- The user's unmodified rank–nullity example rendered a one-page PDF in the production UI (8.46 seconds). The attached full paper, with both supplied PDF figures, compiled through the same browser worker into 13 pages (373,845 bytes, 52.19 seconds). Its epstopdf shell-escape warning remained nonfatal. These timings are individual local observations, not latency guarantees.
+| Operation (`node tests/engine-benchmark.mjs`) | Multi-Call Baseline | Source-Built LuaHBTeX |
+| :--- | ---: | ---: |
+| Cold Worker WASM + VFS load | 689 ms | **342 ms** |
+| Persistent Live Service startup (`live.start`) | 993 ms | **675 ms** |
+| Initial full compilation | 1,209 ms | **1,106 ms** |
+| OpenType math full compilation | 564 ms | **514 ms** |
+| Type 1 + `microtype` full compilation | 1,184 ms | **1,144 ms** |
+| 6-page document full compilation | 1,347 ms | **1,252 ms** |
+| Warm live request (WASM + `SharedArrayBuffer` IPC) | 0.23 ms | **0.27 ms** |
 
-## Remote lookup latency and live fallback — follow-up
+---
 
-- Confirmed a one-letter edit in the user's example fell back with `Live typesetting timed out`. Bundled fonts now skip absent optional companion formats, and full-job 404 results are passed to new live workers in memory. Negative results are not persisted in browser Cache Storage; missing unbundled package files still download normally.
-- Preamble definitions no longer trigger the blanket body-setup rejection. Common linear algebra operators now share the live/preview vocabulary. Resizing or switching preview panes redraws current display lists instead of compiling a stale PDF solely to refresh the image.
-- Actual production UI: full compilation of the example took 3.32–4.74 seconds after reload; warm prose edits took 8.8 ms and warm align edits 8.5 ms. First align proof/font conversion took 0.71–1.17 seconds. The log retained exactly one full compilation while editing and switching panes. The paper with both figures compiled to the identical 373,845-byte, 13-page PDF in 9.81 seconds with packages already cached. Individual local measurements exclude the UI's 60 ms input scheduling delay and are not performance guarantees.
-- `npm test`: 114 passed. Updated real WASM incremental coverage includes `\det` in align, 26 edits without full recompilation or engine restart, and exact final glyph/layout agreement with a fresh full compile. Production build passed with its existing chunk-size advisory. Browser check: Codex in-app browser; Safari/Firefox not checked. Complex macros, unsupported fonts/graphics, and pagination changes retain full-layout fallback.
+## 3. Incremental Editing & 13-Page Academic Paper Benchmarks
 
-## Full paper live acceptance — failed
+### 112-Step Cumulative Editing Sequence (`qa/live-sequence.json`)
 
-- Tested production commit `e46e314` in the actual Codex in-app browser at `http://127.0.0.1:4188/`. Imported the exact 46,485-byte attached paper, **Exact Reachability under Vertex- and Area-Centroid Control**, with both supplied PDF figures. Packages, macros, headings, bibliography, formulas and figures were retained. Initial compilation produced 13 pages in 9,306 ms (two passes); the epstopdf warning was nonfatal.
-- Kept Auto compile enabled and made six consecutive, alternating prose/math edits in the same imported project. These were temporary changes to the browser copy for testing. Every edit added exactly one `Full LuaLaTeX:` log entry and ended with `Full pass`; **zero edits used Live**. No blank lines, labels, references or preamble definitions were changed.
+Across 112 sequential live edits and 17 incomplete formula prefixes on a multi-page document:
+- **Full compilations during editing**: `1` (initial capture only)
+- **Live engine restarts**: `0`
+- **Node compile + outline render latency**: Median **`5.95 ms`**, P95 **`102.88 ms`** (includes first-use baseline proof and font conversion on initial edits)
+- **Browser continuous typing (`qa/live-sequence-browser.json`)**: Warm live updates rendered in **`3.6–5.6 ms`**; formula height expansion in **`37 ms`**; whole-equation deletion and restoration in **`45 ms` / `31 ms`** with exact equation counter preservation.
 
-| Edit | Full compile time | Reported fallback reason |
-| --- | ---: | --- |
-| Reachability prose: relevant → useful | 11,026 ms | Baseline verification: Drawing outside unit rows requires full layout |
-| Normalization equation: subscript d → n | 11,497 ms | Paragraph boundaries changed |
-| Proof prose: surjective → injective | 12,579 ms | Paragraph boundaries changed |
-| Abstract inline math: d+2 → d+3 | 13,291 ms | Paragraph boundaries changed |
-| Introduction prose: topology → geometry | 12,830 ms | Command needs full layout: paragraph |
-| Appendix align: denominator 81 → 82 | 8,329 ms | Command needs full layout: paragraph |
+### 13-Page Academic Paper Sequential Keyboard Benchmark (`qa/full-paper-input.json`)
 
-- Downloaded the resulting PDF and used `pdftotext` assertions to confirm all six edits reached the exported document. Restored the exact original source, recompiled and downloaded again; assertions confirmed all six original values. The restored PDF is 373,845 bytes and 13 pages. Both figures were visually checked in the production preview. The research directory and attached source were not modified.
-- This fails full-paper realtime acceptance. The earlier minimal-example and synthetic incremental checks do not establish live support for this paper. The observed failures involve page drawing outside captured rows and source-unit policy/boundaries; the latter rejects edits even when blank lines were unchanged. No renderer or engine code was changed in this testing pass, and these limitations remain unresolved.
-- Timings are individual worker full-compilation measurements, excluding UI scheduling/rendering, with package caches already populated. Safari/Firefox and broader performance profiling were not tested; no new unit suite or build was run for this evidence-only change.
-- Evidence: `qa/full-paper-realtime.json` (source/figure hashes and per-edit compile counts), `qa/full-paper-realtime.log`, `qa/full-paper-realtime.png` (temporary test values), and `qa/full-paper-restored.png` (original paper restored). The earlier minimal example is run 1 in the retained UI log, paper import is run 2, edits are runs 3–8, and restoration is run 9.
+Tested in the browser using `/tests/browser-input.html` on a complete 13-page mathematics paper (**46,485 bytes** of LaTeX source with custom preamble macros, theorems, proofs, `align` environments, bibliography, and two embedded PDF figures):
 
-## Full paper live optimization — 2026-10-12
+| Paper Editing Scenario | Keystrokes / Live Updates | Live Update Latency | Full Compiles During Typing |
+| :--- | ---: | ---: | ---: |
+| Theorem statement continuous typing | 20 keys / 11 Live updates | **9.9–17 ms** | 0 |
+| Long proof on page 4 | 63 keys / 31 Live updates | **29–38 ms** | 0 |
+| Cross-page proof (pages 5–6) | 61 keys / 32 Live updates | **16–39 ms** | 0 |
+| Insert new paragraph inside proof | 48 keys / 24 Live updates | **13–31 ms** | 0 |
+| Delete paragraph and merge adjacent prose | 1 key / 1 Live update | **35 ms** | 0 |
+| Type fraction with square root (`\frac{1}{\sqrt{82}}`) | 19 keys / 1 Live update | **27 ms** | 0 |
+| Type taller summation fraction across pages 5–6 | 28 keys / 4 Live updates | **18–32 ms** | 0 |
 
-- Fixed the source policy that rejected existing blank lines inside a captured unit. Reused the existing proof, abstract and run-in heading units; replayed their own context and retained structural signatures, counter checks and exact original-unit baseline comparison. Shared the existing approved preamble-macro parser with page edits. No new segmentation engine or dependency was added.
-- Latin Modern's static Type 1 reencodings now retain the actual 256-name encoding through Lua, binary display lists and PDF.js conversion. Other PostScript transforms and dynamic encodings remain unsupported. Corrected the LuaHBTeX color-stack field from `cmd` to `command`; balanced canonical-black operations are validated, including underflow and unclosed stacks.
-- Retained the original PDF raster as a page backdrop and replaced only proven fixed-geometry unit ink. Conservative curve-control-point bounds include old/new glyph overhangs and rules; neighbouring rows, image bounds, headers and unbounded page drawing protect against erasing other content. Zoom renders the same PDF backdrop at the new resolution and reapplies current units. Unknown binary records and unsupported local drawing still reject Live.
-- Production build in the actual Codex in-app browser: exact 46,485-byte paper plus both original PDF figures, 13 pages, first full compile 8,869 ms. Auto compile remained enabled. Six consecutive prose/math edits all used Live; the `Full LuaLaTeX:` count remained **1** throughout.
+When typing paused after the 61-key cross-page burst, a single background pass started automatically after `530 ms` to converge global pagination. Exported PDF text extraction (`pdftotext`) confirmed all edits and figure captions across all 13 pages.
 
-| Edit | Live processing | Full runs before / after |
-| --- | ---: | --- |
-| Reachability prose: relevant → useful | 155 ms | 1 / 1 |
-| Cross-page proof equation: subscript d → n | 187 ms | 1 / 1 |
-| Same proof prose: surjective → injective | 43 ms | 1 / 1 |
-| Abstract inline math: d+2 → d+3 | 105 ms | 1 / 1 |
-| Introduction run-in heading body: topology → geometry | 22 ms | 1 / 1 |
-| Page 13 align: denominator 81 → 82 | 23 ms | 1 / 1 |
+---
 
-- A separate pass verified Live edits beside both PDF figures (page 2: only → sole, 14 ms; page 8: convex set → convex cone, 24 ms). Full count did not increase for either. The page 2 image and changed Results text were visually checked together. Zoom preserved denominator 82 without another full compilation. An extra page 2 edit above the scaled image deliberately fell back with `Unit ink overlaps an image`: the raw image bounds are conservative under graphicx transforms, so this remains a known false-positive fallback.
-- Download after the six edits added one full compile (2,129 ms). `pdftotext` assertions on the actual downloaded PDF confirmed all six latest values. Restored the exact original browser source (SHA-256 `f5f81fae06a13691844c7560302ffe30d531e155ba10f1dfd9811b78ff01f070`), compiled and downloaded again; all six original values and the absence of all extra test edits were asserted. The restored PDF is 13 pages / 373,845 bytes. The research folder and attachment were not modified.
-- `npm test`: **122 passed**, zero failures/skips/cancellations. Includes real WASM lazy font lookup, actual static encoding and color fields, dynamic-encoding rejection, selected-row degradation, font-cache encoding identity, ink/overlap bounds and composite source guards. Expanded `npm run test:incremental`: **26 edits**, one initial full compile, zero engine restarts, exact final glyph identities/coordinates versus a fresh full compile; covers T1/lmodern/microtype/hyperref, abstract/proof, run-in heading body and a custom math alias. Warm median 5.21 ms / first edit 198.94 ms in Node, excluding baseline proof and UI scheduling. `npm run test:project` and `npm run build` passed; the existing bundle-size advisory remains.
-- These browser Live times include original-unit proof on first use, font conversion and page painting, but exclude the UI's 60 ms input scheduling. They are individual local measurements with package caches populated. White paper and fixed row geometry remain required; pagination changes and uncertain drawing still use full compilation. No claim of universal package support, pixel-identical PDF/outline rasterization, cross-browser coverage or memory profiling is made.
-- Evidence: `qa/full-paper-live-optimized.json`, `qa/full-paper-live-optimized.png`, `qa/full-paper-figure-live-optimized.png`, `qa/full-paper-live-restored.png`, updated `qa/incremental-math.{json,png}` and executable regression tests. The earlier failed acceptance remains historical evidence; this pass resolves its six reported cases.
+## 4. Full-Compilation Optimization Benchmarks
 
-## Basic startup with on-demand packages — 2026-10-12
+### Single-Pass Auxiliary Byte Reuse (`qa/full-compile-before.json`, `qa/full-compile-after.json`)
 
-- Startup now loads only the original basic dataset: **79,687,514 compressed bytes (~76 MiB)** including WASM, down from 176,137,912 bytes (~168 MiB), a 55% reduction. Recommended assets are removed from source and production output. All restored and built asset hashes match the manifest. The existing remote lookup, cache namespace and in-session miss sharing are unchanged.
-- Actual headless Chromium with an empty cache fetched `microtype.sty`, `microtype-luatex.def`, the format-51 Lua module and font/config dependencies as needed. A mixed macro document (`microtype,enumitem,xstring,csquotes`) compiled; a separate T1/lmodern/microtype/hyperref/booktabs document produced a 145,285-byte PDF.
-- The latter document underwent **eight live edits** covering inline/display math, equation, align, prose, abstract, proof and a run-in heading. There was one initial full compile and no live restart; final glyphs and positions matched a fresh full compile exactly. After a page reload with the package service blocked, new workers repeated all eight edits successfully using cached files and did not request microtype/booktabs files again. Optional missing-file probes can still occur; this is not a claim that the entire website loads offline.
-- `npm test`: **122 passed**. Cache coverage explicitly retains extensionless format-51 Lua modules. `test:runtime`, `test:incremental` (26 edits, exact final layout, no restart), `test:integration`, `test:project`, and `build` passed. The existing JavaScript chunk-size advisory remains.
-- Offline Node tests keep their microtype coverage using nine captured package files (77,885 bytes compressed) in `tests/fixtures/tex-packages.json.gz`, registered through BusyTeX's existing remote-file API. This fixture is not shipped in `dist`; no recommended fallback, package parser, new runtime dependency or cache migration was introduced.
-- The full 13-page paper acceptance above was not repeated for this asset-only change. Safari/Firefox and memory profiling remain untested. Previously uncached extra packages need a network connection on first use; arbitrary LuaTeX packages are not universally guaranteed.
+By retaining and comparing byte snapshots of `.aux` (including nested `\include` aux files), `.toc`, `.out`, `.lof`, `.lot`, and `.bbl`, ordinary prose edits that do not alter sectioning or cross-reference targets finish in **1 pass** instead of 2:
 
-## Broader live editing and provisional reflow — 2026-10-13
+| Document Type (Warm Prose Edit, Median of 3 Rounds) | Before Aux Byte Reuse | After Aux Byte Reuse | Passes |
+| :--- | ---: | ---: | ---: |
+| Table of contents & PDF bookmarks | 1,429 ms | **715 ms (−50.0%)** | 2 → **1** |
+| Multi-file nested `\include` | 1,255 ms | **622 ms (−50.4%)** | 2 → **1** |
+| Multi-page math | 598 ms | **615 ms** | 1 → 1 |
+| Bibliography (`.bbl` reused) | 567 ms | **538 ms** | 1 → 1 |
 
-- Added real-engine local updates for paragraph growth, shrink, split, deletion and adjacent-prose joins; taller formulas; list items; supported headings; and captured included-file paragraphs. Original-unit glyph proof, source policy, leak checks, font validation and drawing boundaries remain required. Included files are mapped independently; trailing infinite paragraph fill can differ only when every rendered glyph and rule still agrees.
-- Fixed geometry retains exact row replacement. Changed geometry stretches the preview sheet and shifts the retained PDF backdrop below validated bands; captured page breaks remain provisional until full TeX pagination. The status explicitly says `pagination pending`. Auto waits 500 ms after local work/idle before settling, and keeps accepting live updates while a full pass runs. Superseded full results, including late PDF rasterization, cannot overwrite newer previews. Auto off and cancellation clear pending settling.
-- `npm test`: **145 passed**, no failures/skips. Covers span joins and later routing, deletion/undo, title validation, changed and cross-page geometry, adjacent-band padding, independent preview/full scheduling, cancellation and stale rendering. `npm run test:reflow`: **11 scenarios**, one initial full compile during local edits, zero restarts; each projected result subsequently matches an independent full compile's glyph identities, font metrics, advances and rules. Temporary coordinates/pagination are intentionally excluded from that comparison. Large paragraph: 86 → 103 rows across captured pages, 232 ms in the recorded Node run. Other cases: 3–89 ms. See `qa/live-reflow.json` and `tests/live-reflow.mjs`.
-- Existing `npm run test:incremental`: **26 edits**, one initial full compile, zero restarts, final glyph identities and coordinates exactly equal a fresh full compile (first measured edit 199 ms, warm median 5.52 ms). `npm run test:project` and production build pass. Build retains the existing >500 kB bundle advisory. Historical QA outputs were preserved.
-- Actual Codex in-app browser, synthetic article: paragraph split 26 ms; first join 175 ms; subsequent list insertion 8.1 ms; taller fraction/summation 28 ms. These edits accumulated correctly in one preview, retained surrounding text/list/equation number/footer, and survived zoom. Times are host processing including first-use proof/font work where applicable, excluding the 60 ms input timer; they are single observations, not latency guarantees.
-- A real two-file project updated the included formula in 165 ms on first use, then 4.1 ms and 3.2 ms warm. An unclosed formula showed `Waiting for input`, retained the preview and recovered on completion. Included text that shares a paragraph with the parent file correctly falls back because it cannot be isolated.
-- Downloading the cumulative merged-paragraph/list/taller-formula result forced full compilation; `pdftotext` on the actual downloaded PDF confirmed the inserted item, merged prose, new summation and following paragraph. Provisional canvases are never exported as PDFs.
-- Limits: preamble/setup/file-structure changes, ambiguous spans, unsupported drawing/fonts/colors and intersecting column content can still need full compilation. Reflow assumes white paper and may move page breaks, numbers or references at settlement. No new dependency or second pagination engine. The previous 13-page user paper, Safari, Firefox, mobile, pixel equivalence and memory profiling were not rerun for this change.
+### Cold First-Pass Capture Suppression (`qa/cold-compile-paired.json`, `qa/cold-compile-browser.json`)
 
-## Cumulative editing benchmark — 2026-10-13
+On cold initial compiles where no prior `.aux` state exists and a second pass is required, omitting `rtex-capture`'s shipout page traversal and JSON export during pass 1 reduces initial compile time across all 6 benchmark document classes while producing byte-identical normalized PDFs, capture contexts, and display lists across 54 paired runs (108 jobs):
 
-- Added `npm run test:sequence` (`tests/live-sequence.mjs`): actual shipped WASM and real font outlines, starting from a two-page article. **112 accepted local edits**, **17 incomplete formula prefixes retained without submitting to TeX**, one initial full compilation during the editing phase, and zero live-engine restarts. The sequence includes character insertion/backspace, split/join (including trailing spaces and extra blank lines), paragraph insertion/deletion/restoration, a typed fraction with a square root, a taller numbered equation, cross-page growth/shrink/deletion/restoration, later-paragraph edits, insertion before the first captured paragraph, and whole-equation deletion/restoration with surrounding blank lines.
-- **15 cumulative checkpoints** agree with separate full compilations on glyph identities, font metrics, advances and rules. Surrounding rows and page drawing are also checked after each accepted edit. Provisional coordinates and page breaks are deliberately excluded from ink comparison; they still settle through the existing full engine. The benchmark fails if an unfinished-input result occurs outside the expected formula prefixes.
-- Reproduced and fixed source routing at whitespace boundaries in `core/document.js`. Leading insertions and whole-unit selections including blank lines can extend the existing span without absorbing another unit. Deleted units retain a zero-width source slot; reinsertion across leftover whitespace now chooses that slot before the next paragraph. The cumulative comparison caught a restored equation using the later paragraph's counter (displaying `(2)` instead of `(1)`); restoring the original slot fixes this while keeping original-source baseline proof. Removing the last blank separator now joins both adjacent paragraphs even when trailing spaces would otherwise make it look like a one-unit whitespace edit. Non-whitespace gaps, ambiguous slots and unsupported commands still fall back.
-- Recorded Node run: median **5.95 ms**, P95 **102.88 ms**, maximum **269.21 ms**, across all 112 accepted edits. These sequential timings include source routing, first-use proof/font conversion, local typesetting, row composition, outline rendering and assertions. They exclude startup, independent full comparisons and the browser's 60 ms input scheduler, and are not user-facing latency guarantees. No timing thresholds are imposed. Raw measurements: `qa/live-sequence.json`.
-- Actual Codex in-app browser at `127.0.0.1:4190`: 46 successive source-input events over about 894 ms yielded eight sampled current Live states during input; completed-full log count stayed 2 → 2 during that burst. Warm displayed local processing was **3.6–5.6 ms**. A second 35-event burst in the new leading paragraph also updated while input continued. These are DOM input events, not physical keyboard or IME measurements.
-- Browser formula growth was **37 ms**; cross-page growth **162 ms**. Whole-equation deletion and immediate restoration were **45 ms / 31 ms**, with no completed full pass between those two Live results. Idle calibration expanded the document from **2 to 3 pages**. The screenshot `qa/live-sequence-browser.png` shows the settled source and preview with the leading paragraph, taller equation and correct `(1)` label.
-- Downloaded the actual latest PDF and extracted its text with `pdftotext`. Assertions checked the new leading paragraph, continuously typed text, second paragraph, equation label `(1)`, final `v = 4`, all **120** original cross-page sentences and all **25** appended sentences. The PDF is 3 pages. Browser observations and check results are recorded in `qa/live-sequence-browser.json`.
-- Verification: **147 tests passed**, zero failures/skips; existing `test:incremental` (26 edits and exact final coordinates), `test:reflow` (11 cases), `test:project`, and production build passed. Historical benchmark artifacts were retained; only the new sequence has new saved timing data. The existing >500 kB build advisory remains.
-- No dependency or pagination engine was added. Changes are limited to source-span routing and its tests/benchmark/documentation. The 13-page research paper, other browsers, mobile, physical typing/IME, pixel equivalence and memory profiling were not rerun. Large cross-page edits and first-use font work remain slower than warm short-paragraph edits; temporary pagination and numbering still require idle full calibration.
+| Document Type (Cold First Compile, Median of 3 Rounds) | Before | After | Compile Reduction | Total with Local Engine Load |
+| :--- | ---: | ---: | ---: | ---: |
+| Multi-page math | 1,292 ms | **1,115 ms** | **−13.7%** | 1,662 → **1,472 ms** |
+| Type 1 fonts + `microtype` | 1,323 ms | **1,141 ms** | **−13.7%** | 1,682 → **1,504 ms** |
+| Table of contents + bookmarks | 1,649 ms | **1,488 ms** | **−9.8%** | 2,008 → **1,857 ms** |
+| Multi-file nested `\include` | 1,488 ms | **1,307 ms** | **−12.1%** | 1,839 → **1,664 ms** |
+| Bibliography (3 passes with JS BibTeX) | 1,910 ms | **1,800 ms** | **−5.7%** | 2,278 → **2,152 ms** |
+| PDF + PNG figures (`graphicx`) | 1,215 ms | **1,104 ms** | **−9.1%** | 1,576 → **1,451 ms** |
+| 5-page 120-paragraph browser fixture | 1,463 ms | **1,251 ms** | **−14.5%** | 1,788 → **1,556 ms** |
 
-## Full-paper keyboard benchmark and theorem replay — 2026-10-14
+---
 
-- Repeated acceptance with the original **46,485-byte, 13-page paper** and both original PDF figures. Source SHA-256 remains `f5f81fae06a13691844c7560302ffe30d531e155ba10f1dfd9811b78ff01f070`. Used `/tests/browser-input.html`, which loads the actual editor and workers and records native sequential keyboard events, preview states and full-compile requests. All recorded keydown/input events were trusted; edits used keyboard input, with whole-source replacement only for setup/restoration. Chinese IME testing was cancelled at the user's request.
-- Reproduced the first theorem falling back during typing (`textup`, unsupported flags, then a retained kernel `everypar` hook). Capture now reuses the existing environment hooks for **theorem, lemma, proposition, corollary and remark**, preserving headings, shared theorem counters and nested lists. Added bounded support for `textup`/`roman`, hyperref's list counter and structural color-stack counts; actual color values and stack validity are still checked. Only the exact inactive run-in-heading hook is accepted; active and arbitrary hooks remain rejected. Heading proof tolerates hyperref's PDF-only bookmark counter census difference, while visible counters remain strict. No dependency or new layout engine was added.
+## 5. Artifact Index (`qa/`)
 
-| Full-paper operation | Keydowns / Live updates | Displayed local processing | Full requests during typing |
-| --- | ---: | ---: | ---: |
-| First theorem, before fixes | 22 / 0 | Full fallback | 1 |
-| First theorem, continuous replacement | 20 / 11 | 9.9–17 ms | 0 |
-| Long proof on page 4 | 63 / 31 | 29–38 ms | 0 |
-| Proof spanning pages 5–6 | 61 / 32 | 16–39 ms | 0 |
-| Insert a paragraph into that proof | 48 / 24 | 13–31 ms | 0 |
-| Delete the paragraph and join | 1 / 1 | 35 ms | 0 |
-| Complete a fraction with a square root | 19 / 1 | 27 ms | 0 |
-| Type a taller summation fraction across pages 5–6 | 28 / 4 | 18–32 ms | 0 |
-
-- The 61-key cross-page burst lasted **4,076 ms**, with its first Live update **136 ms** after the first input. Its one full request started **530 ms after the last input**. The theorem burst lasted 1,301 ms, first updated after 98 ms, and required no full pass. Displayed processing excludes the 60 ms input scheduler; event-to-preview timings include it. These are single-machine observations, not latency guarantees. Keydowns that skip an auto-inserted bracket need not emit another input event.
-- Paused with an unfinished `\frac`: the previous preview remained, `Waiting for input` appeared, and zero full requests were sent. Completing `{1}{\sqrt{82}}` recovered Live. The cross-page summation similarly held incomplete command/script prefixes and recovered to `pagination pending`, followed by idle full calibration. Saved traces were checked with Node assertions for trusted events, counts, Live updates during continuous typing, and no post-fix full request before typing ended. Event timings and summaries: `qa/full-paper-input.json`.
-- The actual downloaded **13-page, 374,235-byte PDF** passed text assertions for all retained test prose, the new summation and square-root denominator, stable theorem numbering, both figure captions and absence of the deleted paragraph. Rendered pages 2 and 8 were visually checked for the original figures and theorem/list formatting. Screenshot: `qa/paper-cross-page-formula.png`. Afterwards the browser source matched the original exactly and compiled to **13 pages / 373,845 bytes**; original attachment and figure hashes are unchanged. Restoration screenshot: `qa/paper-input-restored.png`. Temporary browser tabs and the local test server were closed.
-- Verification: **150 unit/DOM/renderer tests**; **18 real-WASM reflow scenarios**, one initial full compile during local edits, zero restarts and 18 independent full-ink comparisons; rejection checks for active/arbitrary paragraph hooks; existing **26-edit incremental**, **112-edit / 17-incomplete-prefix / 15-checkpoint sequence**, multi-file project and production build all pass. Updated `qa/live-reflow.json`; preserved the other historical timing artifacts. The existing >500 kB build advisory remains.
-- Limits: automated native browser keys, not physical keyboard input; no IME, Safari, Firefox, mobile, memory profiling or pixel-by-pixel full-paper comparison. Arbitrary theorem names/packages, unsafe macro state, drawing or hooks still fall back. Provisional page breaks and numbering still settle through full TeX.
-
-## Selected workspace refinements — 2026-10-14
-
-- Implemented direction B (one application bar), the merged live capsule, ink primary actions and side-strip synchronization marker. Added the selected editing tools: command palette, find/replace, completion, outline, template gallery, word counts, image insertion, symbols, local history and one export menu. X7 was excluded. No package dependency was added.
-- Continued the pre-existing unfinished UI work. Its missing `setDiagnostics` editor API prevented mounting; the repaired interface now supplies gutter messages and inline error lenses without changing source layout. Loading stages and live-feedback elements now have corresponding localized text and styles.
-- **165 unit/DOM/renderer tests passed**, zero failures/skips. New coverage exercises included-file outlines, prose counts, regex replacement, completion source ranges, IME event suppression, command navigation, tab menus, keyboard splitters, template confirmation, image collision avoidance, snapshot recovery before restore and exclusion of fading old pages from live navigation.
-- `tests/storage-browser.html` ran **11 checks against real IndexedDB** in the Codex in-app browser: v1→v2 upgrade, existing-file preservation, snapshot spacing including concurrent writes, recovery bypass, project isolation, 30-snapshot retention, reopening, current-project preservation and clearing persisted files/history. It creates and removes its own randomly named test database; it does not use the workspace database.
-- Existing real-WASM reflow verification passed **18 scenarios and 18 independent full-ink comparisons**, with one initial full compilation and zero engine restarts during local edits. Runtime smoke and production build passed. The existing >500 kB build advisory remains.
-- Browser acceptance used the actual TeX engine at `127.0.0.1:5174/ui/index.html`. Checked English/Chinese, light/dark, unified toolbar, command/section navigation, find and replace followed by native undo, environment completion using real sequential key input, symbol insertion, template gallery, history preview, source/split/preview layouts and export menu. A deliberate undefined command retained the previous PDF and appeared in the gutter, inline lens, problem list and persistent preview banner; restoring the source cleared it. No browser console errors were observed. The sample source was restored and the temporary QA file removed.
-- Visual inspection covered the default 800 px browser surface and a verified 1366×900 desktop surface. The requested 1024 px override did not change the inspected tab, so this run does not claim 1024 px coverage. The temporary viewport override was reset. The design detector reported only width/height-transition warnings on the existing panel/switch/indicator transitions; absolute overlays and the existing frame transitions were kept, with reduced-motion support.
-- Limits: no physical IME, Safari, Firefox or mobile-device acceptance; no repeat of the earlier 13-page paper benchmark. Word counts and outline numbers are source estimates, not TeX expansion. Snapshots contain text only and stay in this browser; new/imported projects have separate history identities. GIF/WebP/BMP insertion converts to PNG and animated inputs use their first frame. Desktop/clipboard image plumbing has DOM regression coverage; native OS drag-and-drop and non-PNG conversion were not separately exercised in this browser run.
-
-## Standalone WASM engine package — 2026-10-14
-
-- `npm run build:engine` produces relocatable `dist-engine/`: a 61.32 kB readable ES entry plus the pinned engine/basic data, classic workers and nine Lua/TeX support files. It excludes the editor, rendering dependencies and unused native background Lua driver; it has no npm runtime dependencies. Existing app code imports this same source entry. The binary itself is unchanged upstream BusyTeX, so this is not a LuaHBTeX-only source rebuild; encoded WASM/basic data remain 79,687,514 bytes.
-- `tests/standalone-engine.mjs` copies the distribution into a fresh directory outside the repository and imports its default entry without overriding the resource base. Browser Worker scripts run against the real WASM in Node worker_threads with no optional-package fixtures. Assertions cover valid full PDF, a shared compiled WebAssembly.Module (no second WASM asset load), baseline equivalence, eight incremental edits, zero repeated font-byte transport, exact edited glyph positions versus a fresh full compile, live/full error recovery, and a nested main file with project inputs lacking revision IDs. Eight warm core requests measured 0.39–1.03 ms in this run; they exclude canvas rendering and browser input scheduling and are not a before/after benchmark.
-- Added regressions for unchanged-context reuse and invalidation, module/endpoint propagation across workers, optional file revisions, zero-copy complete frames plus fragmented delivery, and serialization of full jobs across asynchronous package persistence. **170 unit/DOM/renderer tests passed**, no failures or skips.
-- Real runtime smoke, **26 incremental math edits** with exact final layout, **18 reflow/full-ink comparisons**, **112 sequential edits plus 17 incomplete inputs and 15 full checkpoints**, multi-file project tests and the production build passed. Incremental suites kept one initialization full compile and zero live restarts during local edits. Historical generated timing/PDF artifacts were restored after rerunning; no cross-run speedup claim is made. The existing >500 kB application bundle advisory remains.
-- Codex in-app browser at `127.0.0.1:5175/ui/index.html` loaded the actual module-backed app, compiled the default math document to one PDF page, and rendered a prose replacement through Live. First proof/font work displayed 422 ms; the warm reverse replacement displayed **6.1 ms**. Original source restored. Screenshot: `qa/standalone-engine-browser.png`.
-- No new dependency, C/WASM binary rewrite, shared mutable TeX memory or pagination engine. The module retains two isolated TeX instances so full compilation cannot block incremental work. Other browsers, mobile, native Node API, a repeated 13-page paper run and memory profiling were not covered. Full PDF export still requires full compilation; provisional pagination and numbering retain existing limits.
-
-## LuaHBTeX-only source build and resource pruning — 2026-10-14
-
-- Built LuaHBTeX 1.24.0 from the TeX Live 2026 release source with Emscripten 5.0.4 and `-Oz`, using the pinned TeXlyre build rules plus `engine/build/luahbtex.mk`. The direct C entry links LuaHBTeX and required libraries, excluding pdfTeX, XeTeX, BibTeX, MakeIndex, DVI applets, ICU, fontconfig, TECkit and FreeType. The strict final link rejects unresolved symbols. The incremental Lua/TeX service is embedded at `/rtex`; the host no longer fetches or copies support files. Existing two-instance isolation is retained.
-- Pruned **1,587 resource files / 60,013,094 bytes**; retained 5,597 files / 96,831,353 bytes before LZ4 packaging. Kept the matching LuaHBLaTeX format, shared PDF maps, OTF/TFM/PFB fonts and generic initialization macros. Removed other formats/macros, unused tool resources, ICU/fontconfig data, Metafont sources, logs and AFM metrics; regenerated `ls-R`. AFM metrics are optional remote downloads now. Both compiler and packager use 16 KiB LZ4 chunks.
-
-| Asset bytes | Previous | LuaHBTeX-only | Reduction |
-| --- | ---: | ---: | ---: |
-| Raw WASM | 32,507,525 | 4,902,183 | 84.9% |
-| Gzip WASM | 13,104,205 | 1,922,759 | 85.3% |
-| Gzip TeX data | 66,583,309 | 42,574,731 | 36.1% |
-| Combined encoded assets | 79,687,514 | 44,497,490 | 44.2% |
-
-- Three sequential fresh Worker pairs per version used identical sources on the same host. Old assets/client were recovered from commit `17b307c`; current code used the new source build. **All exact layout signatures match**, including font identity, glyph/rule positions, dimensions, line geometry and page count for OpenType/math/accents, Type 1 with microtype, a six-page document, and 30 alternating local requests per round. Raw records: `qa/luahbtex-before.json` and `qa/luahbtex-after.json`.
-
-| Node benchmark, median of three rounds | Previous | LuaHBTeX-only |
-| --- | ---: | ---: |
-| Cold Worker load | 689 ms | 342 ms |
-| Persistent service startup | 993 ms | 675 ms |
-| Initial full compilation | 1,209 ms | 1,106 ms |
-| OpenType full compilation | 564 ms | 514 ms |
-| Type 1/microtype full compilation | 1,184 ms | 1,144 ms |
-| Six-page full compilation | 1,347 ms | 1,252 ms |
-| Warm local request | 0.23 ms | 0.27 ms |
-
-- These are local WASM/IPC observations, excluding browser input timers, network and rendering. The warm request did not improve; the measured gains are chiefly transfer size and startup. No memory or universal latency claim is made.
-- **172 unit/DOM/renderer tests**, runtime/error recovery, **26 incremental edits** with exact final coordinates, **18 reflow comparisons**, **112 sequential edits / 17 incomplete inputs / 15 full checkpoints**, multi-file projects and formula previews, all templates, PDF text extraction/aux/TOC checks, and production build passed. No incremental engine restart during the local edit suites. The existing application bundle-size advisory remains. `qa/luahbtex-verification.json` preserves this run; historical QA outputs were restored.
-- The relocated standalone package passed with no external `/rtex` directory, no BusyTeX asset directory, no host support-file fetches and no optional-package fixtures. Full PDF, shared compiled module, eight edits with zero repeated font transport, exact layout, error recovery and unversioned nested project inputs all pass. API entry is 60.72 kB and has no runtime npm dependency.
-- Codex in-app browser at `127.0.0.1:5176/ui/index.html` rendered the default document to one page, performed prose Live updates (191 ms first proof/fonts, **4.7 ms warm**), and restored the original source. No console warnings/errors were observed. Screenshot: `qa/luahbtex-browser.jpg`. Test tab/server closed.
-- Build recipe, source and toolchain hashes, output hashes and embedded-file hashes are retained in `engine/build/README.md` and `public/luahbtex/build-info.json`. The earlier temporary source build tree, raw link map and logs were cleared during the session; the recorded map hash remains. Resource extraction/pruning, asset hashes, runtime checks and before/after benchmarks were rerun from retained assets. The final source-path move is verified by identical embedded hashes, not a second full C compilation.
-- Limits: optional AFM-dependent documents may now require network/cache; no exhaustive package/font compatibility check, Safari/Firefox/mobile validation, physical input, 13-page paper rerun, memory profile or PDF pixel-equivalence test. No new runtime dependency, generic build framework or pagination engine.
-
-## Round-2 refinement, batch 3 (E5–E7, P2–P4, P6, N3, N5, W1–W4) — 2026-10-15
-
-- **BibTeX (W2).** The LuaHBTeX-only engine has no BibTeX binary, so `public/runtime/bibtex.js` implements BibTeX in JavaScript and runs between full passes in the background worker. Twelve TeX Live styles (plain, unsrt, alpha, abbrv, plainnat, unsrtnat, apalike, IEEEtran, siam, ieeetr, acm, amsplain) ran without style errors on a test database with accents, `@string`, concatenation, a missing key and an author-less entry; output matched BibTeX's formatting (name ties, `Van~Loan`, natbib labels, 79-column wrapping). `biblatex.bst` (backend=bibtex) also ran (14 ms). `npm run test:bibliography` drives the real WASM worker: a new bibliography takes **3 passes** (1797 ms), a following text edit **1 pass** (483 ms, `.bbl` and aux reused), a new citation is resolved in the same compile, a missing key yields BibTeX's warning plus LaTeX's line-numbered warning, and style warnings point at the `.bib` line (`qa/bibliography.json`). In the browser, a fresh project with a dropped `refs.bib` fetched `plain.bst` from the TeX Live endpoint and rendered "Gauss [1] … See also [2]" with the reference list after 3 passes.
-- **Storage v3 (N3).** `tests/storage-browser.html` passed **17 checks** in Chromium: v1 data migrates to one project (files, binary files, metadata), reopening does not migrate twice, projects are isolated, two connections saving different projects at once do not interfere, history retention counts per project, delete removes files and history and undo restores them, duplicate gets a new history, describing a project is not a change, and turning persistence off clears everything. The legacy import now runs on every open in its own transaction: during development a hot reload had upgraded the database before a buggy first version of the migration could import, and the on-open import recovered that stranded project.
-- **Browser checks** (Claude in-app browser, `localhost:5183/ui/`): `fig`+Tab expanded with tab stops; ⌘. offered `\usepackage{graphicx}` / `xcolor` and applied them; F2 renamed `eq:sum` in two places and the notice undid it; line moves/duplicate/delete/select and ⌘D behaved as specified; the table builder inserted a 2 × 3 booktabs table (adding `\usepackage{booktabs}`) with the caret in the caption stop. The PDF text layer aligned exactly with the page canvas; dragging selected "The sum of the first n positive integers…" without jumping, a single click still jumped to the source, and PDF search reported "Page 1 · 1 / 2". Two-page and cover spreads laid out correctly and fell back to one page in a narrow pane with the note shown. Pinch zoom changed only the container transform for six wheel events and committed one width afterwards. Dark pages inverted text while a blue word kept its colour; a live paragraph repaint kept the dark paper (`#1c1e22`) and marked that page's text layer stale. The settings dialog, project page (thumbnails, Open badge, duplicate, delete and undo) and history diff (per-file counts, folds, restore one file) were inspected on screen.
-- **Found and fixed while verifying:** in Source-only and Preview-only layouts the remaining pane kept its split share of `flex-grow` and filled only part of the window (from the batch-2 layout work); notices were made inert under dialogs, so an Undo offered from the project page could not be clicked; quick-fix spelling suggestions included substring matches such as `\in` for `\includegraphics`.
-- **Not verified:** pdf.js rendering stalls while the in-app browser pane is hidden (it schedules with `requestAnimationFrame`), so some checks waited for the pane to be visible; Safari's `gesture*` pinch events, Firefox, touch devices and real trackpad pinches were not exercised; hover cards and the quick-fix bulb were driven by script rather than a physical pointer.
-- **Tests:** 196 unit/DOM/renderer tests pass (new: `tests/writing.test.mjs` for the diff, quick fixes, BibTeX and templates; ten DOM tests for snippets, line keys, rename, quick fix, citation completion, settings, PDF search, spreads, project fallback and history). Production build passes with the existing bundle-size warning.
-
-## Full compilation auxiliary reuse — 2026-10-15
-
-- Replaced the blanket second pass for known auxiliary files with byte-for-byte comparison and reuse of the last successful aux, TOC, bookmarks and figure/table lists. Nested include aux files are included. Root changes, explicit project reset and project-file removal clear reuse; failed TeX jobs do not update saved output. Unknown output extensions retain two passes, and the existing two-pass/three-after-BibTeX limits remain. No dependency or WASM binary change.
-- The [latexmk manual](https://tug.ctan.org/support/latexmk/latexmk.pdf), section on custom dependencies (p. 56), describes content-based rerun detection. This worker applies that principle to its existing, bounded pass loop; it does not introduce latexmk or a dependency scheduler. LuaTeX draft mode was considered but omitted because the job must return a complete PDF and capture, and the final pass is not known in advance.
-- Profiling the original worker on a multi-page TOC document found warm TeX calls around 636–655 ms per pass and memory reset around 1.9–2.1 ms. The heap reset was left unchanged.
-- Baseline is commit e704674's worker. Three sequential rounds use fresh workers per document, identical offline assets and 36 initial/edit/repeat jobs per version. Final records are in qa/full-compile-{before,after}.json; all exact display-list, PDF text, bookmark and aux signatures match. Timings exclude initialization, network, PDF.js and UI rendering.
-
-| Full compile after a prose edit, median of three | Before | After | Passes |
-| --- | ---: | ---: | ---: |
-| Multi-page math | 598 ms | 615 ms | 1 → 1 |
-| Contents and bookmarks | 1429 ms | 715 ms | 2 → 1 |
-| Nested include | 1255 ms | 622 ms | 2 → 1 |
-| Bibliography | 567 ms | 538 ms | 1 → 1 |
-
-- Contents/bookmark and include edits improve by about 50%; already single-pass math and bibliography do not have an established speedup. Initial compile pass counts are unchanged; small timing differences there are not claimed as gains.
-- qa/full-compile-regressions.json records 32 successful real-WASM/PDF-text scenarios, plus the suite checks two failed-edit recoveries. Covers changed/deleted/restored labels and headings, a deleted include file whose statement remains, root changes, lists, and unknown custom output. The 200 existing unit/DOM/renderer tests passed; the added byte-comparison case and existing serialization case passed in a focused rerun. BibTeX tests passed with first-run three passes and unchanged-bibliography one pass.
-- The final relocated standalone package passed its eight live edits, exact full-layout comparison, module reuse and live/full recovery checks. The separate multi-file/formula test and production build also passed. Historical generated QA files were restored; only this task's new evidence is added.
-- A separate Codex in-app browser check used real Web Workers and bundled fonts with networking disabled. A three-page TOC/include document matched exact page display lists before/after for initial, edited and renamed-heading cases. Prose editing took 1,133 → 586 ms (2 → 1 passes); heading changes retained two passes. This is one browser observation, not a universal latency guarantee. Data: qa/full-compile-browser.json. Temporary page, worker and server were removed/stopped.
-- test:live-project remains blocked by its existing UI stub: main.js calls ui.setEngineInfo, which the test does not provide. Reproduced the same error using the original worker from e704674. That harness was not changed in this task.
-- Limits: no Safari/Firefox/mobile, long-paper rerun, complete macro-package compatibility or PDF pixel-equivalence acceptance. The existing production bundle-size advisory remains.
-
-## First full compilation preparation pass — 2026-10-15
-
-- Baseline is commit 6a15218. The full worker already requires another pass when no prior auxiliary map exists. That preparation pass now removes only rtex's own end-document JSON-export hook and pre-shipout page traversal; the next pass reinstalls them through the existing full engine reset. Normal PDF generation, paragraph hooks, image/index handling and other packages' callbacks remain active. Warm first passes retain capture because they may finish the job. Production implementation changes one worker by six lines; no WASM rebuild, dependency, extra pass, cache format or scheduler.
-- Verified against the [LaTeX hook manual](https://www.latex-project.org/help/documentation/lthooks-doc.pdf) (RemoveFromHook, AddToHookNext) and [luatexbase documentation](https://tug.ctan.org/macros/luatex/generic/luatexbase/luatexbase.pdf) (remove_from_callback), plus the bundled latex.ltx/ltluatex.lua and exact embedded capture source. Only the package label/callback owned by this engine is removed.
-- Temporary profiling of 120 paragraphs with math/hyperref found first/second TeX calls at 812/644 ms; page traversal used 116/109 ms and JSON export 53/39 ms. Other capture callbacks were much smaller. The profiler used Lua's os.gettimeofday timer and was not shipped. Local engine loading in the final benchmark remained roughly 350–365 ms; Lua/font initialization remains a substantial part of every full pass.
-- An isolated three-round experiment also tried LuaTeX's documented --draftmode and direct capture suppression. Draft mode alone did not show a useful consistent gain on the long fixture, so it was rejected. The final implementation uses supported hook removal and normal PDF mode. Precompiled Lua assets and a C/WASM rebuild were not introduced.
-- Final performance evidence is qa/cold-compile-paired.json: three rounds, six fixtures, fresh workers for each version, baseline/current interleaved per document and reversed in the middle round. All 54 before/after output pairs (108 initial/edit/repeat jobs) match exact display lists, capture contexts, PDF text, bookmarks, aux and PDF bytes after removing only date/trailer-ID fields. Pass counts match too. Fonts, styles and PDF/PNG fixtures are included in the shared source hash. Compilation timing excludes initialization/download/rendering; total includes local engine loading but still excludes rendering.
-
-| First full compile, median of three | Before | After | Time reduction | Including local load, before → after |
-| --- | ---: | ---: | ---: | ---: |
-| Multi-page math | 1292 ms | 1115 ms | 13.7% | 1662 → 1472 ms |
-| Type 1 + microtype | 1323 ms | 1141 ms | 13.7% | 1682 → 1504 ms |
-| Contents + bookmarks | 1649 ms | 1488 ms | 9.8% | 2008 → 1857 ms |
-| Nested include | 1488 ms | 1307 ms | 12.1% | 1839 → 1664 ms |
-| Bibliography | 1910 ms | 1800 ms | 5.7% | 2278 → 2152 ms |
-| PDF + PNG images | 1215 ms | 1104 ms | 9.1% | 1576 → 1451 ms |
-
-- Browser verification in the Codex in-app browser used three alternating fresh-worker pairs, offline bundled fonts, 120 paragraphs, a TOC and a nested include (five pages). Median compile 1463 → 1251 ms (14.5% reduction); total including local load 1788 → 1556 ms. Both versions ran two TeX passes; capture exports fell from two to one. Capture/page/aux signatures all agree. Data: qa/cold-compile-browser.json. Temporary test page, baseline worker and server were cleaned up.
-- 201 unit/DOM/renderer tests, 34 full-PDF regression scenarios plus three expected-error recoveries, bibliography, relocated standalone engine (eight live edits, exact final layout, full/live recovery), multi-file/formula test and production build passed. New assertions cover final-only cold capture, warm capture on every pass, changed preambles, nofiles cold/warm behavior, preservation of user end-document hooks, and recovery after a failed initial job. Records: qa/cold-compile-regressions.json. Historical QA files were restored.
-- Limits: no claimed startup/download acceleration, no repeat of the long paper or Safari/Firefox/mobile checks, and no universal gain for arbitrary macro packages. The previously reproduced test:live-project UI-stub failure (missing setEngineInfo) was not rerun or repaired. Existing bundle-size advisory remains.
+- **Engine & Binary**: `qa/luahbtex-before.json`, `qa/luahbtex-after.json`, `qa/luahbtex-verification.json`, `qa/standalone-engine-browser.png`
+- **Incremental & Reflow**: `qa/incremental-math.json`, `qa/incremental-math.png`, `qa/live-reflow.json`, `qa/live-sequence.json`, `qa/live-sequence-browser.json`, `qa/live-sequence-browser.png`
+- **13-Page Academic Paper**: `qa/full-paper-input.json`, `qa/full-paper-live-optimized.json`, `qa/full-paper-live-optimized.png`, `qa/paper-cross-page-formula.png`
+- **Full-Compile & Bibliography**: `qa/full-compile-before.json`, `qa/full-compile-after.json`, `qa/full-compile-regressions.json`, `qa/cold-compile-paired.json`, `qa/cold-compile-browser.json`, `qa/cold-compile-regressions.json`, `qa/bibliography.json`

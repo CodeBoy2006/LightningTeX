@@ -1,21 +1,36 @@
-# LightningTeX WASM engine
+# `@lightningtex/engine`
 
-A standalone browser ES module containing LuaHBLaTeX, the persistent rtex incremental service, capture/context helpers and the display-list decoder. No editor, DOM, PDF.js, canvas renderer or npm runtime dependency is included.
+A standalone, zero-dependency browser ES module providing **LuaHBLaTeX 1.24.0 (TeX Live 2026)** full-document compilation, the persistent `/rtex` incremental typesetting service, document capture and context-replay utilities, and the `RTDL` binary display-list decoder.
 
-## Build and deploy
+---
 
-From the source repository, run `npm ci` and `npm run build:engine`. Copy the entire `dist-engine/` directory to a static host. It is relocatable; do not copy only `index.js` or let a bundler drop the worker/data files. `npm pack ./dist-engine` produces an installable distribution archive. The application and standalone build use the same engine implementation.
+## Build & Deployment
 
-Serve JavaScript with its JavaScript MIME type and `.partNNN` as binary, without server-side decompression. Use HTTPS (localhost HTTP also works) with:
+From the repository root, build the standalone distribution:
 
-```text
-Cross-Origin-Opener-Policy: same-origin
-Cross-Origin-Embedder-Policy: require-corp
+```sh
+npm ci
+npm run build:engine
 ```
 
-Full compilation needs Web Workers, WebAssembly and `DecompressionStream`. Incremental compilation additionally needs `SharedArrayBuffer` and cross-origin isolation. The package targets browsers; Node verification uses a test Worker adapter and is not a shipped Node API.
+This generates a self-contained, relocatable `dist-engine/` directory (and can be packed into a tarball via `npm pack ./dist-engine`). Both the LightningTeX web application and external integrations consume this exact module entry.
 
-## Full compilation and incremental typesetting
+### Static Hosting Requirements
+
+Deploy the entire `dist-engine/` directory to your static host:
+
+- Serve `.js` files with `text/javascript` and `.partNNN` chunks as `application/octet-stream` without transparent server-side gzip decompression (chunks are assembled and decompressed inside the Worker via `DecompressionStream`).
+- Serve over HTTPS (or `http://127.0.0.1` / `localhost`) with Cross-Origin Isolation headers so `SharedArrayBuffer` is available for the persistent live channel:
+
+```http
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Resource-Policy: same-origin
+```
+
+---
+
+## Quick Start
 
 ```js
 import {
@@ -36,22 +51,28 @@ Hello from LuaHBTeX.
 
 A second paragraph with $x^2$.
 \end{document}`;
+
+  // 1. Run full compilation with capture instrumentation
   const full = await engine.background.compile(source);
-  // full.pdf is Uint8Array; capture, pages, fonts, aux, log and passes accompany it.
   Object.entries(full.fonts).forEach(([name, bytes]) => fonts.set(name, bytes));
+
+  // 2. Start the persistent incremental service (reuses compiled WebAssembly.Module)
   await engine.live.start(
     splitPreamble(source).preamble + '\n\\RequirePackage{luatexbase}\n',
     full.aux, [], full.packageMisses,
   );
-  const span = captureSpans(source, full.capture).find(({unit}) =>
+
+  // 3. Locate an eligible captured unit and verify baseline equivalence
+  const span = captureSpans(source, full.capture).find(({ unit }) =>
     liveUnitEligibility(full.capture, unit).ok);
-  if (!span) throw Error('This document needs full compilation');
   const context = unitContext(full.capture, span.unit);
   const baseline = decodeDisplayList((await engine.live.compile(
     context, span.original, span.unit.advanced || {},
   )).binary);
   const proof = compareUnitBaseline(span.unit, full.pages, baseline);
-  if (!proof.ok) throw Error(proof.reason);
+  if (!proof.ok) throw new Error(proof.reason);
+
+  // 4. Typeset an incremental update in milliseconds
   const result = await engine.live.typeset(context, 'Hello from the incremental service.');
   const displayList = decodeDisplayList(result.binary);
   console.log(displayList.lines);
@@ -60,34 +81,77 @@ A second paragraph with $x^2$.
 }
 ```
 
-The Lua/TeX service is embedded in the WASM filesystem at `/rtex`, so `createEngine()` makes no support-file requests; the first `background.start()` or `compile()` initializes WASM. `live.start()` starts a separate persistent instance. Starting it after the background engine is ready reuses the already compiled `WebAssembly.Module`, skipping a second WASM download/decompression/compilation. TeX data and mutable memories remain isolated. Repeated `live.start()` with unchanged preamble, aux and project files reuses the running service.
+---
 
-`createEngine({base, endpoint, onLog, onLiveLog, onFonts})` resolves resources relative to `index.js` by default. Supply an absolute directory URL ending in `/` as `base` if a bundler relocates the JS entry. `endpoint: ''` disables remote TeX package downloads; otherwise the default is `https://texlive2026.texlyre.org`. A custom endpoint must implement BusyTeX's matching TeX Live 2026 file protocol. Shell escape and Lua sockets are disabled.
+## API Reference
 
-`background.compile(source, {root: 'main.tex', files: [{path, data, rev}]})` accepts text or Uint8Array project files. Paths are relative to the project; traversal and absolute paths are rejected. Include the complete file list each time: omitted files are deleted. `rev` is optional; provide a changed revision whenever file data changes to skip resending unchanged files. Without a revision the file is always sent. The root source is supplied separately. `background.stop()` cancels loading and all pending jobs; it can subsequently restart.
+### `createEngine(options)`
 
-Full jobs retain the last successful `.aux` (including nested `\include` files), `.toc`, `.out`, `.lof`, `.lot` and bibliography output for the same root and preamble. Each pass compares auxiliary bytes, so stable references, contents, bookmarks and figure/table lists take one pass after ordinary edits. Changed auxiliaries or rerun warnings still trigger another pass. Root changes, project resets and file removals invalidate reuse; failed jobs never replace the saved output. Unknown package outputs retain the conservative two-pass behavior. This is in-memory reuse within one Worker, not a persistent document cache.
+```js
+const engine = await createEngine({
+  base,          // Optional base URL (defaults to directory of index.js)
+  endpoint,      // TeX Live 2026 file service URL (default: 'https://texlive2026.texlyre.org'; '' disables remote lookup)
+  onLog,         // Callback for background worker and asset-loader logs
+  onLiveLog,     // Callback for live worker logs
+  onFonts,       // Callback receiving { [filename]: Uint8Array } from the live worker
+});
+```
 
-When no auxiliary state can be reused, the first pass necessarily precedes another pass. It runs normal TeX/PDF output and package hooks, but omits rtex's page traversal and JSON export, whose results would be discarded. The following pass starts with the normal capture hooks restored by the existing engine reset. Warm jobs capture from the first pass because that pass may be the final one. No draft output mode or extra pass is introduced.
+Because the `/rtex` Lua and LaTeX support files are embedded directly in the WASM filesystem image, `createEngine()` performs no network requests until `background.start()`, `background.compile()`, or `live.start()` is invoked.
 
-`live.start(preamble, aux, files, packageMisses)` accepts the preamble's project dependencies. `live.compile(context, source, expectedCounters)` checks counter changes, errors and state leaks. `live.typeset(context, source)` allows changed counters for provisional previews but still rejects polluted engine state. Both return `{header, binary}`. `onFonts` receives each actual font file once per live Worker lifetime; retain these bytes for rendering. Context and compilation requests are serialized. `live.stop()` cancels current/queued requests; start again to recover a discarded worker.
+### `engine.background` (Full Compilation Worker)
 
-For document edits, use the exported `findLiveEdit`, `acceptLiveEdit`, `parseMacros` and `replaceUnitRows` helpers. First prove each captured unit's original output using `compareUnitBaseline`. Preserve source/generation tokens around asynchronous work and reject stale results. Route unsupported edits to full compilation. `typeset()` is a low-level operation, not a source-policy check. Line-count, numbering and pagination changes remain provisional until a new full compile. Incremental output is a display list, not an updated PDF: export by calling `background.compile()` with the latest sources. `parseTexLog` is also exported.
+- **`background.start()`**: Initializes the background Worker, streams and compiles `luahbtex.wasm`, mounts the TeX Live data image, and restores cached packages from browser `Cache Storage`.
+- **`background.compile(source, { root = 'main.tex', files = [] })`**:
+  - `files` is an array of `{ path, data, rev }` records (`string` or `Uint8Array`). Providing an incremented `rev` when a file changes allows the client to send only modified project files across jobs.
+  - **Auxiliary & Bibliography Reuse**: Retains the last successful `.aux` (including nested `\include` aux files), `.toc`, `.out`, `.lof`, `.lot`, and `.bbl` for the same root and preamble. After each pass, auxiliary bytes are compared; when unchanged and no rerun warning is present, compilation finishes in a single pass.
+  - **Cold First-Pass Optimization**: When no prior auxiliary state exists, pass 1 dynamically omits `rtex-capture`'s shipout page traversal and JSON serialization (`\RemoveFromHook` / `remove_from_callback`) and restores full capture on pass 2.
+  - **In-Browser BibTeX**: Automatically executes the built-in JavaScript BibTeX interpreter (`runtime/bibtex.js`) between passes when `\bibdata` is present in `.aux`, running up to 3 passes when `.bbl` changes.
+  - Returns `{ pdf, capture, pages, fonts, aux, passes, packageMisses, bibtex, log, durationMs }`.
+- **`background.stop()`**: Terminates the Worker and rejects in-flight jobs.
 
-For multi-file projects, keep a separate source/span record per file and pass its project-relative path to `captureSpans(source, capture, path)`. Retain `capture.paragraphs`: its file metadata identifies an included file's final paragraph when TeX closes it after returning to its parent. The application can replay edits to several files before committing their combined preview. Ambiguous repeated inputs, paragraphs containing text from multiple files, and preamble/dependency changes still require full compilation.
+### `engine.live` (Persistent Incremental Worker)
 
-## Scope and verification
+- **`live.start(preamble, aux, files, packageMisses)`**:
+  - Starts the persistent LuaHBTeX instance in a dedicated Worker. If `background` has already compiled the WASM module, `live.start()` reuses the compiled `WebAssembly.Module` while maintaining isolated linear memory.
+  - Calling `live.start()` again with identical preamble, `.aux`, and support files reuses the running Worker without restarting.
+- **`live.compile(context, source, expectedCounters)`**:
+  - Installs `context` (if changed since the previous request) and typesets `source` in an isolated `\vbox`, enforcing strict counter invariance against `expectedCounters` as well as state-leak checks. Used for baseline verification.
+- **`live.typeset(context, source)`**:
+  - Typesets `source` under `context`, allowing counter deltas for provisional previews while still rejecting engine state leaks or fatal errors.
+  - Both `compile()` and `typeset()` resolve `{ header, binary }`, where `binary` is an `RTDL` v1 buffer. Each font file referenced in the display list is emitted once per Worker lifetime via `onFonts`.
+- **`live.stop()`**: Immediately terminates the live Worker.
 
-`npm run test:engine` builds the package, copies it outside the repository, imports its public entry, then runs real WASM full/incremental/error-recovery checks with no editor or Node dependency lookup in that directory. The test compares the edited glyph positions to a fresh full compile and checks module reuse and font transport. `npm run test:incremental`, `test:reflow` and `test:sequence` cover the existing richer fixtures.
+### Document, Context & Layout Helpers
 
-`npm run test:preview` checks full-job auxiliary reuse, invalidation, changed/deleted labels and headings, lists, capture restoration, preservation of other hooks, and error recovery through actual WASM and PDF.js. `node tests/full-compile-benchmark.mjs output.json [reference.json]` measures three rounds of initial/edit/repeat full jobs, including Type 1 fonts and PDF/PNG images. It compares exact layout, capture context, PDF text, bookmarks, aux and PDF bytes (excluding dates and trailer IDs) against an optional baseline. Set `RTEX_ENGINE_BASE` to a directory URL with `runtime/` and `luahbtex/` to benchmark another worker implementation. Compilation timings exclude startup, package downloads and rendering; `initialTotalMs` includes local engine loading. Keep the source/fixture hashes identical between compared runs.
+The package re-exports the pure coordination primitives used by the LightningTeX workspace:
 
-For an interleaved comparison, set `RTEX_REFERENCE_BASE` to the baseline directory URL and omit `reference.json`. The benchmark alternates baseline/current workers for each document, reverses their order in the middle round, and asserts equal outputs and pass counts.
+- **Source Segmentation & Policy**: `splitPreamble(source)`, `captureSpans(source, capture, rootPath)`, `findLiveEdit(before, after, capture, spans, macros)`, `acceptLiveEdit(state, edit, source)`, `parseMacros(preamble)`
+- **Context Replay & Baseline Proof**: `unitContext(capture, unitOrId)`, `liveUnitEligibility(capture, unitOrId)`, `compareUnitBaseline(unit, pages, liveDisplayList)`
+- **Layout & Diagnostics**: `replaceUnitRows(pages, unit, baseline, liveDisplayList, { allowReflow })`, `decodeDisplayList(input)`, `parseTexLog(log, { root })`
 
-The executable is source-built LuaHBTeX 1.24.0 / TeX Live 2026 with Emscripten 5.0.4 and the incremental service embedded. The direct entry point links only LuaHBTeX and its dependencies: no pdfTeX, XeTeX, BibTeX, MakeIndex or DVI converter applets, ICU, fontconfig, TECkit or FreeType. The WASM is 4,902,183 bytes (1,922,759 gzip); pruned TeX data is 52,123,184 bytes (42,574,731 gzip). Combined encoded assets are 44,497,490 bytes, 44.2% smaller than the previous package.
+---
 
-The resource tree retains LuaHBLaTeX format, shared PDF maps, OTF/TFM/PFB fonts and core macro packages. Other engine formats, ICU/fontconfig data, unused tool resources, Metafont sources, logs and AFM metrics are removed. Optional AFM metrics and extra packages need the configured file service unless already cached. The `.fmt` is the matching 1.24.0 format from the pinned original data snapshot; it is not regenerated. LZ4 chunks are 16 KiB in both the compiler and data packager.
+## Engine Binary & Resource Profile
 
-The companion source includes `engine/build/README.md`, the C entry point, JS remote lookup and resource filter. The distribution also carries the recipe as `BUILDING.md`. Packaged `luahbtex/build-info.json` records source/toolchain pins, hashes, linked archives and embedded support hashes. Distribute this source with the runtime and retain `THIRD-PARTY-NOTICES.md`.
+The runtime executable is compiled from **TeX Live 2026 (`LuaHBTeX 1.24.0`)** source using **Emscripten 5.0.4 (`-Oz`)**:
 
-The full worker includes a JavaScript BibTeX interpreter for `.bst` styles; Biber is unsupported. Full compilation runs at most two passes, or three when the bibliography changes. The live service does not reflow the bibliography, implement a general pagination engine, or reproduce native rtex's entire Rust session. TeX execution has a 120-second host timeout; live requests have a six-second timeout after startup. Cancellation terminates workers. Safari, Firefox and mobile performance require separate validation.
+- **Direct LuaHBTeX Entry**: Links only LuaHBTeX, HarfBuzz/Graphite, Lua, Kpathsea, and PDF/font/image libraries—excluding pdfTeX, XeTeX, BibTeX, MakeIndex, DVI applets, ICU, fontconfig, TECkit, and FreeType.
+- **Embedded `/rtex` Service**: All Lua and LaTeX incremental capture/server modules (`engine/tex/*`) are compiled directly into the WASM virtual filesystem at `/rtex`.
+- **Pruned Data & 16 KiB LZ4 Chunks**: Retains the `luahblatex.fmt` format, shared `pdftex.map`, OTF/TFM/PFB fonts, and core macro packages (5,597 files), packed with 16 KiB LZ4 frames and split into $\le 16\text{ MiB}$ gzip parts:
+  - `luahbtex.wasm`: **4,902,183 bytes** raw (**1,922,759 bytes** gzip)
+  - `texlive-luahbtex.data`: **52,123,184 bytes** raw (**42,574,731 bytes** gzip)
+  - Total compressed transfer: **44,497,490 bytes (~42.4 MiB)**
+
+Build recipes and SHA-256 provenance records are located in [`engine/build/README.md`](build/README.md) (distributed as `BUILDING.md`) and `luahbtex/build-info.json`.
+
+---
+
+## Verification & Benchmarking
+
+```sh
+npm run test:engine                                    # Relocate dist-engine/ outside repo and verify full/live WASM pipeline
+npm run test:preview                                   # Verify aux byte reuse, cold first-pass capture skip, and TOC/bookmarks
+node tests/engine-benchmark.mjs out.json [ref.json]    # Benchmark cold load, service startup, full compile, and warm live IPC
+node tests/full-compile-benchmark.mjs out.json [ref]   # Benchmark 3 rounds across 6 fixture types with normalized PDF byte checks
+```

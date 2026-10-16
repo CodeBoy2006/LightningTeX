@@ -1,28 +1,43 @@
-# Source reuse and licensing
+# Third-Party Notices & Provenance
 
-This is a JavaScript browser host port around existing engines, not a newly implemented TeX typesetter.
+## 1. `realtime-tex`
 
-## realtime-tex
-MIT. Upstream https://github.com/HenryXiaoYang/realtime-tex , commit 1f681835cfcbeeabcca340b7784316a0ef186d81. Original license is retained at engine/tex/LICENSE and public/luahbtex/RTEX-LICENSE (luahbtex/RTEX-LICENSE in the standalone package). The Lua/TeX service, including the browser port's capture, font-encoding and replay changes, is embedded in the WASM at /rtex. Its source is in engine/tex; build-info.json records each embedded file's hash. The browser context helper derives from capture.rs/layout.rs semantics; the decoder follows the upstream binary encoder.
+- **License**: MIT (`engine/tex/LICENSE` and `public/luahbtex/RTEX-LICENSE`)
+- **Upstream**: <https://github.com/HenryXiaoYang/realtime-tex> (commit `1f681835cfcbeeabcca340b7784316a0ef186d81`)
+- **Usage**: The Lua/TeX incremental capture, context replay, persistent paragraph service, and binary display-list modules (`engine/tex/*`) are embedded in the WebAssembly image at `/rtex`. SHA-256 hashes of each embedded file are recorded in `public/luahbtex/build-info.json`. The JavaScript context-replay helpers (`core/capture.js`, `core/live-layout.js`) and binary display-list decoder (`render/display-list.mjs`) implement the upstream capture and `RTDL` v1 wire specifications.
 
-## LuaHBTeX and TeXlyre build/data sources
-The executable is now built from TeX Live 2026 release source (LuaHBTeX 1.24.0), with Emscripten 5.0.4. It is no longer the multicall BusyTeX binary. The build reuses https://github.com/TeXlyre/texlyre-busytex-build at f544a51a99e7d3978bb70608e927a9a23f96d4a7. This project's engine/build contains the direct C entry point, derived remote-file lookup, selected library link, resource pruning and build recipe. The AGPL text is retained at public/luahbtex/LICENSE. Source/toolchain hashes, final binary/data hashes and embedded file hashes are in public/luahbtex/build-info.json. Distribute the companion source, this recipe and these source pointers with the runtime.
+---
 
-The original resource input is the official https://github.com/TeXlyre/texlyre-busytex/releases/download/assets-v1.4.0/busytex-assets.tar.gz data snapshot, decoded texlive-basic.data SHA-256 ccb35d98d77cbaf988e1481f8538709f72166196785cf6b8785eabe6c8fb2993. The retained LuaHBLaTeX format is from that matching 1.24.0 snapshot. Other engine formats/resources, ICU/fontconfig data, unused tools, Metafont sources, logs and optional AFM metrics were removed; filename databases were regenerated. The remaining tree was repacked with the same Emscripten version, changing LZ4 chunks from 2 KiB to 16 KiB in both runtime and packager. The standard generated data loader uses getPreloadedPackage; no custom vendor-loader patch is needed. Additional files are fetched on demand. The recommended collection and Biber are not bundled.
+## 2. LuaHBTeX & TeX Live 2026 Sources
 
-TeX Live packages and fonts have individual licenses (including LPPL, GPL and font-specific licenses); the enclosing application license does not replace them. Refer to the original TeX Live distribution and its contained metadata for each package.
+- **Engine License**: GNU Affero General Public License v3.0 or later (`public/luahbtex/LICENSE`)
+- **Build Rules**: Derived from <https://github.com/TeXlyre/texlyre-busytex-build> (commit `f544a51a99e7d3978bb70608e927a9a23f96d4a7`)
+- **TeX Live Source**: TeX Live 2026 release source (`texlive-20260301-source.tar.xz`, LuaHBTeX 1.24.0, SHA-256 `32ea827edd3fb80a682ffbdf95d7ba6139ff074516e660c8923260fc82f5e0f0`), compiled with Emscripten 5.0.4.
+- **Companion Build Sources**: Located in [`engine/build/`](engine/build/README.md) (`luahbtex.c`, `kpse-remote.js`, `luahbtex.mk`, `extract-data.cjs`, `prune-data.mjs`, `record-build.mjs`). Complete source, toolchain, archive, and output hashes are recorded in `public/luahbtex/build-info.json`.
+- **TeX Live Resource Tree**: Pruned from the `texlyre-busytex` `assets-v1.4.0` baseline snapshot (`texlive-basic.data` decoded SHA-256 `ccb35d98d77cbaf988e1481f8538709f72166196785cf6b8785eabe6c8fb2993`) and repacked with 16 KiB LZ4 chunks. Individual TeX Live macro packages and fonts retain their respective upstream licenses (LPPL, GPL, SIL OFL, and font-specific licenses).
 
-`tests/fixtures/tex-packages.json.gz` contains unmodified microtype and booktabs files from that TeX Live 2026 service for offline regression tests. Their embedded copyright/license headers are retained; this fixture is not included in the browser build. See `tests/fixtures/README.md` for provenance and format.
+---
 
-## Browser libraries
-Exact package versions are pinned in package-lock.json:
-- PDF.js / pdfjs-dist 6.4.299: Apache-2.0, https://github.com/mozilla/pdf.js
-- OpenType.js 2.0.0: MIT, https://github.com/opentypejs/opentype.js
-- Vite: MIT (build tool)
-- jsdom: MIT (DOM tests only)
-- @napi-rs/canvas: MIT (Node verification only, not shipped browser code)
+## 3. Browser & Build Libraries
 
-## Interface font
-`public/fonts/inter-latin-wght-normal.woff2` is the Latin subset of Inter (variable weight axis) by Rasmus Andersson and the Inter project authors, taken unmodified from @fontsource-variable/inter 5.2.5. SIL Open Font License 1.1; the license text is in licenses/Inter-OFL-1.1.txt. It is served from the application itself; no font is fetched from a third-party host. CJK text falls back to the platform's system font.
+Exact versions are pinned in `package-lock.json`; full license texts are stored in [`licenses/`](licenses/):
 
-Copies of shipped JavaScript library licenses are in licenses/. The application's source and modification details are provided in the source package. No proprietary font or paid TeX package was added.
+| Package | Version | License | Upstream |
+| :--- | :--- | :--- | :--- |
+| `pdfjs-dist` (PDF.js) | `6.4.299` | Apache-2.0 (`licenses/PDFJS.txt`) | <https://github.com/mozilla/pdf.js> |
+| `opentype.js` | `2.0.0` | MIT (`licenses/OPENTYPE.txt`) | <https://github.com/opentypejs/opentype.js> |
+| `vite` | `8.3.4` | MIT | <https://github.com/vitejs/vite> |
+| `jsdom` (dev/test) | `30.1.2` | MIT | <https://github.com/jsdom/jsdom> |
+
+---
+
+## 4. Interface Font
+
+- **Inter Variable (Latin subset)**: `public/fonts/inter-latin-wght-normal.woff2`, taken unmodified from `@fontsource-variable/inter` `5.2.5` by Rasmus Andersson and the Inter project authors.
+- **License**: SIL Open Font License 1.1 (`licenses/Inter-OFL-1.1.txt`).
+
+---
+
+## 5. Offline Test Fixtures
+
+- `tests/fixtures/tex-packages.json.gz` and `tests/fixtures/plain.bst` contain unmodified `microtype`, `booktabs`, and `plain.bst` files from TeX Live 2026 for offline Node regression suites. See [`tests/fixtures/README.md`](tests/fixtures/README.md) for details.

@@ -1,28 +1,63 @@
-# Self-hosting
+# Deployment & Self-Hosting Guide
 
-The ready-to-run package contains `dist/`, `server.mjs`, README and notices. No database or compilation backend is required.
+LightningTeX runs entirely in the client browser and requires only a static file server—no compilation backend or database is needed.
 
-- Local: Node.js 22.12+, run `node server.mjs`, open http://127.0.0.1:4173
-- Choose another local port with `PORT=8080 node server.mjs`
-- Production: serve the contents of `dist` over HTTPS; route `/` to `ui/index.html`
-- Required headers for persistent incremental mode:
-  - `Cross-Origin-Opener-Policy: same-origin`
-  - `Cross-Origin-Embedder-Policy: require-corp`
-  - `Cross-Origin-Resource-Policy: same-origin`
-- Serve `.js` as JavaScript and `.mjs` as JavaScript. `.partNNN` is binary; do not transparently decompress the gzip chunks at the server
-- Preserve paths; chunks are assembled and decompressed in the worker. Every chunk is at most 16 MiB
-- The static host must support Workers and these isolation headers. An unsupported isolation environment offers full-PDF mode, with an explicit notice
-- Keep bundled assets same-origin. A pruned LuaHBTeX resource tree is preloaded (~42.4 MiB compressed including WASM). Additional packages and dependencies download per file when used; recommended is neither shipped nor loaded
-- Missing TeX files are fetched by the existing BusyTeX worker hook from `https://texlive2026.texlyre.org`. This sends requested filenames, not document contents. The service must allow your origin through CORS under the existing isolation headers
-- To use your own service, pass `endpoint` to `createEngine` (in `main.js` for the application). Use the upstream `texlyre-busytex-build/texlive-server` with a matching TeX Live 2026 tree and its `GET /<format_id>/<filename>` protocol. An empty endpoint disables remote lookup and cache restoration. A plain CTAN mirror URL is not compatible
-- The public endpoint selects TeX Live 2026 but is operated upstream. For an immutable deployment, serve a frozen matching tree yourself and change the endpoint when upgrading it
-- Downloaded files are persisted in browser Cache Storage, keyed by the engine release, endpoint and BusyTeX's format/filename. Full jobs finish saving before live workers start. Both workers restore the cache; unavailable/full storage degrades to online loading. Failed lookups are not persisted. Clearing site data removes the cache
-- The LuaHBTeX-only rebuild retains TeX Live 2026 and the original resource snapshot, so it keeps the remote-file cache namespace, so existing downloaded packages remain reusable. First use of an uncached package still needs the service; cached compilation does not by itself make the website available offline
-- Update the engine and data as a matching pair. Clear old static caches when changing the pinned engine release
-- Full compilation, including package downloads, has a 120-second timeout; cancel terminates workers. TeX documents run inside the browser's WASM virtual filesystem, not the host filesystem
+---
 
-This delivery does not create or change any GitHub repository, production deployment, or third-party site.
+## 1. Local Server
 
-## Standalone engine
+Using **Node.js 22.12+**, start the bundled zero-dependency server:
 
-`npm run build:engine` creates `dist-engine/`, independently of the UI build. Deploy that complete directory under any same-origin prefix and import its `index.js`; resources resolve beside the module. The same isolation headers apply. This package contains no editor or PDF renderer. See `engine/README.md` for the API, relocation test and source build recipe and resource scope.
+```sh
+node server.mjs
+```
+
+- Opens on **http://127.0.0.1:4173** by default.
+- Set `PORT=8080 node server.mjs` to listen on a custom port.
+- Pass a custom root directory as the first argument (defaults to `dist/`): `node server.mjs dist`.
+
+---
+
+## 2. Production Static Hosting
+
+To host the compiled `dist/` directory behind Nginx, Caddy, Cloudflare Pages, or any static file server:
+
+1. **HTTPS & Routing**: Serve over HTTPS and route `/` to `/ui/index.html`.
+2. **Cross-Origin Isolation Headers**: Incremental typesetting relies on `SharedArrayBuffer` to communicate with the persistent LuaHBTeX Worker. Configure the following HTTP response headers:
+
+```http
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Resource-Policy: same-origin
+X-Content-Type-Options: nosniff
+```
+
+*(A ready-to-use `public/_headers` file is included and copied into `dist/_headers` during build.)*
+
+3. **MIME Types & Binary Chunk Serving**:
+   - Serve `.js` and `.mjs` with `text/javascript`.
+   - Serve `.wasm` with `application/wasm`.
+   - Serve `.partNNN` chunks (`luahbtex.wasm.gz.part000`, `texlive-luahbtex.data.gz.part000`…`part002`) as raw `application/octet-stream` **without** automatic server-side gzip decompression. Each chunk is capped at $\le 16\text{ MiB}$, verified against `asset-manifest.json`, and decompressed inside the Worker using `DecompressionStream`.
+
+---
+
+## 3. On-Demand TeX Live Package Service & Caching
+
+LightningTeX preloads a pruned TeX Live 2026 basic dataset (~42.4 MiB compressed). When a document loads additional packages, classes, fonts, or `.bst` bibliography styles:
+
+- **Remote Lookup Protocol**: The engine's Kpathsea hook queries `GET <endpoint>/<format_id>/<filename>` (defaulting to `https://texlive2026.texlyre.org`). Only the requested filename and Kpathsea format ID are sent; document contents never leave the browser.
+- **Browser Cache Storage**: Downloaded files are persisted in the browser's `Cache Storage` under `lightningtex-texlive-2026-assets-v1.4.0:<endpoint>` and automatically restored into both the background and live Workers on subsequent sessions.
+- **Self-Hosted Package Mirror**: To host your own immutable TeX Live 2026 file server, deploy [`texlyre-busytex-build/texlive-server`](https://github.com/TeXlyre/texlyre-busytex-build) against a matching TeX Live 2026 tree with CORS enabled, and pass its URL to `createEngine({ endpoint: 'https://your-texlive-mirror.example.com' })`.
+- **Offline-Only Mode**: Pass `endpoint: ''` to `createEngine()` to disable all network package lookups.
+
+---
+
+## 4. Deploying the Standalone Engine (`@lightningtex/engine`)
+
+Run `npm run build:engine` to produce `dist-engine/`. Deploy the complete `dist-engine/` directory under any same-origin path with the Cross-Origin Isolation headers above and import `index.js`:
+
+```js
+import { createEngine } from '/path/to/dist-engine/index.js';
+```
+
+All Worker scripts and WASM/data chunks resolve relative to `index.js` (or via an explicit `base` URL passed to `createEngine({ base })`). See [`engine/README.md`](../engine/README.md) for API details.

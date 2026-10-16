@@ -1,138 +1,269 @@
-# Realtime TeX Web
+# ⚡ LightningTeX
 
-将 realtime-tex 的 Lua 端增量排版搬进浏览器：从源码构建 LuaHBTeX WebAssembly，保留原项目的捕获器、上下文回放、持久段落服务和二进制显示列表。浏览器宿主用 JavaScript 实现；没有把依赖原生进程的 Rust Session 直接宣称为已经编译成 WASM。
+**浏览器内的真 LuaHBLaTeX 增量排版引擎与现代写作工作区 —— 毫秒级局部实时预览，零后端依赖。**
 
-## 直接使用
+[**English**](README.md) · [**简体中文**](README.zh-CN.md) · [**独立引擎 SDK**](engine/README.md) · [**渲染器文档**](render/README.md) · [**源码构建说明**](engine/build/README.md) · [**自托管部署**](docs/DEPLOYMENT.md) · [**验收与基准数据**](QA.md)
 
-下载「运行包」并解压，在解压目录运行：
+---
+
+## 为什么构建 LightningTeX？
+
+长期以来，LaTeX 写作者在工具选择上不得不面对一种两难妥协：
+
+1. **云端或传统全量编译编辑器**：运行真实的 TeX 引擎，拥有精准的断行算法、宏展开与 PDF 输出；但每次修改都必须等待数秒的全文档重编译与服务器往返，打断写作心流。
+2. **基于 HTML / MathJax / KaTeX 的快预览工具**：虽然能做到毫秒级响应，但它们只是 **TeX 的近似模拟**——依赖浏览器 DOM 排版而非 Knuth–Plass 段落断行，使用替代字体，无法执行真实的 LaTeX 计数器、前言自定义宏与宏包钩子，预览与最终 PDF 总是存在偏差。
+
+**LightningTeX 打破了这一取舍。** 它将 [`realtime-tex`](https://github.com/HenryXiaoYang/realtime-tex) 的 Lua 端增量排版机制完整搬进浏览器：从 TeX Live 2026 源码裁剪构建 **LuaHBTeX 1.24.0 WebAssembly**，保留原生的文档捕获器、上下文回放、常驻段落服务与二进制显示列表（`RTDL`），并配以一套零框架依赖的现代 LaTeX 写作工作区。
+
+### 核心产品理念
+
+- **真 TeX 排版，绝不近似模拟**：正文段落、行内与独立公式（`equation`、`align`、`gather`、`multline`）、列表、章节标题、证明与定理环境（`theorem`/`lemma`/`proposition`/`corollary`/`remark`）全部由 **真实的 LuaHBLaTeX** 排版。所有字形均按整数 **scaled-point（`sp`，$1\text{ pt} = 65536\text{ sp}$）** 精确定位，并直接使用引擎原始字体轮廓（OpenType/TrueType 字形索引与 Type 1 PFB 原始轮廓）在 Canvas 上绘制，不使用另一套公式排版器或系统替代字体。
+- **双轨协同管线（毫秒级局部重排 + 后台静默收敛）**：
+  - **快路径（`Live` / `Reflow`，预热后约 5–20 ms）**：独立 Web Worker 中的常驻 LuaHBTeX 实例保持在 TeX 主循环（`\loop\rtexstep...\repeat`）内待命，回放目标单元的精确排版上下文，在 `\vbox` 中仅重排受影响的单元。几何不变时直接原位重绘墨迹区域；行数或公式高度变化、段落拆分/合并/删除时，动态切片并纵向平移下方 PDF 底图（标记为 `分页待校准`），实现打字不中断的即时视觉反馈。
+  - **慢路径（`Full`，停顿约 500 ms 后静默校准）**：当停止输入、或修改了前言/交叉引用/复杂结构时，后台 LuaHBTeX Worker 自动执行全量编译，校准精确分页、页码、目录书签与参考文献。通过逐字节比对并复用 `.aux`/`.toc`/`.out`/`.lof`/`.lot`/`.bbl`，常规正文修改**仅需一遍（1 pass）**即可完成校准。
+- **严密基线核验、保守回退与透明可观测**：在对任何单元执行首次增量更新前，系统都会先将捕获到的**原文**送入常驻引擎编译，逐行核对盒模型尺寸、粘连（glue）、字体签名、字形索引与相对坐标（`compareUnitBaseline`）。括号或公式定界符未闭合时静默保留上一帧有效预览，不会触发报错闪烁；光标处公式浮窗则自动补全未闭合分组进行实时预览。顶栏 **实时状态胶囊与检查器（Live Inspector）** 实时可视化最近 24 次更新的耗时柱状图、路由原因、常驻引擎健康度与 PDF 同步状态。
+- **100% 纯前端运行，零后端与绝对隐私**：从 TeX 编译、JavaScript BibTeX `.bst` 样式解释、字体轮廓解析到多项目版本快照，全部在本地浏览器内完成。文档内容绝不上传任何服务器；导出 PDF 时始终确保生成包含最新修改的完整 PDF。
+
+---
+
+## 快速开始
+
+### 1. 直接运行发布包
+
+如果下载了预构建的「运行包」，其中已包含编译好的网页、WASM 引擎、TeX 基础宏包与字体，**无需 `npm install`，也无需在本地安装 TeX Live**。在 **Node.js 22.12+** 环境下运行：
 
 ```sh
 node server.mjs
 ```
 
-然后打开 http://127.0.0.1:4173 。建议 Node.js 22.12 或更新版本。运行包已经包含编译好的网页、WASM、TeX 基础包和字体，不需要 npm install，也不需要安装 TeX Live。
+随后在桌面浏览器打开 **http://127.0.0.1:4173**（可通过 `PORT=8080 node server.mjs` 自定义端口）。
 
-不能直接双击 index.html：Web Worker、WASM 资源加载和增量通道需要 HTTP 安全上下文。附带的服务器只监听本机，并设置 COOP / COEP。远程自托管时需要 HTTPS 和相同响应头；其他服务器配置见 docs/DEPLOYMENT.md。
+> [!IMPORTANT]
+> **请勿直接双击打开 `index.html`**。Web Worker、流式 WASM 解压与 `SharedArrayBuffer` 增量通道需要 HTTP 安全上下文（`http://127.0.0.1` 或 `https://`）以及跨源隔离响应头（`COOP: same-origin`、`COEP: require-corp`）。附带的 `server.mjs` 默认仅监听本机并自动设置上述响应头。远程自托管或反向代理配置详见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
 
-首次加载约 42.4 MiB 压缩引擎数据，gzip 解压后约 54.4 MiB（TeX 文件仍按 LZ4 分块存储），另外还有网页与加载脚本。只预装 TeX Live basic；microtype、booktabs 等额外宏包及其依赖在文档实际使用时下载，并复用浏览器缓存，不再整包加载 recommended。建议在桌面浏览器使用；本次未验收手机浏览器。
-
-## 独立 WASM 引擎模块
-
-运行 `npm run build:engine` 生成 `dist-engine/`，整个目录可以独立部署或用 `npm pack ./dist-engine` 打包。通过 `import {createEngine} from './index.js'` 使用全文编译和常驻增量服务，无需编辑器、PDF.js、Canvas 或前端框架。现有网页也使用同一个入口。
-
-模块提供源码分段、上下文回放、基线核验和二进制显示列表解码；用最新源码完整编译取得最终 PDF。两条排版路径共用已编译的 WebAssembly.Module，但隔离可变内存；相同上下文不重复安装，实时字体每个 Worker 只传一次，PDF/字体/显示列表采用可转移缓冲区。详见 [模块接口与示例](engine/README.md)。
-
-`npm run test:engine` 会将构建包复制到仓库之外，再运行真实 WASM，检查独立加载、字形坐标一致性、增量与全文错误恢复、模块复用和字体传输量。底层已从 TeX Live 2026 源码构建 LuaHBTeX-only WASM，并把增量 Lua/TeX 服务嵌入 `/rtex`；删除 pdfTeX、XeTeX、BibTeX、MakeIndex、DVI 工具及 ICU/fontconfig 等依赖。WASM 从 31.0 MiB 减至 4.68 MiB；压缩引擎与数据合计从 76.0 MiB 减至 42.4 MiB，下降 44.2%。裁掉 1,587 个资源文件，保留 LuaHBLaTeX 格式和共享字体/映射；可选 AFM 字体度量改为按需下载。源码、工具链固定版本和重建步骤见 [源码构建说明](engine/build/README.md)。
-
-## 怎么试
-
-1. 打开页面后自动编译默认文档，右侧显示真实 PDF
-2. 保持 Auto 开启，编辑文字、公式、列表、标题或子文件；通过原文校验后，只排版受影响的局部内容，并直接更新页面
-3. 输入后约 60 ms 开始处理；处理期间的输入合并为最新版本。改变行数或结构时先即时重排预览，停顿约 500 ms 后启动全文校准；校准期间仍能继续即时编辑
-4. 行内公式、独立公式、equation 和 align 均使用真实 LuaLaTeX 和原始字体。括号或公式定界符未闭合时保留上一张成功预览，补全后自动恢复
-5. `Live · PDF pending` 表示预览已更新、PDF 文件尚未更新；`pagination pending`（分页待校准）表示页高、分页或编号暂为预览值，随后由全文编译校准。下载始终生成包含最新修改的完整 PDF
-6. 尝试交叉引用、列表和表格示例；下载 PDF 或 .tex
-
-Ctrl / Command + Enter 完整编译；编译时再次点击顶栏状态胶囊可停止。文件默认保存在当前浏览器，可在设置中关闭；关闭时会清除已保存的项目和本地快照。
-
-## 编辑工作区
-
-顶栏集中提供项目、布局、实时状态、导出和设置。源码／分栏／预览三种布局可随时切换；实时胶囊显示最近的局部更新耗时，箭头菜单控制自动编译。黄色侧边条标记光标对应的纸面位置；预览中的临时分页会标为「分页待校准」。
-
-- **命令面板：** `Ctrl / Command + K` 搜文件与操作；`@` 搜章节和标签，`>` 只搜命令，`:行号` 跳转。快捷键总览在设置的「快捷键」分类中。
-- **设置：** 560 px 对话框，左侧分类（外观／编辑器／编译与预览／存储／快捷键），顶部可搜索，每项附一句说明，改动即时生效。自动编译、光标处公式预览与预览跟随光标也可在实时胶囊的下拉菜单中一键切换。
-- **查找替换：** `Ctrl / Command + F` 查找，`Ctrl / Command + Shift + H` 替换；支持大小写、全词和正则。替换、补全、图片引用和符号插入都进入编辑器的原生撤销栈。
-- **补全与导航：** 输入命令、环境、引用标签、文件路径或 `\cite{` 后，用方向键选择，Tab / Enter 插入，Esc 关闭；文献补全读取项目内 `.bib`，按键、作者、年份和标题匹配。带参数的命令插入后，Tab / Shift+Tab 在参数占位符之间移动。单独一行输入 `fig`、`tab`、`mat`、`eq` 或 `beg` 后按 Tab 展开图、表、矩阵、带标签公式和环境片段。侧栏大纲随光标定位，点击章节或预览段落可跳到源码。大纲编号与字数是源码估算，不展开自定义宏或自定义章节编号。
-- **行编辑：** ⌥↑／⌥↓ 移动行，⇧⌥↓ 复制行，⌘⇧K 删除行，⌘L 选中整行（重复按扩展到下一行），⌘D 选中光标处的词并跳到下一处相同文字；选中文字后在反斜杠后输入 `(` 或 `[` 包裹为 `\( … \)`／`\[ … \]`（Windows/Linux 用 Ctrl、Alt）。
-- **重命名与引用：** 光标在 `\label` 或任一引用上按 F2，输入新名时实时列出所有受影响的行（跨文件），回车一次改完；打开的文件可用撤销回退，提示条的「撤销重命名」还原全部文件。Shift+F12 把一个标签的所有引用列在问题面板的「引用」页签。
-- **快速修复：** 有已知修复的错误行在行号处显示灯泡，`Ctrl / Command + .` 打开同一菜单：未定义命令推荐所属宏包或拼写相近的命令，未定义环境推荐宏包或补上 `\newtheorem`，`Missing $ inserted` 用 `$…$` 包裹该行的数学片段，未定义的引用、文献键和找不到的文件列出相近名称，括号不配对时跳到未闭合处。修复以一次编辑写入；改动其他文件时提示条可撤销。
-- **表格与矩阵：** 命令面板「插入表格／插入矩阵」打开网格选择器（最大 10 × 8），可选 booktabs 三线表、列对齐、外包 table 环境与标题标签，矩阵可选 pmatrix 等六种括号；插入后 Tab 逐格填写，缺少的 booktabs／amsmath 会自动加入前言。
-- **多项目：** `Ctrl / Command + O` 打开项目页，卡片显示首页缩略图、标题、修改时间与页数；新建、复制、删除（可撤销）和导入 ZIP 都生成独立项目，顶栏项目名的下拉菜单列出最近 5 个项目。存储按项目分区（IndexedDB v3，旧版的单个项目在首次打开时自动迁移），设置与已缓存的宏包跨项目共享；每个浏览器标签页记住自己打开的项目，可同时编辑不同项目。
-- **文件与模板：** 项目菜单打开模板画廊，也可拖入 ZIP。标签可拖动排序，右键关闭其他／右侧标签或定位文件；分隔条支持方向键调整和 Home 复位。
-- **图片与符号：** 图片拖入或粘贴到源码会存入 `figures/` 并插入引用；重名自动加序号。GIF、WebP、BMP 转为 PNG，动画取第一帧。文件树中的 TeX 文件可拖入源码插入 `\input`。文档需加载 `graphicx`；缺少时界面会提示。数学符号面板位于命令面板，支持名称、符号和 `->` 等搜索。
-- **本地历史：** 完整编译成功后，距同项目上一份快照至少 5 分钟时保存文本快照；每个项目最多保留最近 30 份。侧栏「本地历史」默认显示所选快照与当前版本的逐行差异（新增绿、删除红，未改动的连续行折叠），文件标签标出各文件的增删行数；可还原整个快照或只还原当前文件，还原前强制保存当前文本作为恢复快照，现有图片保持不变。快照依赖浏览器存储，不是项目 ZIP 的一部分。
-- **预览与导出：** 触控板捏合或 Ctrl / Command + 滚轮以指针为锚点缩放：手势进行中只缩放页面容器（无重排），结束时一次性提交并清晰重绘；悬停页面时页脚浮出「3 / 13」。浮动工具条提供缩放预设、适应宽度／整页、单页／双页／双页（封面单独）和页码跳转；宽度放不下两页时自动回到单页并在缩放标签旁说明。完整排版的页面叠有 PDF 文本层：按住拖动选择、复制文字，单击仍跳到源码；预览获得焦点时 `Ctrl / Command + F`（或工具条的搜索按钮）在 PDF 文字中查找，显示「第 4 页 · 2 / 7」。实时绘制的临时页暂无文本层，拖动时页角提示完整排版后可选择。深色主题下开启「深色页面」后，只把低饱和度像素按亮度反转到深色纸面，彩色插图保持原色，实时局部绘制走同一处理。预览获得焦点时可用 Page Up / Page Down 翻页。「导出」集中提供 PDF、项目 ZIP 和当前文件；PDF 有待更新时先完整编译。
-
-首次加载提供分阶段进度，可以边加载边编辑。编译错误保留上次成功预览，并在源码行、问题列表和预览提示条中呈现；日志可复制，问题可按级别筛选。界面支持中英文、浅深主题和系统减少动效偏好。本次不扩展窄屏／触控方案（X7）。
-
-## 本版的准确范围
-
-- 真正增量：首次完整编译捕获布局；首次编辑某个单元时校验原文字形与坐标，之后只向常驻引擎发送修改的单元。几何不变时沿用精确行替换；换行、公式增高、段落拆分/删除、相邻普通段落合并时，使用真实 TeX 字形即时重排受影响页面
-- 局部路径还支持已捕获的 itemize/enumerate/description、quote/quotation、section 等标题，以及 proof、abstract、theorem/lemma/proposition/corollary/remark、行内/独立公式、equation、align、gather、multline。定理环境保留标题、共享编号和内部列表。主文件、`\input`（含嵌套引用）和 `\include` 的文本子文件按各自源位置跟踪，包括返回父文件后才结束的末段。快速切换文件产生的多处待更新内容会逐项核验、统一提交预览；任一项失败或版本过期都不会留下半批更新。标题、标签/引用、编号变化会标记待校准；不完整输入保留上一张成功预览
-- 即时重排暂时伸缩页面并移动下方的 PDF 底图，保留正文、插图和页脚；跨页单元暂沿用已捕获的分页位置。停顿后由原有全文引擎恢复精确分页、页码、引用和辅助文件。没有新增分页引擎，也不把临时预览作为导出的 PDF
-- 常驻 LuaTeX 和 PDF.js Worker 复用。完整排版复用同一主文件和前言下上次成功的主／子文件 aux、目录、书签、图表清单与参考文献；逐字节比较辅助文件，稳定时只执行一遍，内容变化或日志要求重跑时才继续。切换主文件、重置项目或删除项目文件时清除复用状态，失败编译不覆盖成功状态；未知宏包输出仍保守执行两遍
-- 首次编译没有可复用的辅助文件，第一遍必定还要重跑，因此只省略这一遍会被丢弃的页面捕获和 JSON 导出；TeX 排版、PDF、辅助文件及其他宏包钩子照常运行，下一遍恢复完整捕获。已有辅助文件时，从第一遍就保留完整捕获，不增加遍数，也不启用草稿输出模式
-- 绘制使用真实字体与整数 scaled-point 坐标。OpenType/TrueType 使用引擎 glyph index；Type 1 字体使用已安装的 PDF.js 转换原 PFB 轮廓，支持直接映射和静态 256 字符重编码（包括 Latin Modern 的 T1 与数学字体），按字体文件及编码缓存，没有新增依赖或另一套公式排版器
-- 已编译 PDF 作为页面底图，只清除并重绘通过边界校验的区域；缩放重放最新局部结果。前言/宏定义、文件结构、不能隔离的跨文件段落、复杂绘图、并列栏相交区域或不受支持的字体/色彩仍走完整编译。预览与 PDF 分别记录版本，迟到的全文结果不能覆盖更新的预览
-- 不含原项目所有 Rust Session 功能；没有承诺与原生版所有包和环境完全等价
-- 支持多文件项目、图片/PDF 上传和项目 ZIP 导入/导出
-- 参考文献：精简的 LuaHBTeX 引擎不含 BibTeX 程序，因此在完整排版的 Worker 中用 JavaScript 实现了 BibTeX（`public/runtime/bibtex.js`），按 bibtex.web 解释任意 `.bst` 样式（姓名格式、大小写、排序、交叉引用、79 列换行）。检测到 `\bibliography`／`\bibdata`（含 biblatex 的 `backend=bibtex`）时在两遍之间生成 `.bbl`；首次需要三遍，之后同一前言下复用 `.bbl` 与 aux，引用不变时不加遍数。样式优先使用项目内的 `.bst`，否则从同一 TeX Live 文件服务获取并与宏包一起缓存。BibTeX 的警告进入问题列表并指向 `.bib` 中的条目行；未找到的文献键由 LaTeX 的警告给出行号并提供快速修复。不支持 Biber；局部实时路径不重排参考文献列表，引用编号由完整排版校准
-- 缺失的宏包、文档类和字体由引擎自动向 TeX Live 2026 文件服务获取。完整编译后将下载文件保存在浏览器 Cache Storage 中，后续完整编译和增量引擎共用；缓存不可用时仍可联网编译。首次使用未缓存文件需要网络，仍不保证所有宏包兼容
-- 外部 shell 命令关闭。编译发生在客户端，不提交文档内容；默认文件服务 texlive2026.texlyre.org 会收到所查询的文件名。需要 Python、图形转换器等外部程序的功能仍需单独支持
-- 对需要三遍以上才能收敛的特殊引用，日志会提示；不声称完整文档已经通用收敛
-
-## 验证结果
-
-真实 WebAssembly、原项目 Lua 文件和浏览器 Worker 脚本已经在 Node worker_threads 中运行：
-
-- 三个完整样例均产生有效 PDF
-- 连续 26 次文字/公式编辑只发生初始化的一次全文编译，常驻引擎重启次数为零；最终所有字形与坐标逐项等于重新完整编译的结果
-- 上述测试包括行内公式、分式求和、编号公式、align、跨段落修改、proof/abstract、小标题正文、T1 字体与初始 PDF 中不存在的数学字形。Node 回归测试数据见 `qa/incremental-math.json`，不含浏览器输入调度
-- Codex 内置浏览器实测：公式补全到 Full 更新约 131 ms；预热后的局部处理约 6–8 ms，首次数学字体转换约 125–156 ms。这些是本机单次观测，不是延迟保证
-- 未完成公式保留画面且不触发编译；PDF 下载触发完整编译，并通过实际下载文件的文本提取确认包含最新文字
-- 用户完整 13 页论文（含两张 PDF 插图）的六次正文/公式交替编辑全部走 Live，处理为 22–187 ms，全文编译计数不变；插图所在页另有两次 Live 更新。缩放保留最新公式，实际下载 PDF 经文本提取确认包含最新修改，测试后恢复原稿。细节见 QA.md
-- 122 项单元/DOM/渲染器测试、真实 WASM 增量与多文件项目回归、生产构建通过
-
-2026-10-13 的扩展验收通过 145 项测试，另覆盖 11 类真实 WASM 即时编辑，局部阶段只有一次初始全文编译、没有引擎重启；每种结果的字形、字号、进宽和规则都与独立完整编译核对（临时位置和分页不要求一致）。浏览器实测段落拆分、合并、列表增项、公式增高、子文件连续编辑与未完成公式恢复、缩放和最新 PDF 导出。运行 `npm run test:reflow` 可复现引擎检查，完整记录见 QA.md。
-
-后续累计 benchmark 通过 147 项测试：112 次有效局部修改和 17 次未完成公式输入，覆盖连续输入/退格、段落增删与恢复、跨页增长/缩短、公式增高和整块删除/撤销；15 个检查点与独立全文编译核对字形和规则。首段前插入、连同空行删除公式现在也能即时更新；恢复已删除内容会复用原单元，避免误用后续段落的公式计数器。运行 `npm run test:sequence` 复现，结果写入 `qa/live-sequence.json`。Node 本机一次运行中位 5.95 ms、P95 102.88 ms（含局部排版、字形绘制和检查，不含浏览器输入计时器）。浏览器另验证连续输入期间 Live 更新、跨页校准及最新 PDF 内容；详见 QA.md。
-
-2026-10-14 重新使用上述完整 13 页论文与两张原始 PDF 插图验收，改为浏览器实际逐键输入（可信 keydown/beforeinput/input 事件）。定理连续输入 20 键产生 11 次 Live 更新（9.9–17 ms）；跨第 5、6 页的证明连续输入 61 键产生 32 次 Live 更新（16–39 ms），输入期间没有全文编译，停下后约 0.5 秒校准。另验证段落增删、未完成公式保留预览、根式与跨页求和分式恢复；下载 PDF 包含最新修改，测试页已恢复原稿。150 项测试和扩展后的 18 类真实 WASM 重排检查通过，记录见 `qa/full-paper-input.json` 与 QA.md。
-
-2026-10-14 源码裁剪版通过 172 项测试及全文、增量、重排、连续编辑、多文件、模板、PDF 文本与独立分发包回归。新旧引擎三轮对照的字形、规则和坐标签名全部一致；本机冷加载中位数从 689 ms 降至 342 ms，增量服务启动从 993 ms 降至 675 ms。预热局部核心请求为 0.23/0.27 ms，没有加速结论；浏览器实测预热 Live 4.7 ms。数据见 `qa/luahbtex-{before,after,verification}.json` 与 QA.md。
-
-浏览器验证限定桌面 Codex 内置浏览器。中文输入法按用户要求未测试；Safari、Firefox、移动端、物理键盘及更大文档的性能尚未验收。局部绘制要求白色纸面，不能解释的全页绘制仍回退。不能据这些样例声称任意 LaTeX 操作都即时完成。
-
-## 开发
-
-源码包中：
+### 2. 从源码运行与构建
 
 ```sh
 npm ci
-npm run dev
-npm run build
-npm run build:engine
-npm run test:engine
-npm test
-npm run test:runtime
-npm run test:integration
-npm run test:preview
-npm run test:incremental
-npm run test:reflow
-npm run test:sequence
-npm run test:live-project
+npm run dev       # 启动 Vite 开发服务器
+npm run build     # 构建生产版本至 dist/
+npm run preview   # 使用本机静态服务器运行 dist/ (http://127.0.0.1:4173)
 ```
 
-npm run preview 使用本机静态服务器提供 dist。Worker 位于 public/runtime，增量 Lua/TeX 源码在 engine/tex（修改后需重建 WASM），压缩 WASM/数据在 public/luahbtex。Vite 只打包现有产物；源码编译步骤见 engine/build/README.md。
+首次访问将分阶段流式加载约 **42.4 MiB** 的压缩引擎与数据（gzip 解压后约 54.4 MiB，内部 TeX 文件按 16 KiB LZ4 分块存储），加载过程中即可开始编辑。仅预装裁剪后的 TeX Live basic；当文档实际使用 `microtype`、`booktabs`、`enumitem` 等额外宏包时，引擎会自动按需下载并持久化至浏览器 `Cache Storage`。
 
-Node 回归测试使用 `tests/fixtures/tex-packages.json.gz` 中的少量已下载宏包运行离线检查；这些测试夹具不会打包到网页。浏览器运行时仍按需获取缺失文件，包含 microtype 的 Lua 模块和字体配置。
+---
 
-`npm run test:live-project` 在 Node 中执行实际 `main.js` 更新路径、WASM 和 Canvas 绘制，仅适配编辑器 DOM；覆盖子文件末段、嵌套引用、多个文件同批修改、段落拆分、不完整公式、过期响应与批次失败回退，并与独立全文编译核对字形和规则。该测试使用 Node 的实验性 VM 模块接口；浏览器输入调度另通过 `tests/browser-input.html` 验证。
+## 核心技术架构
 
-浏览器输入 benchmark：运行开发服务器后打开 `/tests/browser-input.html`，通过项目 ZIP 导入完整论文及插图；待全文编译完成，展开 `Input benchmark`，点击 `Reset measurements`，再用键盘连续编辑。面板统计真实输入事件、Live 状态、全文请求及 Live Worker 启动次数，`Download trace` 导出记录。恢复基准原稿后可重复同一操作；面板只在该测试页面加载。
+```mermaid
+flowchart TB
+  subgraph UI["主线程：零依赖写作工作区与字形渲染器"]
+    Editor["代码编辑器与多文件工程\n(UTF-16 范围跟踪、源码准入策略、快速修复)"]
+    Coordinator["增量协调器与快照状态机\n(原文基线核验、版本代际守卫、多文件原子提交)"]
+    Canvas["显示列表与页面条带渲染器\n(OpenType.js + PDF.js Type 1 轮廓转换 + PDF 底图合成)"]
+    Inspector["实时检查器与双向精准同步\n(24 帧耗时时间线、字形级源码定位)"]
+  end
 
-`tests/runtime-helpers.mjs` 提供 Node 的浏览器 Worker 适配；增量服务直接由 WASM 装载。`tests/engine-binary.test.mjs` 检查二进制哈希、嵌入源码一致性和资源裁剪；`node tests/engine-benchmark.mjs output.json [reference.json]` 测量冷启动、全文和预热局部请求，并逐项比较固定样例的排版签名。
+  subgraph Live["独立 Web Worker：常驻增量引擎 (LiveEngine)"]
+    Mailbox["SharedArrayBuffer 共享信箱\n(Atomics.wait /dev/rtex-req 与 /dev/rtex-resp)"]
+    Serve["LuaHBTeX 1.24.0 + /rtex/rtex-serve.lua\n(常驻 TeX 外层循环、上下文回放、RTDL 二进制编码)"]
+  end
 
-`node tests/full-compile-benchmark.mjs output.json [reference.json]` 单独测量全量编译：三轮数学多页、Type 1 字体、目录／书签、子文件、参考文献和 PDF／PNG 图片文档，分别记录初次编译、正文编辑和重复编译的耗时；与基线比较排版坐标、捕获上下文、PDF 文字、书签、aux，以及去除日期和尾部 ID 后的 PDF 全部字节。编译耗时不包含引擎启动、网络下载与页面绘制，`initialTotalMs` 另计入本地引擎加载；对比前后需保持源码和夹具哈希一致。`npm run test:preview` 验证辅助文件复用、标题／标签增删、图表清单、捕获恢复、其他钩子保留和失败恢复。
+  subgraph Bg["独立 Web Worker：全量编译引擎 (BackgroundEngine)"]
+    FullTeX["LuaHBTeX 1.24.0 + /rtex/rtex-capture.lua\n(Shipout 页面捕获、辅助文件字节复用、线性内存快照重置)"]
+    JSBib["浏览器内 JS BibTeX 引擎\n(bibtex.web .bst 栈式解释器与 .bbl 缓存)"]
+    PkgCache["TeX Live 2026 按需包加载器\n(__wrap_kpse_find_file + Cache Storage)"]
+  end
 
-独立模块用 `createEngine({endpoint})` 指定包服务地址；设为 `''` 可关闭远程查找及远程文件缓存恢复。网页在 `main.js` 的 `createEngine` 调用中传入该选项；默认地址仍在 `public/runtime/raw-loader.js` 中。自托管服务必须实现 BusyTeX 的 `GET /<format_id>/<filename>` 接口并使用配套的 TeX Live 2026 文件树，不能直接填写 CTAN 地址。完整编译（包括下载）最多 120 秒，可随时取消。浏览器清理网站数据会删除宏包缓存；只缓存成功下载的文件，不持久化缺失结果。随应用打包的字体不查询不存在的可选替代格式；完整编译遇到的 404 结果在当前会话内传给实时引擎，避免局部编辑重复等待网络。首次完整编译、引擎预热与后续局部更新的耗时不同；修改前言或不支持的内容仍会触发全文排版，局部重排后的精确分页也由全文编译完成。
+  Editor -->|"~60 ms 输入防抖\nfindLiveEdit & liveSourcePolicy"| Coordinator
+  Coordinator -->|"Atomics.store + notify\nJSON / C 协议帧"| Mailbox
+  Mailbox <--> Serve
+  Serve -->|"PostMessage 零拷贝传输\n二进制 RTDL + 按字体去重字节流"| Coordinator
+  Coordinator -->|"replaceUnitRows & pageFlow"| Canvas
+  Canvas <--> Inspector
 
-## 来源与许可证
+  Editor -->|"~500 ms 停顿收敛\n或前言 / 结构变更"| FullTeX
+  FullTeX <--> JSBib
+  FullTeX <--> PkgCache
+  FullTeX -->|"可转移 PDF + 捕获 JSON\n+ Aux + 404 负缓存表"| Coordinator
+```
 
-- realtime-tex，MIT，固定提交 1f681835cfcbeeabcca340b7784316a0ef186d81：https://github.com/HenryXiaoYang/realtime-tex
-- TeXlyre BusyTeX 的官方 assets-v1.4.0 分发（内含 TeX Live 2026、LuaHBTeX 1.24）：https://github.com/TeXlyre/texlyre-busytex/releases/tag/assets-v1.4.0
-- 引擎构建工程：https://github.com/TeXlyre/texlyre-busytex-build
-- PDF.js：https://github.com/mozilla/pdf.js
-- OpenType.js：https://github.com/opentypejs/opentype.js
+### 1. 双 Worker 常驻架构与零 Asyncify 同步通信
 
-本项目按 AGPL-3.0 分发；TeX 引擎、宏包与字体保留各自许可证。见 THIRD-PARTY-NOTICES.md。生成的用户 PDF 不因为使用本应用而自动改为 AGPL。
+将增量 TeX 搬进浏览器面临一个底层运行时矛盾：**当 WebAssembly 在 C/Lua 内部同步阻塞等待下一条排版请求时，同一个 Web Worker 的事件循环被冻结，无法接收 `postMessage`**；而如果每次按键都重启进程，又会彻底丧失毫秒级响应。
+
+- **基于 `SharedArrayBuffer` 的虚拟字符设备**：LightningTeX 没有采用会导致二进制体积膨胀与宏展开性能下降的 Emscripten Asyncify，而是在 [`public/runtime/live-worker.js`](public/runtime/live-worker.js) 中向虚拟文件系统注册了 `/dev/rtex-req` 与 `/dev/rtex-resp` 两个字符设备，底层挂载 1 MiB 的 `SharedArrayBuffer` 信箱。Lua 服务端（[`rtex-serve.lua`](engine/tex/rtex-serve.lua)）在 `\loop\rtexstep\ifnum\rtexcontinue>0 \repeat` 循环中读取请求时，通过 `Atomics.wait` 原地挂起，完整保留已加载的前言宏、字体表与寄存器状态；主线程写入请求后通过 `Atomics.notify` 瞬时唤醒排版。
+- **共享 `WebAssembly.Module` 与隔离内存**：`BackgroundEngine` 完成首次 `luahbtex.wasm` 编译后，将已编译的 `WebAssembly.Module` 直接共享给 `LiveEngine`，省去二次网络下载、解压与 WASM 编译开销，同时严格隔离两个 Worker 的可变线性内存与文件系统。
+- **状态污染检测与看门狗恢复**：每次在独立 `\vbox` 中排完单元后，`rtex-serve.lua` 会校验并还原 TeX 计数器与宏指纹。一旦检测到全局状态泄漏、内部错误或超过 6 秒实时超时，宿主会立即终止并丢弃该 Worker、隔离触发崩溃的片段，并在后台无缝预热新实例。
+
+### 2. 布局捕获、增量上下文回放与原文基线核验
+
+- **全量捕获插桩（[`rtex-capture.lua`](engine/tex/rtex-capture.lua)）**：全量编译时通过 LuaTeX `pre_shipout_filter` 与段落回调捕获文档中的全部单元（普通段落 `par`、数学环境 `equation`/`align`/`gather`/`multline`/`displaymath`、定理族 `theorem`/`lemma`/`proposition`/`corollary`/`remark`、`proof`、`abstract`、列表 `itemize`/`enumerate`/`description`、引文 `quote`/`quotation` 以及章节标题 `\section`…`\subparagraph`），记录差分编码的计数器、`\the<counter>` 格式、NFSS 字体状态、段落几何参数（`\parindent`、`\leftskip`、`\rightskip`、`\parfillskip`、`parshape`、`everypar`）及每页显示列表。
+- **累积增量上下文重建（[`core/capture.js`](core/capture.js)）**：单独重排第 $k$ 个单元时，`unitContext(capture, unit)` 按文档顺序累积回放 $1 \dots k$ 的状态差分，精确还原该单元起始处的计数器、字体、颜色栈与段落参数；相同上下文在连续请求中自动缓存复用。
+- **首次编辑强制基线核验（`compareUnitBaseline`）**：首次对某个已捕获单元进行局部编辑前，宿主会先将该单元捕获时的**原始源码**发送给常驻引擎排版，并逐行比对行数、盒尺寸（`w`/`h`/`d`）、粘连伸缩（`gs`/`gsign`/`gorder`）、字体键值、字形索引及相对 `sp` 坐标。只有基线 100% 吻合才放行局部更新。
+- **多文件源位置跟踪与原子批次提交（[`core/document.js`](core/document.js)）**：独立跟踪主文件、`\input`（含嵌套引用及返回父文件后才闭合的末尾段落）与 `\include` 子文件的 UTF-16 源码区间。快速切换文件产生的多处修改会逐一核验并作为单一批次原子提交预览，任何一项失败或版本过期都不会留下半批残缺画面。
+
+### 3. 字形级显示列表渲染、Type 1 轮廓复用与临时页面重排
+
+- **精确字形索引 Canvas 渲染器（[`render/canvas-renderer.mjs`](render/canvas-renderer.mjs)）**：解析 `RTDL` v1 二进制显示列表，直接按引擎输出的字形索引（glyph index）在字体坐标空间绘制二次/三次贝塞尔曲线轮廓，严格遵循 `CSS_PX_PER_SP = 96 / (72.27 * 65536)` 比例，支持独立水平字宽伸缩（`microtype` font expansion / extend）与倾斜矩阵变换（`y` 轴向上转 Canvas `y` 轴向下），绝不调用浏览器 `fillText` 或系统字体匹配。
+- **零额外依赖的 Type 1 PFB 轮廓转换（[`render/type1-font.mjs`](render/type1-font.mjs)）**：针对 Computer Modern / Latin Modern 数学字体与 T1 编码等 PostScript Type 1（`.pfb`）字体，LightningTeX 在内存中动态构造一份仅包含 256 个字符编码与静态 `ReEncodeFont` 向量的极简一页 PDF，交由已加载的 `PDF.js` Worker 一次性提取转换后的 OpenType 轮廓及 `originalCharCode -> glyphIndex` 精确映射并缓存——即便某个数学符号在初始 PDF 中从未出现，也能在局部输入时即时渲染。
+- **边界守卫局部擦除与条带切片重排（[`core/live-layout.js`](core/live-layout.js)）**：
+  - **固定几何（`Live`）**：根据字形曲线控制点与标尺计算保守墨迹边界（`inkBounds`），确认与相邻行、插图及页眉页脚零相交（`unitInkRegion`）后，仅在已缓存的 PDF 底图上清除并重绘该局部区域。
+  - **可变几何（`Reflow`）**：当换行导致行数增减、分式/矩阵撑高公式、或段落拆分/合并/删除时，`pageFlow` 将缓存的 PDF 页面切分为水平条带（bands），动态伸缩受影响条带并整体平移下方 PDF 底图（保留下方正文、插图与页脚），同时标记 `分页待校准`；停顿约 500 ms 后由后台全量编译恢复精确分页。
+  - **保色深色纸面（[`render/dark-page.mjs`](render/dark-page.mjs)）**：深色主题开启「深色页面」后，仅将低饱和度像素按亮度反转至 `#1c1e22` 深色纸面，彩色插图保持原色；全量 PDF 页面与局部实时重绘条带走完全一致的像素处理。
+
+### 4. 源码级 WASM 裁剪、单遍辅助文件复用与内置 JS BibTeX
+
+- **体积缩减 44.2% 的专用 LuaHBTeX WASM（[`engine/build/`](engine/build/README.md)）**：基于 TeX Live 2026 源码与 Emscripten 5.0.4（`-Oz`）构建专用入口，仅链接 LuaHBTeX、HarfBuzz/Graphite、Kpathsea 及必需的 PDF/字体库，彻底剔除 pdfTeX、XeTeX、BibTeX、MakeIndex、DVI 工具及 ICU/fontconfig 等冗余组件；将 `/rtex` 增量服务直接内嵌至 WASM 镜像，裁除 1,587 个非必需资源文件，并将编译器与打包器的 LZ4 分块统一提升至 16 KiB：
+  - **原始 WASM 体积**：`31.0 MiB` → **`4.68 MiB`**（gzip 后仅 `1.83 MiB`）
+  - **压缩引擎与数据总传输量**：`76.0 MiB` → **`42.4 MiB`**（解压后约 `54.4 MiB`）
+- **单遍辅助文件复用与冷启动首遍加速（[`public/runtime/background-worker.js`](public/runtime/background-worker.js)）**：
+  - 全量编译在内存中保留同一主文件与前言下上次成功的 `.aux`（含嵌套 `\include` 子文件 aux）、`.toc`、`.out`、`.lof`、`.lot` 与 `.bbl`。每遍结束后逐字节比对辅助文件：若内容未变且无重跑警告，**仅执行一遍（1 pass）即告完成**，使含目录/书签/子文件的常规全量编译耗时减半（约 1.4 s 降至 0.6–0.7 s）。
+  - 首次冷编译无辅助文件可复用、第一遍注定需要重跑时，首遍自动通过 `\RemoveFromHook` 与 `remove_from_callback` 跳过会被丢弃的 `rtex-capture` 页面遍历与 JSON 导出（保留全部 TeX 排版与宏包钩子），在下一遍自动恢复完整捕获，单次冷启动立省约 150–210 ms。
+- **纯 JavaScript BibTeX `.bst` 解释器（[`public/runtime/bibtex.js`](public/runtime/bibtex.js)）**：按照 `bibtex.web` 规范用 JavaScript 完整实现了 `.bst` 栈式语言解释器（支持姓名格式化、大小写转换、排序、交叉引用与 79 列折行）。检测到 `\bibliography` 或 `\bibdata`（含 `biblatex` 的 `backend=bibtex`）时在两遍编译之间生成 `.bbl`；缺失的 `.bst` 样式自动从 TeX Live 服务获取并缓存，BibTeX 警告精准关联至 `.bib` 文件行号。
+- **按需宏包缓存与 404 负缓存共享**：缺失宏包与字体通过 `__wrap_kpse_find_file` 自动从 `texlive2026.texlyre.org` 下载并存入浏览器 `Cache Storage`。随包字体的可选衍生格式缺失记录与全量编译遇到的 404 结果会在当前会话内直接同步给常驻引擎，彻底消除局部打字时的冗余网络等待。
+
+---
+
+## 现代 LaTeX 写作工作区
+
+LightningTeX 的工作区界面（[`ui/`](ui/editor.js)）采用原生 ES 模块从零构建，无任何前端框架依赖，围绕学术写作的高频交互打磨了完整的工具链：
+
+| 模块 | 核心特性 |
+| :--- | :--- |
+| **实时状态胶囊与检查器 (Live Inspector)** | 顶栏状态胶囊实时显示最近一次局部更新耗时（如 `Live 6.1 ms`）与 12 帧迷你波形。点击展开 **Live Inspector**：展示最近 24 次更新的分类柱状时间线（`Live` / `Reflow` / `Full` / `Waiting`）、最新一次更新走该路径的具体原因、常驻引擎状态与重启计数、中位耗时，以及 PDF 同步滞后步数（`Live · PDF pending` 或 `已同步`）。 |
+| **源码 ⇄ 预览双向字形级同步** | **源码 → 预览**：光标移动时在纸面侧边高亮对应段落/公式/标题位置；滚动离开视野时显示边缘定位胶囊。<br>**预览 → 源码**：单击预览任意位置会触发 `alignGlyph`，将渲染出的字形码点（经 NFKC 归一化，兼容连字与数学斜体）与源码字符序列对齐，精准跳转到所点击的具体单词。 |
+| **光标公式预览与智能悬停卡片** | **光标处公式浮窗**：复用常驻引擎与文档前言宏实时排版光标所在公式，未写完的括号、`{}`、`\left...\right.` 或环境会自动闭合预览，行内公式包裹于自然宽度 `\hbox` 中。<br>**悬停卡片（400 ms）**：悬停在 `\ref`/`\eqref` 上直接渲染目标公式预览；悬停在 `\includegraphics` 上显示图片缩略图与尺寸；悬停在自定义宏或 `\cite` 上展示宏定义展开或格式化后的文献条目。按住 `⌘/Ctrl` 点击或按 `F12` 直接跳转定义。 |
+| **跨文件重构与灯泡快速修复** | **跨文件重命名（`F2`）**：在任意 `\label` 或引用处按 `F2`，实时预览所有受影响的文件与行，回车一次性完成跨文件替换并支持一键全局撤销；`⇧F12` 在引用面板列出所有引用位置。<br>**快速修复（`⌘.` / `Ctrl+.` 或行号 💡）**：针对未定义命令/环境推荐所属宏包（覆盖 80+ 常用宏包与拼写相近命令）或补全 `\newtheorem`；`Missing $ inserted` 自动用 `$…$` 包裹数学片段；未定义标签、文献键和文件路径列出编辑距离最近的候选；括号不匹配直接定位未闭合处。 |
+| **补全、代码片段与可视化构建器** | 命令、环境、标签、文件路径与 `.bib` 文献（按键名、作者、年份、标题匹配）智能补全。支持 `fig`、`tab`、`mat`、`eq`、`beg` 行首 Tab 展开与镜像占位符跳转。内置 **表格与矩阵可视化网格选择器**（最大 10×8，支持 `booktabs` 三线表、列对齐、6 种矩阵括号、Tab 逐格填写，并自动将缺失的 `booktabs`/`amsmath` 加入前言）。 |
+| **PDF 文本层、跨页视图与缩放** | 完整编译页面叠加 **PDF.js 文本层**：按住拖动即可选择复制 PDF 文字，预览聚焦时按 `⌘F` / `Ctrl+F` 在 PDF 全文中搜索高亮（如 `第 4 页 · 2 / 7`），单击仍保持跳回源码。支持触控板捏合与指针锚点缩放、单页 / 双页 / 双页（封面单独）视图、页面缩略图栏（`⌥⌘T`）与保色 **深色页面**。 |
+| **多项目工作台与本地历史 Diff** | **IndexedDB v3 多项目隔离存储**（`⌘O` / `Ctrl+O`）：项目卡片展示首页缩略图、标题、修改时间与页数；支持模板画廊、ZIP 导入导出、多标签页独立打开不同项目；拖入或粘贴图片（GIF/WebP/BMP 自动转 PNG）自动存入 `figures/` 并插入引用。<br>**本地历史**：每次完整编译成功后（间隔满 5 分钟）自动保存快照（每项目最多 30 份），内置基于 Myers 算法的逐行 Diff 视图（折叠未改动行），支持整包还原或单文件还原。 |
+
+### 常用快捷键一览
+
+| 快捷键（macOS / Win & Linux） | 功能说明 |
+| :--- | :--- |
+| `⌘Enter` / `Ctrl+Enter` | 立即执行完整 LuaHBLaTeX 编译 |
+| `⌘K` / `Ctrl+K` | 打开命令面板（`@` 搜章节与标签，`>` 搜命令，`:行号` 跳转，内置数学符号搜索） |
+| `⌘.` / `Ctrl+.` | 打开当前诊断行的「快速修复」菜单 |
+| `F2` / `F12` / `⇧F12` | 跨文件重命名标签与引用 / 跳转到定义 / 查找所有引用 |
+| `⌘F` / `⌥⌘F` (`Ctrl+Shift+H`) | 源码查找与正则替换（当预览区聚焦时 `⌘F` 为在 PDF 文字中查找） |
+| `⌘\` / `Ctrl+\` | 切换工作区布局（`源码` / `分栏` / `预览`） |
+| `⌘B` / `⌘J` / `⌥⌘T` | 切换左侧栏（文件/大纲/标签） / 问题与日志面板 / PDF 页面缩略图栏 |
+| `⌘O` / `⌘,` | 打开多项目管理页 / 打开可搜索的设置对话框 |
+| `⌥↑` `⌥↓` / `⇧⌥↓` / `⌘⇧K` | 上下移动当前行 / 向下复制行 / 删除整行 |
+| `⌘L` / `⌘D` | 选中整行（重复按向下扩展） / 选中当前词并跳至下一处相同文本 |
+
+---
+
+## 独立 WASM 引擎模块 (`@lightningtex/engine`)
+
+LightningTeX 的底层排版引擎与前端 UI 完全解耦。运行 `npm run build:engine` 即可生成可独立部署的 `dist-engine/` 目录（或通过 `npm pack ./dist-engine` 打包分发），零运行时 npm 依赖，无需编辑器、PDF.js 或任何前端框架：
+
+```js
+import {
+  createEngine, splitPreamble, captureSpans, unitContext,
+  liveUnitEligibility, compareUnitBaseline, decodeDisplayList,
+} from './dist-engine/index.js';
+
+const engine = await createEngine({
+  onLog: console.log,
+  onFonts: fonts => { /* 每个常驻 Worker 生命周期内每个字体文件仅传输一次 */ },
+});
+
+// 1. 完整编译：返回 PDF、捕获元数据、各页显示列表、字体、aux 与缺失包记录
+const full = await engine.background.compile(source, { root: 'main.tex', files: [] });
+
+// 2. 启动常驻增量服务（直接复用已编译的 WebAssembly.Module）
+await engine.live.start(
+  splitPreamble(source).preamble + '\n\\RequirePackage{luatexbase}\n',
+  full.aux, [], full.packageMisses,
+);
+
+// 3. 首次编辑某个捕获单元时核验原文基线，随后执行毫秒级增量排版
+const span = captureSpans(source, full.capture).find(s => liveUnitEligibility(full.capture, s.unit).ok);
+const ctx = unitContext(full.capture, span.unit);
+const baseline = decodeDisplayList((await engine.live.compile(ctx, span.original, span.unit.advanced)).binary);
+if (!compareUnitBaseline(span.unit, full.pages, baseline).ok) throw new Error('基线核验未通过');
+
+const liveResult = await engine.live.typeset(ctx, '修改后的段落与公式 $\\sum_{i=1}^n x_i$。');
+const displayList = decodeDisplayList(liveResult.binary);
+```
+
+完整的模块接口、多文件协作约定与选项说明见 [**engine/README.md**](engine/README.md)；独立 Canvas 显示列表渲染器文档见 [**render/README.md**](render/README.md)。
+
+---
+
+## 验证与性能基准
+
+本项目包含 **201 项单元 / DOM / 渲染器测试** 以及多项基于真实 WebAssembly 与浏览器环境的端到端回归基准（在 Node `worker_threads` 及桌面 Chromium 中直接运行真实的 LuaHBTeX WASM、原项目 Lua 脚本与 Worker 代码）：
+
+| 验证套件 / 基准测试 | 运行命令 | 核心实测结果 |
+| :--- | :--- | :--- |
+| **源码裁剪版引擎基准** | `node tests/engine-benchmark.mjs` | 新旧引擎三轮对照的字形、规则和坐标签名 **100% 一致**；本机冷加载中位数从 `689 ms` 降至 **`342 ms`**，增量服务启动从 `993 ms` 降至 **`675 ms`**；预热后核心请求仅 **`0.23–0.27 ms`**（浏览器预热 Live 实测 `4.7 ms`）。 |
+| **26 次连续数学与正文增量回归** | `npm run test:incremental` | 涵盖行内公式、分式求和、编号 `equation`、`align`、`proof`/`abstract`、T1 字体与初始 PDF 中不存在的数学字形：**仅 1 次初始全量编译、0 次常驻引擎重启**，最终所有字形与 `sp` 坐标逐项等于独立重新完整编译的结果。 |
+| **18 类局部重排与定理环境验证** | `npm run test:reflow` | 覆盖段落拆分/合并/删除、列表增项、公式增高、标题与共享编号的 `theorem`/`lemma`/`proof` 嵌套列表，字形、字号、进宽与标尺全部与独立全量编译一致。 |
+| **112 步连续累积编辑与容错基准** | `npm run test:sequence` | 112 次有效局部修改 + 17 次未闭合公式输入（含跨页增删、首段前插入、整块删除与恢复），**仅 1 次初始全量编译、0 次引擎重启**，15 个检查点与独立全量编译逐项吻合（Node 编译+绘制中位耗时 **`5.95 ms`**）。 |
+| **13 页真实学术论文逐键输入实测** | `tests/browser-input.html` | 含两张原始 PDF 插图的 13 页完整论文（46.5 KB 源码）：定理环境连续输入 20 键产生 11 次 Live 更新（**`9.9–17 ms`**），跨第 5–6 页证明连续输入 61 键产生 32 次 Live 更新（**`16–39 ms`**），打字期间全量编译次数为 0，停顿约 0.5 秒后自动完成全局校准。 |
+| **多文件工程实时协同回归** | `npm run test:live-project` | 在 Node 中执行真实 `main.js` + WASM + Canvas 路径，验证 `\input` 末段、嵌套子文件、多文件同批修改、过期响应丢弃与批次失败原子回退。 |
+| **辅助文件复用与首遍捕获优化** | `npm run test:preview` | 辅助文件未变时单遍收敛使含目录/书签/子文件的全量编译中位耗时从 **`1.25–1.43 s` 降至 `0.62–0.71 s`**；冷启动首遍省略冗余页面捕获额外节省 **`150–210 ms`**，且归一化 PDF 字节完全一致。 |
+
+### 编译路由与运行模型
+
+- **增量与全量自动路由**：在已捕获的正文段落、数学环境、定理族、列表、引文与章节标题内的编辑由常驻 `LiveEngine` 处理（几何尺寸不变时走 `Live` 原位重绘；行数或高度变化时走 `Reflow` 条带伸缩）。修改前言、宏定义、文档结构、复杂绘图（如原始 PDF literal / TikZ）或跨文件耦合段落时，自动路由至后台 `Full` 全量编译。
+- **停顿分页收敛**：局部条带重排在连续输入期间提供即时视觉反馈，并在停顿约 500 ms 后自动触发后台全量编译，收敛全局分页、页码与交叉引用。导出 PDF 时若存在未收敛的局部修改，会自动完成全量编译后再输出。
+- **参考文献管线**：后台 Worker 内置 JavaScript BibTeX 引擎，支持标准 `.bst` 样式（含 `biblatex` 的 `backend=bibtex`）；首次生成或更新 `.bbl` 时最多运行三遍，后续引用未变时直接复用 `.bbl`。
+- **客户端沙箱与按需包加载**：全部编译在浏览器 WebAssembly 虚拟文件系统中执行，默认启用 `--no-shell-escape` 与 `--nosocket`。当文档引用未预装的 TeX Live 宏包或字体时，运行时仅按文件名向 `https://texlive2026.texlyre.org` 请求对应资源并持久化至浏览器 `Cache Storage`（可通过 `endpoint: ''` 关闭远程查找或配置自建镜像）。
+
+完整的基准测试数据与回归记录见 [**QA.md**](QA.md) 与 [`qa/`](qa/) 目录。
+
+---
+
+## 仓库目录结构
+
+```text
+LightningTeX/
+├── main.js                  # 应用主协调器：PDF.js 渲染、局部擦除与条带重排、字形级双向同步
+├── server.mjs               # 零依赖本地静态服务器（自动附加 COOP/COEP 跨源隔离头）
+├── core/                    # 核心领域逻辑：源码准入策略、区间映射、上下文回放、局部布局、Myers Diff、快速修复
+├── engine/                  # 独立 @lightningtex/engine 模块入口、Worker 客户端、内嵌 Lua/TeX (/rtex) 与源码构建脚本
+├── render/                  # RTDL 二进制显示列表解码器、OpenType/Type 1 PFB Canvas 渲染器、保色深色页面滤镜
+├── ui/                      # 零依赖工作区界面：代码编辑器、实时检查器、悬停卡片、补全、IndexedDB v3 多项目存储
+├── public/
+│   ├── luahbtex/            # 源码裁剪构建的 LuaHBTeX 1.24.0 WASM 与 TeX Live 2026 LZ4/gzip 分块资源
+│   └── runtime/             # Web Worker 运行时（background-worker、live-worker、raw-loader、tex-packages、JS bibtex）
+├── scripts/                 # 资源哈希校验、16 MiB 分块打包器与独立引擎构建脚本
+├── tests/                   # 201 项单元/DOM 测试 + 真实 WASM 增量、重排、连续输入、参考文献与性能基准套件
+└── docs/                    # 自托管部署指南、架构移植审计与运行时探针文档
+```
+
+### 常用开发与验证命令
+
+```sh
+npm test                     # 运行全部 201 项单元、DOM 与显示列表渲染器测试
+npm run test:runtime         # 真实 WASM 冒烟测试（全文编译、捕获、常驻服务、错误恢复）
+npm run test:integration     # 端到端 WASM 集成测试
+npm run test:preview         # 验证辅助文件单遍复用、冷启动首遍优化与目录/书签输出
+npm run test:incremental     # 26 次连续数学/正文增量编辑与最终字形坐标一致性回归
+npm run test:reflow          # 18 类真实 WASM 局部重排与定理环境回归测试
+npm run test:sequence        # 112 步累积连续输入与未完成公式容错基准测试
+npm run test:project         # 多文件项目与光标处公式预览 WASM 回归测试
+npm run test:live-project    # 真实 main.js + WASM + Canvas 多文件批次更新测试
+npm run test:bibliography    # 浏览器内置 JS BibTeX (.bst) 与多遍文献编译回归测试
+npm run test:engine          # 构建并拷贝至仓库外验证 @lightningtex/engine 独立分发包
+```
+
+---
+
+## 来源致谢与开源许可
+
+LightningTeX 的构建基于以下优秀的开源项目：
+
+- **[realtime-tex](https://github.com/HenryXiaoYang/realtime-tex)**（MIT，固定提交 `1f681835cfcbeeabcca340b7784316a0ef186d81`）—— 提供 Lua 端增量捕获、上下文回放、常驻段落服务与二进制显示列表协议。
+- **[TeXlyre BusyTeX](https://github.com/TeXlyre/texlyre-busytex/releases/tag/assets-v1.4.0) 与 [texlyre-busytex-build](https://github.com/TeXlyre/texlyre-busytex-build)**（`f544a51a`，内含 TeX Live 2026、LuaHBTeX 1.24.0）—— 提供 Web2C Emscripten 构建规则与基准 TeX Live 2026 数据快照。
+- **[PDF.js](https://github.com/mozilla/pdf.js)**（`6.4.299`，Apache-2.0）—— 用于完整 PDF 页面栅格化、文本层交互以及 Type 1 PFB 字形轮廓转换。
+- **[OpenType.js](https://github.com/opentypejs/opentype.js)**（`2.0.0`，MIT）—— 用于显示列表 Canvas 渲染器的字形轮廓解析。
+- **[Inter](https://github.com/rsms/inter)**（`5.2.5`，SIL OFL 1.1）—— 随应用本地打包的拉丁可变界面字体。
+
+本项目按 **GNU Affero General Public License v3.0 or later ([AGPL-3.0-or-later](LICENSE))** 许可证分发；随附的 TeX 引擎、宏包与字体保留各自原始许可证，完整来源、固定版本与哈希记录见 [**THIRD-PARTY-NOTICES.md**](THIRD-PARTY-NOTICES.md)。用户使用本应用生成的 PDF 文档与源码不会因使用本应用而受到 AGPL 约束。
