@@ -1,6 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
   <title>LightningTeX</title>
   <rect width="40" height="40" rx="5" fill="#f5b800"/>
-  <!-- Keep this outline identical to logo.svg; favicons must be self-contained. -->
-  <path fill="#1b1d21" transform="translate(6 4) scale(.875)" d="M1 1h30v7.75h-1.6C27.7 5.4 25.7 4.5 22.8 4.5h-1.1c-1.2 0-1.6.3-2 1.5l-2.9 9.1 5.6-.9L8.6 35l5.2-14.8L8 21.9 11.5 6c.2-.8.3-1.1-.2-1.1H8c-2.6 0-4.3 1.1-5.5 3.85H1Z"/>
+  <!-- Keep the path and its optical inset identical to logo.svg; favicons must be self-contained. -->
+  <g fill="#1b1d21" transform="translate(6 4) scale(.875)">
+    <path transform="translate(1.6 3.8) scale(.9)" d="M1 1h30v7.75h-1.6C27.7 5.4 25.7 4.5 22.8 4.5h-1.1c-1.2 0-1.6.3-2 1.5l-2.9 9.1 5.6-.9L8.6 35l5.2-14.8L8 21.9 11.5 6c.2-.8.3-1.1-.2-1.1H8c-2.6 0-4.3 1.1-5.5 3.85H1Z"/>
+  </g>
 </svg>
