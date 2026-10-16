@@ -36,7 +36,7 @@ const canvas=()=>Object.assign(createCanvas(1,1),{style:{},dataset:{},setAttribu
 let resolveBoot,rejectBoot;const booted=new Promise((resolve,reject)=>{resolveBoot=resolve;rejectBoot=reject;});
 const ui={
  ready:Promise.resolve(),getState:()=>({revision}),project:{get:path=>({text:texts.get(path)})},
- setEngineStatus:()=>{},setLoadProgress:()=>{},setMarker:()=>{},refreshMath:()=>{},setProblems:()=>{},
+ setEngineStatus:()=>{},setEngineInfo:()=>{},setLoadProgress:()=>{},setMarker:()=>{},refreshMath:()=>{},setProblems:()=>{},
  setLiveStatus:value=>statuses.push(value),log:(message,level)=>{if(level==='error')rejectBoot(Error(message));},
  setLivePages:result=>{
   if(result.revision!==revision)return false;
