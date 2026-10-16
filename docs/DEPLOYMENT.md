@@ -43,10 +43,10 @@ X-Content-Type-Options: nosniff
 
 ## 3. On-Demand TeX Live Package Service & Caching
 
-LightningTeX preloads a pruned TeX Live 2026 basic dataset (~42.4 MiB compressed). When a document loads additional packages, classes, fonts, or `.bst` bibliography styles:
+LightningTeX preloads a pruned TeX Live 2026 basic dataset (~40.6 MiB compressed; ~42.4 MiB including WASM). When a document loads additional packages, classes, fonts, or `.bst` bibliography styles:
 
 - **Remote Lookup Protocol**: The engine's Kpathsea hook queries `GET <endpoint>/<format_id>/<filename>` (defaulting to `https://texlive2026.texlyre.org`). Only the requested filename and Kpathsea format ID are sent; document contents never leave the browser.
-- **Browser Cache Storage**: Downloaded files are persisted in the browser's `Cache Storage` under `lightningtex-texlive-2026-assets-v1.4.0:<endpoint>` and automatically restored into both the background and live Workers on subsequent sessions.
+- **Browser Cache Storage**: After each full job, the background Worker persists its downloaded files under `lightningtex-texlive-2026-assets-v1.4.0:<endpoint>`. Both Workers restore these files when starting. Files fetched only by the live Worker remain in its in-memory filesystem.
 - **Self-Hosted Package Mirror**: To host your own immutable TeX Live 2026 file server, deploy [`texlyre-busytex-build/texlive-server`](https://github.com/TeXlyre/texlyre-busytex-build) against a matching TeX Live 2026 tree with CORS enabled, and pass its URL to `createEngine({ endpoint: 'https://your-texlive-mirror.example.com' })`.
 - **Offline-Only Mode**: Pass `endpoint: ''` to `createEngine()` to disable all network package lookups.
 

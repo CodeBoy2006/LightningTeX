@@ -1,6 +1,6 @@
 # Offline Test Fixtures
 
-This directory contains TeX Live 2026 files used by the Node regression suites (`tests/worker-harness.cjs` and `tests/bibliography.mjs`) so that all automated tests run deterministically offline. These files are used only during testing and are excluded from production builds.
+This directory contains TeX Live 2026 files that let regression suites using `tests/worker-harness.cjs`, including `tests/bibliography.mjs`, run offline. Browser package-loading tests use the remote TeX Live service. These fixtures are used only during testing and are excluded from production builds.
 
 ## Contents
 

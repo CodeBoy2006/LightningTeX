@@ -76,7 +76,7 @@ git archive 17b307c public | tar -x -C /tmp/lightningtex-resource-input
 node engine/build/extract-data.cjs /tmp/lightningtex-resource-input/public /path/to/work/data
 ```
 
-Inside the Linux build environment, run `prune-data.mjs` to strip non-LuaHBTeX formats, ICU/fontconfig tables, unused CLI tool resources, Metafont sources, logs, and optional AFM files (retaining **5,597 files / 96.8 MiB** and removing **1,587 files / 60.0 MiB**), rebuild `ls-R` databases, and pack the LZ4 + gzip chunks:
+Inside the Linux build environment, run `prune-data.mjs` to strip non-LuaHBTeX formats, ICU/fontconfig tables, unused CLI tool resources, Metafont sources, logs, and optional AFM files (retaining **5,597 files / 92.35 MiB** and removing **1,587 files / 57.23 MiB**), rebuild `ls-R` databases, and pack the LZ4 + gzip chunks:
 
 ```sh
 node /project/engine/build/prune-data.mjs /work/data /work/data-luahbtex-final

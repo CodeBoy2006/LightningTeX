@@ -20,7 +20,7 @@ Modern LaTeX tools have long forced writers into a compromise:
 - **Real TeX, Never Approximated**: Every paragraph, inline or display formula (`equation`, `align`, `gather`, `multline`), list, heading, and theorem environment is typeset by **actual LuaHBLaTeX**. Glyphs are placed at integer **scaled-point (`sp`, $1\text{ pt} = 65536\text{ sp}$)** coordinates and drawn directly from engine font outlines (OpenType/TrueType glyph indices and original Type 1 PFB charstrings).
 - **Two-Speed Hybrid Pipeline (Instant Local Reflow + Quiet Background Convergence)**:
   - **Fast Path (`Live` / `Reflow`, ~5–20 ms warm)**: A persistent LuaHBTeX worker stays alive inside TeX's outer loop (`\loop\rtexstep...\repeat`), replays the exact captured state of the edited unit, typesets only the affected unit in a `\vbox`, and updates the page canvas in place—stretching or slicing horizontal page bands when line counts or formula heights change (`pagination pending`).
-  - **Slow Path (`Full`, ~500 ms idle settlement)**: After typing pauses—or when preambles, cross-references, or unsupported constructs change—a background LuaHBTeX worker runs a full pass to converge pagination, page numbers, TOC/bookmarks, and BibTeX bibliography, reusing auxiliary files byte-for-byte to finish stable edits in a **single pass**.
+  - **Slow Path (`Full`)**: After a provisional `Reflow`, ~500 ms of inactivity triggers background compilation to update pagination, page numbers, TOC/bookmarks, and bibliography. Preamble, cross-reference, or unsupported changes route directly to `Full`. Fixed-geometry `Live` updates keep the preview current without scheduling an idle full compile; PDF export compiles the latest source when needed.
 - **Fail-Closed Correctness & Transparent Observability**: Before any unit is edited live, LightningTeX compiles its *original* captured source in the live worker and proves that every row box, glue setting, font descriptor, glyph index, and relative `sp` coordinate matches the full-compile baseline. Incomplete math delimiters or unbalanced braces never trigger noisy broken builds—the previous valid preview is calmly held while the caret math popover auto-repairs open groups. The top-bar **Live Inspector** shows the exact routing path, latency timeline, and PDF sync state for every keystroke.
 - **100% Client-Side & Zero Backend**: All TeX compilation, BibTeX `.bst` interpretation, font outline parsing, and project persistence happen locally inside the browser. Your document content never leaves your machine.
 
@@ -59,14 +59,14 @@ On first launch, LightningTeX streams **~42.4 MiB** of gzip-compressed engine an
 ```mermaid
 flowchart TB
   subgraph UI["Main Thread: Dependency-Free Workspace & Renderer"]
-    Editor["Code Editor & Multi-File Project\n(UTF-16 Spans, AST Policy, Quick Fixes)"]
+    Editor["Code Editor & Multi-File Project\n(UTF-16 Spans, Source Policy, Quick Fixes)"]
     Coordinator["Live Coordinator & Snapshot State\n(Baseline Proof, Generation Guards, Batch Commit)"]
     Canvas["Display-List & Page Band Renderer\n(OpenType.js + PDF.js Type 1 PFB + PDF Backdrop)"]
     Inspector["Live Inspector & Bidirectional Sync\n(24-Bar Timeline, Glyph-Aligned Hit Testing)"]
   end
 
   subgraph Live["Dedicated Web Worker: Persistent LiveEngine"]
-    Mailbox["SharedArrayBuffer Mailbox\n(Atomics.wait /dev/rtex-req & /dev/rtex-resp)"]
+    Mailbox["SharedArrayBuffer Request Mailbox\n(Atomics.wait /dev/rtex-req)"]
     Serve["LuaHBTeX 1.24.0 + /rtex/rtex-serve.lua\n(Persistent Outer Loop, Context Replay, Binary RTDL)"]
   end
 
@@ -76,14 +76,14 @@ flowchart TB
     PkgCache["On-Demand TeX Live 2026 Loader\n(__wrap_kpse_find_file + Cache Storage)"]
   end
 
-  Editor -->|"~60 ms debounce\nfindLiveEdit & liveSourcePolicy"| Coordinator
+  Editor -->|"~60 ms input coalescing\nfindLiveEdit & liveSourcePolicy"| Coordinator
   Coordinator -->|"Atomics.store + notify\nJSON / C Frame"| Mailbox
-  Mailbox <--> Serve
-  Serve -->|"PostMessage Transferable\nBinary RTDL + Deduplicated Fonts"| Coordinator
+  Mailbox --> Serve
+  Serve -->|"/dev/rtex-resp → postMessage\nBinary RTDL + Deduplicated Fonts"| Coordinator
   Coordinator -->|"replaceUnitRows & pageFlow"| Canvas
   Canvas <--> Inspector
 
-  Editor -->|"~500 ms idle settlement\nor structural / preamble change"| FullTeX
+  Editor -->|"~500 ms idle settlement after Reflow\nor structural / preamble change"| FullTeX
   FullTeX <--> JSBib
   FullTeX <--> PkgCache
   FullTeX -->|"Transferable PDF + Capture JSON\n+ Aux + Negative Lookup Table"| Coordinator
@@ -93,9 +93,9 @@ flowchart TB
 
 A browser WASM port of incremental TeX faces a fundamental runtime constraint: **a Web Worker synchronously blocked inside a C/Lua read loop cannot process `postMessage` callbacks**, while spawning a fresh TeX process per edit destroys millisecond latency.
 
-- **Lock-Free `SharedArrayBuffer` Device Bridge**: Rather than compiling LuaTeX with Emscripten Asyncify (which inflates WASM size and penalizes CPU-bound macro expansion), [`public/runtime/live-worker.js`](public/runtime/live-worker.js) registers two custom virtual character devices (`/dev/rtex-req` and `/dev/rtex-resp`) backed by a 1 MiB `SharedArrayBuffer`. Inside LuaHBTeX, [`rtex-serve.lua`](engine/tex/rtex-serve.lua) executes `\loop\rtexstep\ifnum\rtexcontinue>0 \repeat`. When waiting for the next edit, the synchronous POSIX `read()` blocks inside `Atomics.wait` with the entire TeX state, preamble macros, and loaded fonts kept warm in memory.
-- **Shared `WebAssembly.Module`, Isolated Heap**: `BackgroundEngine` compiles `luahbtex.wasm` once and passes the compiled `WebAssembly.Module` to `LiveEngine`. Both workers skip duplicate network downloads and WASM compilation while maintaining strictly isolated linear memories and virtual filesystems.
-- **State Hygiene & Watchdog Recovery**: After typesetting each unit inside an isolated `\vbox`, `rtex-serve.lua` verifies and restores TeX registers, counters, and macro fingerprints. If an edit leaks global state, corrupts the engine, or exceeds the 6-second live timeout, the coordinator immediately terminates the worker, quarantines the offending snippet, and warms a fresh worker in the background.
+- **`SharedArrayBuffer` Device Bridge**: Rather than compiling LuaTeX with Emscripten Asyncify, [`public/runtime/live-worker.js`](public/runtime/live-worker.js) registers two virtual character devices: `/dev/rtex-req` reads requests from a 1 MiB `SharedArrayBuffer`, while `/dev/rtex-resp` returns frames through transferable `postMessage` buffers. Inside LuaHBTeX, [`rtex-serve.lua`](engine/tex/rtex-serve.lua) executes `\loop\rtexstep\ifnum\rtexcontinue>0 \repeat`. When waiting for the next edit, the synchronous POSIX `read()` blocks inside `Atomics.wait` with the entire TeX state, preamble macros, and loaded fonts kept warm in memory.
+- **Shared `WebAssembly.Module`, Isolated Heap**: `BackgroundEngine` compiles `luahbtex.wasm` once and passes the compiled `WebAssembly.Module` to `LiveEngine`, avoiding another WASM download, decompression, and compilation. Each worker loads its own TeX data image and keeps its linear memory and virtual filesystem isolated.
+- **State Hygiene & Watchdog Recovery**: After typesetting each unit inside an isolated `\vbox`, `rtex-serve.lua` verifies and restores TeX registers, counters, and macro fingerprints. State leaks, internal faults, or a 6-second live timeout discard the worker. Document edits fall back to `Full`, which prepares the next live instance; the math popover quarantines crashing formulas and warms a replacement directly.
 
 ### 2. Document Capture, Context Replay & Baseline Proof
 
@@ -107,7 +107,7 @@ A browser WASM port of incremental TeX faces a fundamental runtime constraint: *
 ### 3. Exact Glyph-Index Rendering, Type 1 PFB Pipeline & Provisional Reflow
 
 - **Direct Outline Renderer ([`render/canvas-renderer.mjs`](render/canvas-renderer.mjs))**: Decodes binary `RTDL` v1 display lists and paints quadratic/cubic Bézier curves directly from font outlines in font units (`CSS_PX_PER_SP = 96 / (72.27 * 65536)`), applying horizontal font expansion (`microtype`), extend, and slant transforms (`y`-up to `y`-down) identical to upstream `rtex-verify`. Browser `fillText`, Unicode glyph substitution, and OS text shaping are never used.
-- **Zero-Dependency Type 1 PFB Conversion ([`render/type1-font.mjs`](render/type1-font.mjs))**: Classic TeX math and T1 fonts (such as Latin Modern Math / CM / AMS symbols) use PostScript Type 1 `.pfb` outlines and 256-entry encoding vectors. LightningTeX synthesizes a tiny in-memory 1-page PDF containing all 256 encoded charstrings, passes it once through the already-loaded `PDF.js` worker to extract converted OpenType outlines and exact `originalCharCode -> glyphIndex` mappings, and caches the parsed font—supporting math glyphs even if they never appeared in the initial PDF.
+- **Type 1 PFB Conversion with No Additional Dependency ([`render/type1-font.mjs`](render/type1-font.mjs))**: Classic Computer Modern / Latin Modern math extensions and T1 text fonts use PostScript Type 1 `.pfb` outlines and 256-entry encoding vectors. LightningTeX synthesizes a tiny in-memory 1-page PDF using all 256 character codes, passes it once through the already-loaded `PDF.js` worker to extract converted OpenType outlines and exact `originalCharCode -> glyphIndex` mappings, and caches the parsed font—supporting math glyphs even if they never appeared in the initial PDF.
 - **Guarded Ink Patching vs. Provisional Band Reflow ([`core/live-layout.js`](core/live-layout.js))**:
   - **Fixed Geometry (`Live`)**: Computes conservative control-point `inkBounds`, verifies zero intersection with neighboring lines, images, or page headers/footers (`unitInkRegion`), clears only the guarded box over the cached PDF.js page raster, and draws the updated TeX rows.
   - **Variable Geometry (`Reflow`)**: When line counts or formula heights change—or when paragraphs are split, deleted, or merged—`pageFlow` slices the cached PDF page canvas into horizontal bands, expanding or contracting the edited band and shifting lower PDF slices vertically while marking the preview as `pagination pending`. After ~500 ms of idle time, the background worker restores exact global pagination.
@@ -115,14 +115,14 @@ A browser WASM port of incremental TeX faces a fundamental runtime constraint: *
 
 ### 4. Source-Trimmed WASM, Single-Pass Aux Reuse & JS BibTeX
 
-- **44.2% Smaller Custom WASM Build ([`engine/build/`](engine/build/README.md))**: Compiled directly from TeX Live 2026 source (`LuaHBTeX 1.24.0`) with Emscripten 5.0.4 (`-Oz`), linking only LuaHBTeX, HarfBuzz/Graphite, Kpathsea, and PDF/font libraries while stripping pdfTeX, XeTeX, BibTeX, MakeIndex, DVI applets, ICU, and fontconfig. The `/rtex` Lua/TeX service is embedded directly into the WASM image, and the TeX Live data package is pruned by 1,587 files and packed with paired 16 KiB LZ4 chunks:
+- **44.2% Smaller Compressed Startup Assets ([`engine/build/`](engine/build/README.md))**: Compiled directly from TeX Live 2026 source (`LuaHBTeX 1.24.0`) with Emscripten 5.0.4 (`-Oz`), linking only LuaHBTeX, HarfBuzz/Graphite, Kpathsea, and PDF/font libraries while stripping pdfTeX, XeTeX, BibTeX, MakeIndex, DVI applets, ICU, and fontconfig. The `/rtex` Lua/TeX service is embedded directly into the WASM image, and the TeX Live data package is pruned by 1,587 files and packed with paired 16 KiB LZ4 chunks:
   - **Raw WASM binary**: `31.0 MiB` → **`4.68 MiB`** (`1.83 MiB` gzip)
   - **Total compressed startup transfer**: `76.0 MiB` → **`42.4 MiB`** (`54.4 MiB` unpacked)
 - **Single-Pass Auxiliary Reuse & Cold First-Pass Fast Hook ([`public/runtime/background-worker.js`](public/runtime/background-worker.js))**:
-  - Full compilations retain byte snapshots of `.aux` (including nested `\include` aux files), `.toc`, `.out`, `.lof`, `.lot`, and `.bbl` for the active root and preamble. When auxiliary bytes remain unchanged after pass 1 and no rerun warning is emitted, the second pass is skipped—cutting warm full-compile times roughly in half (~1.4 s → ~0.6–0.7 s).
-  - On cold first compiles where a second pass is mandatory, pass 1 dynamically unhooks `rtex-capture`'s shipout page traversal and JSON export (`\RemoveFromHook` / `remove_from_callback`), saving ~150–200 ms while preserving normal TeX pagination and package hooks.
-- **In-Browser `.bst` BibTeX Interpreter ([`public/runtime/bibtex.js`](public/runtime/bibtex.js))**: Implements a full `.bst` stack machine in pure JavaScript following `bibtex.web` (supporting `name.format$`, `change.case$`, `text.prefix$`, `purify$`, `width$`, cross-references, sorting, and 79-column wrapping). Generates `.bbl` between passes (including `biblatex` with `backend=bibtex`), fetches missing `.bst` styles from the TeX Live service, and maps BibTeX warnings directly to `.bib` entry line numbers.
-- **On-Demand TeX Live 2026 Package Service & Negative Lookup Sharing**: Missing packages and fonts are fetched on demand via `__wrap_kpse_find_file`, stored in browser `Cache Storage`, and restored into both workers. Bundled font companion misses (`.ofm`, `.ovf`, `.vf`) and 404 results from full compiles are shared with the live worker in-session so incremental typing never blocks on redundant network probes.
+  - Full compilations retain `.aux` (including nested `\include` aux files), `.toc`, `.out`, `.lof`, `.lot`, and `.bbl` for the active root and preamble. When these outputs remain unchanged after pass 1, no rerun warning is emitted, and no unrecognized auxiliary output exists, the second pass is skipped—cutting warm full-compile times roughly in half (~1.4 s → ~0.6–0.7 s).
+  - On cold first compiles where a second pass is mandatory, pass 1 dynamically unhooks `rtex-capture`'s shipout page traversal and JSON export (`\RemoveFromHook` / `remove_from_callback`), saving ~110–210 ms in the recorded benchmarks while preserving normal TeX pagination and package hooks.
+- **In-Browser `.bst` BibTeX Interpreter ([`public/runtime/bibtex.js`](public/runtime/bibtex.js))**: Implements a full `.bst` stack machine in pure JavaScript following `bibtex.web` (supporting `format.name$`, `change.case$`, `text.prefix$`, `purify$`, `width$`, cross-references, sorting, and 79-column wrapping). Generates `.bbl` between passes (including `biblatex` with `backend=bibtex`), fetches missing `.bst` styles from the TeX Live service, and maps BibTeX warnings directly to `.bib` entry line numbers.
+- **On-Demand TeX Live 2026 Package Service & Negative Lookup Sharing**: Missing packages and fonts are fetched via `__wrap_kpse_find_file`. Full jobs persist their downloads in browser `Cache Storage` for both workers to restore; live-only downloads stay in memory. Bundled font companion misses (`.ofm`, `.ovf`, `.vf`) and 404 results from full compiles are shared with the live worker in-session to avoid repeating those network probes.
 
 ---
 
@@ -132,13 +132,13 @@ LightningTeX's UI ([`ui/`](ui/editor.js)) is built from scratch with zero fronte
 
 | Category | Capabilities |
 | :--- | :--- |
-| **Live Inspector & Status Capsule** | Top-bar status capsule displays real-time update latency (`Live 6.1 ms`) and a 12-bar sparkline. Clicking opens the **Live Inspector**: a 24-bar timeline (`Live`, `Reflow`, `Full`, `Waiting`), localized routing explanation, live worker status & restart count, median latency, and PDF sync lag (`Live · PDF pending` vs. `Synced`). |
-| **Bidirectional Source ⇄ Preview Sync** | **Source → Preview**: Moving the caret highlights the corresponding paragraph/formula/heading on the page margin and shows an edge chip when scrolled out of view.<br>**Preview → Source**: Clicking any rendered line runs `alignGlyph` (matching NFKC-normalized glyph codepoints, ligatures, and math italics to source text) to jump to the exact clicked word. |
-| **Caret Math Popover & Hover Cards** | **Math Popover**: Live-typesets the formula under the caret using the document's preamble macros and fonts, automatically closing unfinished braces/delimiters/environments.<br>**Hover Cards** (400 ms dwell): Preview typeset target equations on `\ref`/`\eqref`, image thumbnails & dimensions on `\includegraphics`, macro definitions, and formatted `.bib` citations. `Ctrl/Cmd + Click` or `F12` jumps to definition. |
-| **LaTeX Intelligence & Quick Fixes** | **Cross-File Rename (`F2`)**: Rename any `\label` or reference across all project files in one atomic step with live impact preview and multi-file undo; `Shift + F12` opens the References panel.<br>**Quick Fixes (`Ctrl/Cmd + .` or gutter 💡)**: Suggests `\usepackage` for 80+ unknown commands/environments, fixes command typos via edit distance, adds `\newtheorem`, wraps bare math in `$…$`, resolves nearest label/citation/file names, and locates unclosed braces. |
+| **Live Inspector & Status Capsule** | Top-bar status capsule displays real-time update latency (`Live 6.1 ms`) and a 12-bar sparkline. Clicking opens the **Live Inspector**: a 24-bar timeline (`Live`, `Reflow`, `Full`, `Waiting`), localized routing explanation, live worker status & restart count, median latency, and PDF sync state (in sync, behind by a number of edits, or updating). |
+| **Bidirectional Source ⇄ Preview Sync** | **Source → Preview**: Moving the caret highlights the corresponding paragraph/formula/heading on the page margin and shows an edge chip when scrolled out of view.<br>**Preview → Source**: Clicking a rendered line uses `alignGlyph` to match NFKC-normalized glyph codepoints, ligatures, and math italics to source text. It jumps to the matched word, or an approximate row position when no match is found. |
+| **Caret Math Popover & Hover Cards** | **Math Popover**: Live-typesets the formula under the caret using the document's preamble macros and fonts, automatically closing unfinished braces/delimiters/environments.<br>**Hover Cards** (400 ms dwell): Preview typeset target equations on `\ref`/`\eqref`, image thumbnails & dimensions on `\includegraphics`, macro definitions, and `.bib` entry titles, authors, years, and metadata. `Ctrl/Cmd + Click` or `F12` jumps to definition. |
+| **LaTeX Intelligence & Quick Fixes** | **Cross-File Rename (`F2`)**: Rename any `\label` or reference across all project files in one atomic step with live impact preview and multi-file undo; `Shift + F12` opens the References panel.<br>**Quick Fixes (`Ctrl/Cmd + .` or gutter 💡)**: Suggests packages for unknown commands/environments using mappings to 80+ packages, fixes command typos via edit distance, adds `\newtheorem`, wraps bare math in `$…$`, resolves nearest label/citation/file names, and locates unclosed braces. |
 | **Completion, Snippets & Builders** | Context-aware completion for commands, environments, labels, file paths, and `.bib` citations (by key, author, year, or title). Tab-stop snippets (`fig`, `tab`, `mat`, `eq`, `beg`) with mirrored placeholders. Visual **Table & Matrix Builder** (up to 10×8 grid, `booktabs` three-line tables, 6 matrix bracket styles, Tab cell navigation, auto package insertion). |
 | **PDF Text Layer, Spreads & Zoom** | Full-compiled pages include an interactive **PDF.js Text Layer** (drag to select/copy text, while single-click still jumps to source) and in-PDF search (`Ctrl/Cmd + F` inside preview). Supports pinch/wheel pointer-anchored zoom, single-page / two-page / cover spreads, page thumbnail rail (`Ctrl/Cmd + Alt + T`), and hue-preserving **Dark Pages**. |
-| **Multi-Project & Local History** | **IndexedDB v3 Multi-Project Store** (`Ctrl/Cmd + O`) with first-page thumbnails, per-tab project isolation, template gallery, drag-and-drop image conversion (GIF/WebP/BMP → PNG in `figures/`), and ZIP import/export.<br>**Local History**: Saves up to 30 automatic snapshots per project (at 5-minute intervals after successful full compiles) with an integrated Myers line-diff viewer for whole-project or single-file restore. |
+| **Multi-Project & Local History** | **IndexedDB v3 Multi-Project Store** (`Ctrl/Cmd + O`) with first-page thumbnails, per-tab project isolation, template gallery, drag-and-drop image conversion (GIF/WebP/BMP → PNG in `figures/`), and ZIP import/export.<br>**Local History**: Saves up to 30 text-file snapshots per project (at 5-minute intervals after successful full compiles) with an integrated Myers line-diff viewer. Restore all project text or a single file while keeping current images and other binary assets. |
 
 ### Essential Keyboard Shortcuts
 
@@ -148,7 +148,7 @@ LightningTeX's UI ([`ui/`](ui/editor.js)) is built from scratch with zero fronte
 | `⌘K` / `Ctrl+K` | Open Command Palette (`@` sections/labels, `>` commands, `:line` jump) |
 | `⌘.` / `Ctrl+.` | Open Quick Fix menu on diagnostic line |
 | `F2` / `F12` / `⇧F12` | Rename label across files / Go to definition / Find all references |
-| `⌘F` / `⌥⌘F` (`Ctrl+Shift+H`) | Find / Replace in source (or Search in PDF when preview is focused) |
+| `⌘F` / `Ctrl+F`; `⌘⇧H` / `Ctrl+Shift+H` | Find / Replace in source (or Search in PDF when preview is focused) |
 | `⌘\` / `Ctrl+\` | Cycle layout (`Source` / `Split` / `Preview`) |
 | `⌘B` / `⌘J` / `⌥⌘T` | Toggle Sidebar / Problems & Log Panel / PDF Page Thumbnails |
 | `⌘O` / `⌘,` | Open Projects Dashboard / Settings Dialog |
@@ -206,20 +206,20 @@ LightningTeX is verified by **201 unit/DOM/renderer tests** and a suite of **rea
 
 | Benchmark / Verification Suite | Command | Key Verified Result |
 | :--- | :--- | :--- |
-| **Source-Trimmed Engine & Startup** | `node tests/engine-benchmark.mjs` | Cold engine load median **342 ms** (down from 689 ms); live service startup **675 ms** (down from 993 ms); warm core IPC + WASM request **0.23–0.27 ms**; 100% identical glyph/rule/coordinate signatures across 3 rounds. |
+| **Source-Trimmed Engine & Startup** | `node tests/engine-benchmark.mjs /tmp/engine-benchmark.json` | Cold engine load median **342 ms** (down from 689 ms); live service startup **675 ms** (down from 993 ms); warm core IPC + WASM request **0.23–0.27 ms**; 100% identical glyph/rule/coordinate signatures across 3 rounds. |
 | **26-Edit Math & Prose Regression** | `npm run test:incremental` | **1 initial full compile, 0 live worker restarts** across 26 sequential inline/display/align/T1/Type 1 math edits; final glyph identities and `sp` coordinates match an independent fresh full compile 100%. |
-| **18-Scenario Provisional Reflow** | `npm run test:reflow` | Verifies paragraph split/merge/delete, taller formulas, lists, headings, and theorem families (`theorem`/`lemma`/`proof`) with shared numbering against independent full compiles. |
+| **18-Scenario Provisional Reflow** | `npm run test:reflow` | Verifies paragraph split/merge/delete, taller formulas, lists, headings, and theorem families (`theorem`/`lemma`/`proposition`/`corollary`/`remark`) with shared numbering against independent full compiles. |
 | **112-Step Cumulative Edit Sequence** | `npm run test:sequence` | 112 accepted live edits + 17 incomplete math inputs across page boundaries with **1 initial full compile, 0 restarts**, verified at 15 full-ink checkpoints (Node compile+render median **5.95 ms**). |
 | **13-Page Academic Paper (Browser)** | `tests/browser-input.html` | Real 13-page paper (46.5 KB source + 2 PDF figures): 20-key theorem typing (`9.9–17 ms` Live) and 61-key cross-page proof typing (`16–39 ms` Live) with **0 full compiles while typing** and automatic idle settlement after 530 ms. |
 | **Multi-File Live Coalescing** | `npm run test:live-project` | Exercises real `main.js` + WASM + Canvas across `\input`, `\include`, nested child EOF paragraphs, batched multi-file edits, stale-response rejection, and atomic fallback. |
-| **Full-Compile Aux Reuse & Cold Pass** | `npm run test:preview` | Single-pass auxiliary reuse cuts warm full compiles on TOC/bookmark/include documents from **~1.25–1.43 s to ~0.62–0.71 s**; cold first-pass capture skip saves **~150–210 ms** with byte-identical normalized PDF output. |
+| **Full-Compile Aux Reuse & Cold Pass** | `npm run test:preview` | Single-pass auxiliary reuse cuts warm full compiles on TOC/bookmark/include documents from **~1.25–1.43 s to ~0.62–0.71 s**; cold first-pass capture skip saves **~110–210 ms** with byte-identical normalized PDF output. |
 
 ### Compilation Routing & Runtime Model
 
 - **Incremental vs. Full-Document Routing**: Edits within captured prose, math environments, theorems, lists, quotes, and section headings execute on the persistent `LiveEngine` (`Live` when row geometry is unchanged; `Reflow` when line counts or heights change). Edits to the preamble, macro definitions, document class/packages, raw PDF literals/TikZ graphics, or cross-file structural layout automatically trigger a background `Full` compilation pass.
-- **Idle Pagination Convergence**: Provisional band reflow updates the preview immediately while typing and schedules a background full compilation after ~500 ms of inactivity to settle global page breaks, page numbers, and cross-references. Exporting a PDF always returns a fully converged document.
+- **Idle Pagination Convergence & Export**: Provisional `Reflow` schedules a background full compilation after ~500 ms of inactivity; fixed-geometry `Live` updates do not schedule this pass. Export compiles the current source if the PDF is behind. Compilation runs at most two passes, or three after a bibliography update; if the log still requests a rerun, compile again to finish resolving references.
 - **Bibliography Pipeline**: The background worker includes a JavaScript BibTeX engine supporting standard `.bst` styles (including `biblatex` with `backend=bibtex`), running up to 3 passes when `.bbl` output changes and reusing cached `.bbl` files on subsequent edits.
-- **Sandboxed Client Execution**: All compilation runs inside the browser's WebAssembly virtual filesystem with `--no-shell-escape` and `--nosocket`. When a document references an unbundled TeX Live package or font, the runtime fetches that file by name from `https://texlive2026.texlyre.org` (configurable or disableable via `endpoint: ''`) and caches it in browser `Cache Storage`.
+- **Sandboxed Client Execution**: All compilation runs inside the browser's WebAssembly virtual filesystem with `--no-shell-escape` and `--nosocket`. When a document references an unbundled TeX Live package or font, the runtime fetches that file by name from `https://texlive2026.texlyre.org` (configurable or disableable via `endpoint: ''`). Background jobs persist downloaded files in browser `Cache Storage`.
 
 Detailed benchmark traces and test artifacts are available in [**QA.md**](QA.md) and [`qa/`](qa/).
 
@@ -247,7 +247,7 @@ LightningTeX/
 
 ```sh
 npm test                     # Run all 201 unit, DOM, and display-list renderer tests
-npm run test:runtime         # Smoke-test WASM full compile, capture, live server, and error recovery
+npm run test:runtime         # Smoke-test WASM full compile, capture, and error recovery
 npm run test:integration     # End-to-end WASM integration test
 npm run test:preview         # Verify full-compile auxiliary reuse, cold-pass optimization, and PDF/TOC output
 npm run test:incremental     # 26-edit real-WASM incremental math & prose exact-coordinate regression

@@ -6,22 +6,48 @@ Standalone ES module (`render/index.mjs`) for decoding `rtex` binary (`RTDL` v1)
 
 ## Quick Start
 
+To render a page with text and Type 1 math fonts, run this module from an HTML page served by the repository's Vite server (`npm run dev`). The imports and runtime base below use the repository root.
+
 ```js
-import { decodeDisplayList, createDisplayListRenderer } from './render/index.mjs';
+import { createEngine } from '/engine/index.js';
+import { createDisplayListRenderer } from '/render/index.mjs';
+import { parseEngineFont } from '/render/type1-font.mjs';
+import * as pdfjs from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+const fonts = {};
+const engine = await createEngine({
+  base: new URL('/', window.location.href),
+  onFonts: entries => Object.assign(fonts, entries),
+});
+const worker = new pdfjs.PDFWorker();
 const renderer = createDisplayListRenderer({
-  resolveFont: async (filename, descriptor) => engine.readFile(filename),
-  pdfFallback: async ({ canvas, displayList, reasons, options }) => {
-    return renderMatchingPDF(canvas, displayList, options);
+  resolveFont: async filename => {
+    if (!fonts[filename]) throw new Error('Missing font: ' + filename);
+    return fonts[filename];
   },
+  parseFont: (buffer, descriptor) => parseEngineFont(buffer, descriptor, pdfjs, worker),
 });
 
-const result = await renderer.render(canvas, bytesOrJSON, {
-  zoom: 1.25,
-  devicePixelRatio: window.devicePixelRatio,
-  padding: 16,
-});
+try {
+  const full = await engine.background.compile(String.raw`\documentclass{article}
+\begin{document}
+Hello from LuaHBTeX.
+\[\alpha + \frac{1}{2} = x^2\]
+\end{document}`);
+  Object.assign(fonts, full.fonts);
+  const canvas = document.createElement('canvas');
+  canvas.setAttribute('aria-label', 'LuaHBTeX page preview');
+  await renderer.render(canvas, full.pages[0], { zoom: 1.25, padding: 16 });
+  document.body.append(canvas);
+} finally {
+  engine.dispose();
+  await worker.destroy();
+}
 ```
+
+Full compiles supply `full.fonts`; live requests add font bytes through `onFonts`. For an ongoing editor session, keep the engine, PDF.js worker, and renderer alive until the session ends.
 
 ---
 
@@ -53,14 +79,14 @@ const { render, clearFontCache } = createDisplayListRenderer({
 
 ### Type 1 PFB Outline Pipeline (`render/type1-font.mjs`)
 
-For PostScript Type 1 (`.pfb`) fonts (such as Computer Modern / Latin Modern math extensions and T1-encoded text fonts), `parseEngineFont(buffer, descriptor, pdfjs, worker)` synthesizes an in-memory 1-page PDF containing all 256 charstrings and any static `ReEncodeFont` vector. It passes that minimal PDF once through the `PDF.js` worker to obtain converted OpenType glyph outlines and an exact `originalCharCode -> glyphIndex` lookup table, caching the parsed font by `filename#encoding#subfont`.
+For PostScript Type 1 (`.pfb`) fonts (such as Computer Modern / Latin Modern math extensions and T1-encoded text fonts), `parseEngineFont(buffer, descriptor, pdfjs, worker)` synthesizes an in-memory 1-page PDF using all 256 character codes and any static `ReEncodeFont` vector. It passes that minimal PDF through the `PDF.js` worker to obtain converted OpenType glyph outlines and an exact `originalCharCode -> glyphIndex` lookup table. The renderer caches the parsed font by `filename#encoding#subfont`.
 
 ### Supported Primitives & Preflight Validation
 
 The renderer executes a complete preflight pass over all display-list records before modifying the target Canvas:
 
 - **Supported**: Glyph runs (`g`), filled rules (`r`), device-gray and device-RGB color stack operations (`c`: set, push, pop, current), math boundary markers (`m`), and 2D transformation matrix save/set/restore (`M`).
-- **Preflight Fallback**: If a display list contains raw PDF literals (`l`), external image resources (`i`), unsupported items (`u`), Type 3 / virtual fonts, `ttcf` font collections, variable/color fonts (`fvar`/`colr`/`svg`), non-trivial `squeeze`, CMYK colors, or unbalanced stacks, preflight halts before painting and either delegates to `pdfFallback` or throws `UnsupportedDisplayListError` with structured `reasons`.
+- **Preflight Fallback**: If a display list contains raw PDF literals (`l`), external image resources (`i`), unsupported items (`u`), Type 3 / virtual fonts, `ttcf` font collections, variable/color fonts (`fvar`/`colr`/`svg`), non-trivial `squeeze`, CMYK colors, color-stack underflow, or unbalanced matrix saves/restores, preflight halts before painting and either delegates to `pdfFallback` or throws `UnsupportedDisplayListError` with structured `reasons`.
 
 ### Return Value & Ink Bounds
 
@@ -75,7 +101,7 @@ A completed render returns:
   cssWidth,
   cssHeight,
   glyphCount,
-  inkBounds,     // { x, y, w, h } in scaled points (computed from glyph curve control points and rules)
+  inkBounds,     // { x, y, w, h } in sp; null for empty ink or lists with matrix operations
 }
 ```
 

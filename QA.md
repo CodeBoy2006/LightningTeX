@@ -6,18 +6,20 @@ This document summarizes the automated test suites, differential layout verifica
 
 ## 1. Automated Test Suite Overview
 
-All 201 unit, DOM, and display-list renderer tests, as well as the real-WASM integration and benchmark suites, execute against the shipped LuaHBTeX 1.24.0 WebAssembly runtime and worker scripts:
+The 201-test `npm test` suite covers pure logic, mock Workers, jsdom, rendering, and runtime assets. The dedicated WASM suites below run the shipped LuaHBTeX 1.24.0 binary and browser Worker scripts in Node `worker_threads`; browser measurements are identified separately.
 
 | Command | Suite Scope | Verified Assertions |
 | :--- | :--- | :--- |
 | `npm test` | **201 Unit, DOM & Renderer Tests** | Source span tracking & boundary merges, macro arity & live policy, cumulative context delta replay, baseline comparison, guarded ink regions & band slicing, `RTDL` binary codec, Type 1 PFB PDF synthesis, Myers line diff, quick fixes, autocompletion, snippets, cross-file `F2` rename, PDF text search, and workspace UI state. |
 | `npm run test:runtime` | **WASM Runtime Smoke** (`tests/runtime-smoke.mjs`) | Cold WASM initialization, prose & math PDF compilation, recoverable undefined-command error handling, and subsequent compilation on the same worker. |
 | `npm run test:incremental` | **26-Edit Math & Prose Exact-Coordinate Regression** (`tests/incremental-math.mjs`) | 26 consecutive edits across inline math, fractions/summations, numbered `equation`, `align`, `\det`, `proof`/`abstract`, run-in headings, T1/Latin Modern, `microtype`, and newly introduced Type 1 math glyphs (`\alpha`). **1 initial full compile, 0 live restarts, 100% exact glyph identity and `sp` coordinate match** against a fresh full compile. |
-| `npm run test:reflow` | **18-Scenario Provisional Band Reflow** (`tests/live-reflow.mjs`) | Paragraph split/join/deletion, list item insertion, taller display formulas, section headings, multi-file `\input` updates, and `theorem`/`lemma`/`proposition`/`corollary`/`remark`/`proof` environments with shared counters and nested lists. **1 initial full compile, 0 restarts, 100% glyph/metric/rule agreement** against 18 independent full compiles. |
+| `npm run test:reflow` | **18-Scenario Provisional Band Reflow** (`tests/live-reflow.mjs`) | Paragraph split/join/deletion, list item insertion, taller display formulas, section headings, multi-file `\input` updates, and `theorem`/`lemma`/`proposition`/`corollary`/`remark` environments with shared counters and nested lists. **1 initial full compile, 0 restarts, 100% glyph/metric/rule agreement** against 18 independent full compiles. |
 | `npm run test:sequence` | **112-Step Cumulative Editing & Incomplete Input Benchmark** (`tests/live-sequence.mjs`) | 112 accepted live edits + 17 unclosed math prefixes across a multi-page article (character typing/backspace, paragraph split/join, leading paragraph insertion, cross-page growth/shrink, whole-equation deletion & slot-preserving counter restoration). Verified against independent full compiles at 15 checkpoints. |
 | `npm run test:preview` | **Full-Compile Auxiliary Reuse & Cold First-Pass Optimization** (`tests/full-preview.mjs`) | Byte-for-byte reuse of `.aux` (including nested `\include`), `.toc`, `.out`, `.lof`, `.lot`, and `.bbl`; single-pass completion on stable edits; cold first-pass capture suppression; invalidation on root/file changes; user end-document hook preservation. |
-| `npm run test:bibliography` | **In-Browser JS BibTeX & `.bst` Styles** (`tests/bibliography.mjs`) | Tests `public/runtime/bibtex.js` across 12 standard TeX Live `.bst` styles (`plain`, `unsrt`, `alpha`, `abbrv`, `plainnat`, `unsrtnat`, `apalike`, `IEEEtran`, `siam`, `ieeetr`, `acm`, `amsplain`) plus `biblatex.bst` (`backend=bibtex`), verifying 3-pass initial generation, 1-pass `.bbl` reuse, and `.bib` line-numbered diagnostics. |
-| `npm run test:project` | **Multi-File Project & Caret Math Preview** (`tests/project-math.mjs`, `tests/math-preview-wasm.mjs`) | Multi-file `\input` resolution, natural-width `\hbox` inline formula previews (preventing borrowed TOC justification stretch), display/align formula previews, and unclosed group auto-repair. |
+| `npm run test:bibliography` | **JS BibTeX with `plain.bst`** (`tests/bibliography.mjs`) | Tests `public/runtime/bibtex.js` with the bundled `plain.bst`: 3-pass initial generation, `.bbl` reuse without an extra bibliography pass, added/missing citations, and `.bib` line-numbered diagnostics. |
+| `npm run test:project` | **Multi-File Project & Caret Math Preview** (`tests/project-math.mjs`) | Multi-file `\input` and image resolution, child-file error attribution, preamble macros, inline/display/align formula previews, unclosed group auto-repair, and error recovery. |
+| `node tests/math-preview-wasm.mjs` | **Formula Spacing in a TOC Context** | Natural-width `\hbox` inline previews without borrowed TOC justification stretch, long formulas without wrapping, display/align previews, and unchanged subsequent paragraph replay. |
+| `npm run test:live-project` | **Multi-File Live Coordinator** (`tests/live-project.mjs`) | Real `main.js`, WASM, and Canvas with an adapted editor DOM: 8 local update checkpoints match independent full compiles, with 1 initial full compile and 0 live restarts during editing. Checks nested child EOF, multi-file batches, incomplete input, stale responses, and atomic fallback. |
 | `npm run test:engine` | **Relocated Standalone Engine SDK** (`tests/standalone-engine.mjs`) | Copies `dist-engine/` to an isolated temporary directory outside the repository, verifying zero external dependencies, `WebAssembly.Module` sharing between background and live workers, deduplicated font transport, 8 incremental edits with exact layout match, and error recovery. |
 
 ---
@@ -37,7 +39,7 @@ Building a dedicated LuaHBTeX 1.24.0 executable from TeX Live 2026 source (`engi
 
 ### Engine Startup & Compilation Latency (Median of 3 Rounds)
 
-| Operation (`node tests/engine-benchmark.mjs`) | Multi-Call Baseline | Source-Built LuaHBTeX |
+| Operation (`node tests/engine-benchmark.mjs /tmp/engine-benchmark.json`) | Multi-Call Baseline | Source-Built LuaHBTeX |
 | :--- | ---: | ---: |
 | Cold Worker WASM + VFS load | 689 ms | **342 ms** |
 | Persistent Live Service startup (`live.start`) | 993 ms | **675 ms** |
@@ -81,7 +83,7 @@ When typing paused after the 61-key cross-page burst, a single background pass s
 
 ### Single-Pass Auxiliary Byte Reuse (`qa/full-compile-before.json`, `qa/full-compile-after.json`)
 
-By retaining and comparing byte snapshots of `.aux` (including nested `\include` aux files), `.toc`, `.out`, `.lof`, `.lot`, and `.bbl`, ordinary prose edits that do not alter sectioning or cross-reference targets finish in **1 pass** instead of 2:
+Reusing unchanged auxiliary files and `.bbl` output lets warm prose edits finish in **1 pass** when there are no rerun warnings or unrecognized auxiliary outputs. The recorded benchmarks show:
 
 | Document Type (Warm Prose Edit, Median of 3 Rounds) | Before Aux Byte Reuse | After Aux Byte Reuse | Passes |
 | :--- | ---: | ---: | ---: |

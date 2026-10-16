@@ -9,7 +9,7 @@ This document describes the low-level WebAssembly runtime loader, virtual filesy
 [`public/runtime/raw-loader.js`](../public/runtime/raw-loader.js) initializes the **LuaHBTeX 1.24.0 / TeX Live 2026** WebAssembly runtime inside classic Web Workers:
 
 1. **Manifest Verification & Streaming Decompression**: Reads `public/luahbtex/asset-manifest.json` and streams each $\le 16\text{ MiB}$ `.gz.partNNN` file through `DecompressionStream('gzip')` into a preallocated `Uint8Array(decodedSize)`, bounding peak memory overhead to a single 16 MiB part.
-2. **`WebAssembly.Module` Sharing**: `BackgroundEngine` compiles `luahbtex.wasm` via `WebAssembly.compile()` and returns the compiled `WebAssembly.Module` to the host coordinator. When `LiveEngine` starts, it receives that `WebAssembly.Module` and instantiates it directly via `new WebAssembly.Instance(module, imports)`, skipping duplicate network fetches, decompression, and WASM compilation.
+2. **`WebAssembly.Module` Sharing**: `BackgroundEngine` compiles `luahbtex.wasm` via `WebAssembly.compile()` and returns the compiled `WebAssembly.Module` to the host coordinator. When `LiveEngine` starts, it receives that `WebAssembly.Module` and instantiates it directly via `new WebAssembly.Instance(module, imports)`, skipping another WASM fetch, decompression, and compilation. Each Worker separately loads and decompresses `texlive-luahbtex.data` into its own virtual filesystem.
 3. **16 KiB LZ4 Virtual Filesystem**: `texlive-luahbtex.data` is mounted via Emscripten's `getPreloadedPackage` hook as a read-only LZ4-compressed virtual filesystem (`/texlive` and `/etc`) using 16 KiB LZ4 blocks, decompressing individual TeX macro and font files on demand in memory.
 
 ### Virtual Filesystem Layout
@@ -18,11 +18,11 @@ This document describes the low-level WebAssembly runtime loader, virtual filesy
 | :--- | :--- |
 | `/rtex` | Embedded Lua/TeX incremental service (`rtex-serve.lua`, `rtex-capture.lua`, `rtex-dl.lua`, `rtex-dl-bin.lua`, `rtex-json.lua`, `rtex-pic.lua`, `latex/*`) |
 | `/texlive/texmf-dist` | Pruned TeX Live 2026 distribution (`luahblatex.fmt`, `pdftex.map`, OTF/TFM/PFB fonts, core LaTeX/LuaTeX packages) |
-| `/tmp/texlive_remote` | On-demand packages and fonts fetched via `kpse-remote.js` and persisted in browser `Cache Storage`, plus `.misses.json` |
+| `/tmp/texlive_remote` | On-demand packages and fonts fetched via `kpse-remote.js`; full jobs persist downloaded files in browser `Cache Storage`. `.misses.json` holds in-session negative lookups. |
 | `/project` | Working directory for full compilation jobs (`main.tex` and multi-file project tree) |
 | `/out` | Output directory for full compilation jobs (`main.pdf`, `main.log`, `main.aux`, `main.bbl`, `main.rtex.json`, `main.rtex-page<N>.json`) |
 | `/live` | Working directory for the persistent live service (`rtex-preamble.tex`, `serve.tex`, `serve.aux`, preamble support files) |
-| `/dev/rtex-req`, `/dev/rtex-resp` | Custom character devices bridging Lua I/O to the `SharedArrayBuffer` mailbox |
+| `/dev/rtex-req`, `/dev/rtex-resp` | Custom character devices: requests read from `SharedArrayBuffer`; responses transfer to the host via `postMessage` |
 
 ---
 
@@ -59,4 +59,4 @@ In [`public/runtime/background-worker.js`](../public/runtime/background-worker.j
    \AddToHookNext{begindocument/end}{\directlua{luatexbase.remove_from_callback("pre_shipout_filter","rtex-capture")}}
    ```
    This skips `rtex-capture`'s shipout node traversal and JSON export during pass 1 while running normal TeX typesetting, PDF generation, and package hooks. The heap snapshot reset automatically restores full capture on pass 2.
-3. **Byte-for-Byte Auxiliary Reuse**: Across edits to the same root file and preamble, the worker retains byte maps of all `.aux`, `.toc`, `.out`, `.lof`, `.lot`, and `.bbl` files. If pass 1 produces identical auxiliary bytes and no LaTeX rerun warning, compilation completes in a single pass.
+3. **Byte-for-Byte Auxiliary Reuse**: Across edits to the same root file and preamble, the worker retains byte maps of `.aux`, `.toc`, `.out`, `.lof`, and `.lot` files, plus the generated `.bbl` text. If pass 1 produces identical outputs, no LaTeX rerun warning, and no unrecognized auxiliary output, compilation completes in a single pass.

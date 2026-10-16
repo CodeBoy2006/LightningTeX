@@ -104,7 +104,7 @@ Because the `/rtex` Lua and LaTeX support files are embedded directly in the WAS
 - **`background.start()`**: Initializes the background Worker, streams and compiles `luahbtex.wasm`, mounts the TeX Live data image, and restores cached packages from browser `Cache Storage`.
 - **`background.compile(source, { root = 'main.tex', files = [] })`**:
   - `files` is an array of `{ path, data, rev }` records (`string` or `Uint8Array`). Providing an incremented `rev` when a file changes allows the client to send only modified project files across jobs.
-  - **Auxiliary & Bibliography Reuse**: Retains the last successful `.aux` (including nested `\include` aux files), `.toc`, `.out`, `.lof`, `.lot`, and `.bbl` for the same root and preamble. After each pass, auxiliary bytes are compared; when unchanged and no rerun warning is present, compilation finishes in a single pass.
+  - **Auxiliary & Bibliography Reuse**: Retains the last successful `.aux` (including nested `\include` aux files), `.toc`, `.out`, `.lof`, `.lot`, and `.bbl` for the same root and preamble. When these outputs are unchanged, no rerun warning is present, and no unrecognized auxiliary output exists, compilation finishes in a single pass.
   - **Cold First-Pass Optimization**: When no prior auxiliary state exists, pass 1 dynamically omits `rtex-capture`'s shipout page traversal and JSON serialization (`\RemoveFromHook` / `remove_from_callback`) and restores full capture on pass 2.
   - **In-Browser BibTeX**: Automatically executes the built-in JavaScript BibTeX interpreter (`runtime/bibtex.js`) between passes when `\bibdata` is present in `.aux`, running up to 3 passes when `.bbl` changes.
   - Returns `{ pdf, capture, pages, fonts, aux, passes, packageMisses, bibtex, log, durationMs }`.
@@ -143,7 +143,7 @@ The runtime executable is compiled from **TeX Live 2026 (`LuaHBTeX 1.24.0`)** so
   - `texlive-luahbtex.data`: **52,123,184 bytes** raw (**42,574,731 bytes** gzip)
   - Total compressed transfer: **44,497,490 bytes (~42.4 MiB)**
 
-Build recipes and SHA-256 provenance records are located in [`engine/build/README.md`](build/README.md) (distributed as `BUILDING.md`) and `luahbtex/build-info.json`.
+The build recipe is `engine/build/README.md` in the source checkout and `BUILDING.md` in the standalone package. Provenance records are in `public/luahbtex/build-info.json` in the checkout and `luahbtex/build-info.json` in the package.
 
 ---
 
