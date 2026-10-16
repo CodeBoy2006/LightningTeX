@@ -49,7 +49,7 @@ const shell=()=>`<div class="app">
   <header class="appbar">
     <div class="appbar-side">
       <button type="button" class="icon-btn" data-action="toggle-sidebar" data-i18n-title="sidebar.toggle" data-keys="${keys('Mod+B')}">${icon('sidebar')}</button>
-      <span class="brand"><span class="brand-mark">${icon('bolt',14)}</span><b>Lightning<span class="tex">T<i>E</i>X</span></b></span>
+      <span class="brand"><span class="brand-mark" aria-hidden="true"></span><b>Lightning<span class="tex">T<i>E</i>X</span></b></span>
       <button type="button" class="project-btn" data-action="project-menu" data-i18n-title="project.menu" aria-haspopup="menu"><span data-id="project-name"></span>${icon('chevronDown',12)}</button>
       <button type="button" class="icon-btn" data-action="palette" data-i18n-title="palette.open" data-keys="${keys('Mod+K')}">${icon('search')}</button>
     </div>
