@@ -1,6 +1,7 @@
 // Interface strings. Elements carry data-i18n / data-i18n-title keys so a language switch needs no remount.
 // A title becomes data-tip (shown by ui/tooltip.js, with data-keys as a keycap) and the accessible name.
 const en={
+  'app.author':'By Yongjie Guan','app.repository':'GitHub repository (opens in a new tab)',
   'app.files':'Files','file.new':'New file','folder.new':'New folder','file.upload':'Upload files','file.more':'More',
   'file.rename':'Rename','file.delete':'Delete','file.download':'Download','file.setMain':'Set as main file','file.main':'Main file',
   'file.newHere':'New file here','folder.newHere':'New folder here',
@@ -34,6 +35,7 @@ const en={
   'zoom.menu':'Zoom','zoom.fitPage':'Fit page','page.jump':'Go to page','keys.title':'Keyboard shortcuts','keys.save':'Save now','keys.comment':'Toggle comment','keys.indent':'Indent, outdent','keys.escape':'Leave the editor, stop compiling',
 };
 const zh={
+  'app.author':'作者 Yongjie Guan','app.repository':'GitHub 仓库（在新标签页打开）',
   'app.files':'文件','file.new':'新建文件','folder.new':'新建文件夹','file.upload':'上传文件','file.more':'更多',
   'file.rename':'重命名','file.delete':'删除','file.download':'下载','file.setMain':'设为主文件','file.main':'主文件',
   'file.newHere':'在此新建文件','folder.newHere':'在此新建文件夹',

@@ -51,6 +51,22 @@ async function chooseProject(h,title){
 
 test('templates do not force legacy T1 fonts',()=>{assert.ok(TEMPLATES[0].files['main.tex'].includes('\\documentclass'));for(const template of TEMPLATES)for(const text of Object.values(template.files))assert.ok(!text.includes('fontenc'));});
 
+test('sidebar credits the author and provides a localized, accessible repository link',()=>{
+  const h=setup({storage:{'lightningtex:settings:v1':JSON.stringify({lang:'en'})}});
+  try {
+    const credit=h.root.querySelector('.side-foot .app-credit'),link=credit.querySelector('a');
+    assert.equal(credit.textContent,'By Yongjie Guan');
+    assert.equal(link.href,'https://github.com/CodeBoy2006/LightningTeX');
+    assert.equal(link.target,'_blank');assert.equal(link.rel,'noopener noreferrer');
+    assert.ok(link.querySelector('.icon-github path'));
+    assert.equal(link.getAttribute('aria-label'),'GitHub repository (opens in a new tab)');
+    h.q('settings').querySelector('[data-setting="lang"] [data-value="zh"]').click();
+    assert.equal(credit.textContent,'作者 Yongjie Guan');
+    assert.equal(link.getAttribute('aria-label'),'GitHub 仓库（在新标签页打开）');
+    assert.equal(link.dataset.tip,link.getAttribute('aria-label'));
+  }finally{h.cleanup();}
+});
+
 test('repeat compilation replaces PDF and manual requests do not overlap',async()=>{
   let calls=0;const wait=deferred();const h=setup({onCompile:async()=>{calls++;if(calls===1)await wait.promise;return {pdf:bytes(calls)};}});
   try {const first=h.ui.compile();await h.ui.compile();assert.equal(calls,1);wait.resolve();await first;await h.ui.compile();assert.equal(calls,2);assert.deepEqual(h.rendered,[1,2]);assert.equal(h.q('preview-status-text').textContent,'Up to date');}finally{h.cleanup();}

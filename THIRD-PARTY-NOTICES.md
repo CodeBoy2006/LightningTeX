@@ -41,3 +41,10 @@ Exact versions are pinned in `package-lock.json`. PDF.js, OpenType.js, and Inter
 ## 5. Offline Test Fixtures
 
 - `tests/fixtures/tex-packages.json.gz` and `tests/fixtures/plain.bst` contain unmodified `microtype`, `booktabs`, and `plain.bst` files from TeX Live 2026 for offline Node regression suites. See [`tests/fixtures/README.md`](tests/fixtures/README.md) for details.
+
+---
+
+## 6. GitHub Icon
+
+- **Source**: GitHub's [Octicons `mark-github-16`](https://github.com/primer/octicons/blob/main/icons/mark-github-16.svg), used in `ui/icons.js` for the repository link.
+- **License**: MIT, copyright 2026 GitHub Inc. The license is included in [`public/licenses/OCTICONS.txt`](public/licenses/OCTICONS.txt) and copied into the web build.
