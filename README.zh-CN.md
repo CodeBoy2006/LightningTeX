@@ -188,7 +188,7 @@ const displayList = decodeDisplayList(liveResult.binary);
 
 ## 验证与性能基准
 
-本项目包含 **216 项单元 / DOM / 渲染器测试** 以及多项基于真实 WebAssembly 与浏览器环境的端到端回归基准（在 Node `worker_threads` 及桌面 Chromium 中直接运行真实的 LuaHBTeX WASM、原项目 Lua 脚本与 Worker 代码）：
+本项目包含 **218 项单元 / DOM / 渲染器测试** 以及多项基于真实 WebAssembly 与浏览器环境的端到端回归基准（在 Node `worker_threads` 及桌面 Chromium 中直接运行真实的 LuaHBTeX WASM、原项目 Lua 脚本与 Worker 代码）：
 
 | 验证套件 / 基准测试 | 运行命令 | 核心实测结果 |
 | :--- | :--- | :--- |
@@ -197,7 +197,7 @@ const displayList = decodeDisplayList(liveResult.binary);
 | **18 类局部重排与定理环境验证** | `npm run test:reflow` | 覆盖段落拆分/合并/删除、列表增项、公式增高、标题与共享编号的 `theorem`/`lemma`/`proposition`/`corollary`/`remark` 及定理内嵌套列表，字形、字号、进宽与标尺全部与独立全量编译一致。 |
 | **112 步连续累积编辑与容错基准** | `npm run test:sequence` | 112 次有效局部修改 + 17 次未闭合公式输入（含跨页增删、首段前插入、整块删除与恢复），**仅 1 次初始全量编译、0 次引擎重启**，15 个检查点与独立全量编译逐项吻合（Node 编译+绘制中位耗时 **`5.95 ms`**）。 |
 | **13 页真实学术论文逐键输入实测** | `tests/browser-input.html` | 含两张原始 PDF 插图的 13 页完整论文（46.5 KB 源码）：定理环境连续输入 20 键产生 11 次 Live 更新（**`9.9–17 ms`**），跨第 5–6 页证明连续输入 61 键产生 32 次 Live 更新（**`16–39 ms`**），打字期间全量编译次数为 0，停顿约 0.5 秒后自动完成全局校准。 |
-| **多文件工程实时协同回归** | `npm run test:live-project` | 在 Node 中执行真实 `main.js` + WASM + Canvas 路径，验证 `\input` 末段、嵌套子文件、多文件同批修改、过期响应丢弃与批次失败原子回退。 |
+| **多文件工程实时协同回归** | `npm run test:live-project` | 在 Node 中执行真实 `main.js` + WASM + Canvas 路径，验证 `\input` 末段、嵌套子文件、自带报告模板的正文与行间公式、嵌套导言依赖、多文件同批修改、过期响应丢弃与批次失败原子回退。 |
 | **辅助文件复用与首遍捕获优化** | `npm run test:preview` | 辅助文件未变时单遍收敛使含目录/书签/子文件的全量编译中位耗时从 **`1.25–1.43 s` 降至 `0.62–0.71 s`**；冷启动首遍省略冗余页面捕获额外节省 **`110–210 ms`**，且归一化 PDF 字节完全一致。 |
 
 ### 编译路由与运行模型
@@ -225,14 +225,14 @@ LightningTeX/
 │   ├── luahbtex/            # 源码裁剪构建的 LuaHBTeX 1.24.0 WASM 与 TeX Live 2026 LZ4/gzip 分块资源
 │   └── runtime/             # Web Worker 运行时（background-worker、live-worker、raw-loader、tex-packages、JS bibtex）
 ├── scripts/                 # 资源哈希校验、16 MiB 分块打包器与独立引擎构建脚本
-├── tests/                   # 216 项单元/DOM 测试 + 真实 WASM 增量、重排、连续输入、参考文献与性能基准套件
+├── tests/                   # 218 项单元/DOM 测试 + 真实 WASM 增量、重排、连续输入、参考文献与性能基准套件
 └── docs/                    # 自托管部署指南、架构移植审计与运行时探针文档
 ```
 
 ### 常用开发与验证命令
 
 ```sh
-npm test                     # 运行全部 216 项单元、DOM 与显示列表渲染器测试
+npm test                     # 运行全部 218 项单元、DOM 与显示列表渲染器测试
 npm run test:runtime         # 真实 WASM 冒烟测试（全文编译、捕获、错误恢复）
 npm run test:integration     # 端到端 WASM 集成测试
 npm run test:preview         # 验证辅助文件单遍复用、冷启动首遍优化与目录/书签输出

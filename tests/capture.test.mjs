@@ -56,6 +56,14 @@ test('strict paragraph eligibility declines side effects and complex contexts',(
  c.units[0].advanced={section:1};assert.match(liveUnitEligibility(c,1).reason,/Counter/);
  delete c.units[0].advanced;c.paragraphs[0].flags={dir:1};assert.equal(liveUnitEligibility(c,1).ok,false);
 });
+test('display-split prose accepts top-level fragments but still checks every fragment',()=>{
+ const c=capture(),unit=c.units[0];unit.seqs.push(21);delete c.paragraphs[2].begin;
+ assert.equal(liveUnitEligibility(c,unit).ok,true,'continuation after a display has no new para/begin');
+ c.paragraphs[2].nest=2;assert.equal(liveUnitEligibility(c,unit).ok,false);
+ c.paragraphs[2].nest=1;c.paragraphs[2].flags={ins:1};assert.equal(liveUnitEligibility(c,unit).ok,false);
+ delete c.paragraphs[2].flags;unit.seqs.push(999);assert.equal(liveUnitEligibility(c,unit).ok,false,'missing capture cannot be proved');
+ unit.seqs=[];assert.equal(liveUnitEligibility(c,unit).ok,false);
+});
 test('captured theorem families replay shared numbering and nested hyperref lists without allowing unrelated counters',()=>{
  const c=capture(),unit=c.units[0];unit.kind='env';unit.seqs.push(21);
  for(const name of ['theorem','lemma','proposition','corollary','remark']){

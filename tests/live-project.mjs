@@ -7,6 +7,7 @@ import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import * as engine from '../engine/index.js';
 import {fontKey} from '../core/capture.js';
 import {BrowserWorker} from './runtime-helpers.mjs';
+import {TEMPLATES} from '../ui/templates.js';
 
 globalThis.Worker=BrowserWorker;
 const source=String.raw`\documentclass{article}
@@ -31,7 +32,8 @@ const texts=new Map([
 ]);
 let revision=0,options,runtime,liveGate;
 const canvases=new Map(),painted=[],statuses=[],times=[],listeners=new Map();
-const request=reason=>({root:'paper/main.tex',source:texts.get('paper/main.tex'),files:[...texts].filter(([path])=>path!=='paper/main.tex').map(([path,data])=>({path,data,rev:revision})),filesRev:revision,revision,reason});
+let root='paper/main.tex';
+const request=reason=>({root,source:texts.get(root),files:[...texts].filter(([path])=>path!==root).map(([path,data])=>({path,data,rev:revision})),filesRev:revision,revision,reason});
 const canvas=()=>Object.assign(createCanvas(1,1),{style:{},dataset:{},setAttribute(){}});
 let resolveBoot,rejectBoot;const booted=new Promise((resolve,reject)=>{resolveBoot=resolve;rejectBoot=reject;});
 const ui={
@@ -54,7 +56,7 @@ const ui={
 const context=vm.createContext({console,URL,Map,Set,Uint8Array,SharedArrayBuffer,AbortController,performance,devicePixelRatio:1,crossOriginIsolated:true,
  fetch:async()=>({ok:false}),window:{addEventListener:(name,fn)=>listeners.set(name,fn)},
  document:{baseURI:'http://localhost/ui/index.html',createElement:canvas,querySelector:selector=>canvases.get(Number(/data-page="(\d+)"/.exec(selector)?.[1]))}});
-const host=new vm.SourceTextModule(await fs.readFile(new URL('../main.js',import.meta.url),'utf8')+'\nexport {snapshot};',{context});
+const host=new vm.SourceTextModule(await fs.readFile(new URL('../main.js',import.meta.url),'utf8')+'\nexport {snapshot,fullReason,supportFiles};',{context});
 await host.link(async specifier=>{
  let exports;
  if(specifier==='./ui/editor.js')exports={mountEditor:value=>{options=value;return ui;}};
@@ -74,13 +76,21 @@ const ink=pages=>pages.flatMap(page=>page.lines.flatMap(line=>line.items.filter(
 const checkpoints=[];
 async function preview(label){
  const count=painted.length,result=await options.onPreview(request('auto'));
- assert.ok(result,label+': '+statuses.at(-1)?.reason);
+ assert.ok(result,label+': '+(host.namespace.fullReason||statuses.at(-1)?.reason));
  assert.equal(painted.length,count+1,label+': paints once');
  assert.equal(painted.at(-1).revision,revision);
  checkpoints.push({label,job:request('check'),ink:ink(host.namespace.snapshot.drawnPages)});
 }
 try{
  await host.evaluate();await booted;
+ const dependencies=[
+  {path:'setup.tex',data:'\\input{./config/operators.tex}\n% \\input{body}\n'},
+  {path:'config/operators.tex',data:'\\input{setup}'},
+  {path:'local.sty',data:'\\input{package-options}'},
+  {path:'package-options.tex',data:'\\relax'},
+  {path:'body.tex',data:'Body.'},
+ ];
+ assert.deepEqual(Array.from(host.namespace.supportFiles('\\input{setup}',dependencies),file=>file.path),dependencies.slice(0,4).map(file=>file.path),'transitive inputs include package dependencies, stop at cycles and ignore comments');
  const initial=host.namespace.snapshot;
  for(const path of ['chapters/one.tex','chapters/nested.tex','chapters/three.tex'])assert.equal(initial.documents.get(path).spans.length,2,path);
  edit('chapters/one.tex','x=1','x=5');await preview('input EOF');
@@ -117,5 +127,31 @@ Continuation in the root.
  edit('chapters/one.tex','x=3','x=8');edit('joined.tex','Text','Changed');assert.equal(await options.onPreview(request('auto')),false);
  assert.equal(painted.length,beforeFallback,'failed baseline never paints a partial update');
  assert.equal(host.namespace.snapshot.documents.get('chapters/one.tex').source,acceptedSource,'a later failure does not accept the earlier file');
- console.log(JSON.stringify({updates:checkpoints.length,fullCompilesDuringEdits:1,restarts:0,independentFullComparisons:checkpoints.length,staleAndIncompletePreserved:true,ms:times.map(value=>Number(value.toFixed(2)))},null,2));
+ // The shipped report has prose on both sides of a display, captured as one unit with two paragraph fragments.
+ texts.clear();for(const [path,text] of Object.entries(TEMPLATES.find(template=>template.id==='report').files))texts.set(path,text);
+ root='main.tex';revision++;await ui.compile('manual');
+ const reportFull=runtime.background.next,reportStart=runtime.live.generation,reportCheckpoint=checkpoints.length;
+ edit('sections/method.tex','residual norm','residual error');await preview('report prose before display');
+ edit('sections/method.tex','^2,','^3,');await preview('report display inside prose');
+ edit('sections/method.tex','normal equations','normal relations');await preview('report prose after display');
+ edit('sections/introduction.tex','We study','We solve');await preview('report switch to introduction');
+ edit('sections/method.tex','residual error','residual error and the squared distance between the observed and fitted vectors');await preview('report paragraph reflow');
+ const reportWaiting=painted.length;
+ edit('sections/method.tex','^3,','^3 + \\frac{1}{,');assert.equal(await options.onPreview(request('auto')),true);assert.equal(statuses.at(-1).state,'waiting');assert.equal(painted.length,reportWaiting);
+ edit('sections/method.tex','\\frac{1}{,','\\frac{1}{1+x^2},');await preview('report taller display after incomplete fraction');
+ assert.equal(runtime.background.next,reportFull,'report edits do not compile the full document');
+ assert.equal(runtime.live.generation,reportStart,'report edits keep the live worker');
+ for(const point of checkpoints.slice(reportCheckpoint)){const full=await runtime.background.compile(point.job.source,point.job);assert.deepEqual(point.ink,ink(full.pages),point.label+': matches fresh full compilation');}
+ // Preamble inputs may themselves input project files; body files must remain live-editable.
+ texts.set('macros.tex','\\input{config/operators}\n');texts.set('config/operators.tex',TEMPLATES.find(template=>template.id==='report').files['macros.tex']);revision++;await ui.compile('manual');
+ const nestedStart=runtime.live.generation,nestedCompiles=runtime.background.next;
+ edit('sections/method.tex','^3 +','^4 +');await preview('nested preamble dependencies');
+ assert.equal(runtime.background.next,nestedCompiles);assert.equal(runtime.live.generation,nestedStart);
+ const nested=checkpoints.at(-1),nestedFull=await runtime.background.compile(nested.job.source,nested.job);assert.deepEqual(nested.ink,ink(nestedFull.pages));
+ const beforeDependency=painted.length;
+ edit('config/operators.tex','mathbb','mathbf');assert.equal(await options.onPreview(request('auto')),false);assert.equal(painted.length,beforeDependency);
+ await ui.compile('manual');assert.ok(runtime.live.generation>nestedStart,'changed nested macros rebuild the live worker');
+ edit('sections/method.tex','^4 +','^5 +');await preview('live editing resumes with changed nested macros');
+ const rebuilt=checkpoints.at(-1),rebuiltFull=await runtime.background.compile(rebuilt.job.source,rebuilt.job);assert.deepEqual(rebuilt.ink,ink(rebuiltFull.pages));
+ console.log(JSON.stringify({updates:checkpoints.length,independentFullComparisons:checkpoints.length,staleAndIncompletePreserved:true,ms:times.map(value=>Number(value.toFixed(2)))},null,2));
 }finally{listeners.get('pagehide')?.();runtime?.dispose();}

@@ -32,6 +32,7 @@ test('math source policy distinguishes unfinished input from structural changes'
 test('standard linear algebra operators remain eligible for local math edits',()=>{
  assert.ok(liveSourcePolicy(String.raw`\begin{align}\det R_\theta &= \cos^2\theta + \sin^2\theta = 1.\end{align}`).ok);
  assert.ok(liveSourcePolicy(String.raw`For $T\colon V\to W$, $\dim V=\dim\ker T+\dim\operatorname{im}T$.`).ok);
+ assert.ok(liveSourcePolicy(String.raw`The normal equations are $A^{\top} A x = A^{\top} b$.`).ok);
 });
 test('theorem text and roman list labels are bounded and require complete arguments',()=>{
  assert.equal(liveSourcePolicy(String.raw`\begin{theorem}[Control]\begin{enumerate}[label=\textup{(\roman*)},nosep]\item A claim.\end{enumerate}\end{theorem}`).ok,true);

@@ -193,7 +193,7 @@ See [**engine/README.md**](engine/README.md) for the complete API reference and 
 
 ## Verification & Benchmarks
 
-LightningTeX is verified by **216 unit/DOM/renderer tests** and a suite of **real-WASM integration and differential benchmarks** (running the actual Emscripten LuaHBTeX binary, Lua scripts, and Worker code in both Node `worker_threads` and desktop Chromium):
+LightningTeX is verified by **218 unit/DOM/renderer tests** and a suite of **real-WASM integration and differential benchmarks** (running the actual Emscripten LuaHBTeX binary, Lua scripts, and Worker code in both Node `worker_threads` and desktop Chromium):
 
 | Benchmark / Verification Suite | Command | Key Verified Result |
 | :--- | :--- | :--- |
@@ -202,7 +202,7 @@ LightningTeX is verified by **216 unit/DOM/renderer tests** and a suite of **rea
 | **18-Scenario Provisional Reflow** | `npm run test:reflow` | Verifies paragraph split/merge/delete, taller formulas, lists, headings, and theorem families (`theorem`/`lemma`/`proposition`/`corollary`/`remark`) with shared numbering against independent full compiles. |
 | **112-Step Cumulative Edit Sequence** | `npm run test:sequence` | 112 accepted live edits + 17 incomplete math inputs across page boundaries with **1 initial full compile, 0 restarts**, verified at 15 full-ink checkpoints (Node compile+render median **5.95 ms**). |
 | **13-Page Academic Paper (Browser)** | `tests/browser-input.html` | Real 13-page paper (46.5 KB source + 2 PDF figures): 20-key theorem typing (`9.9–17 ms` Live) and 61-key cross-page proof typing (`16–39 ms` Live) with **0 full compiles while typing** and automatic idle settlement after 530 ms. |
-| **Multi-File Live Coalescing** | `npm run test:live-project` | Exercises real `main.js` + WASM + Canvas across `\input`, `\include`, nested child EOF paragraphs, batched multi-file edits, stale-response rejection, and atomic fallback. |
+| **Multi-File Live Coalescing** | `npm run test:live-project` | Exercises real `main.js` + WASM + Canvas across `\input`, `\include`, nested child EOF paragraphs, the shipped report’s mixed prose/display math, nested preamble dependencies, batched multi-file edits, stale-response rejection, and atomic fallback. |
 | **Full-Compile Aux Reuse & Cold Pass** | `npm run test:preview` | Single-pass auxiliary reuse cuts warm full compiles on TOC/bookmark/include documents from **~1.25–1.43 s to ~0.62–0.71 s**; cold first-pass capture skip saves **~110–210 ms** with byte-identical normalized PDF output. |
 
 ### Compilation Routing & Runtime Model
@@ -230,14 +230,14 @@ LightningTeX/
 │   ├── luahbtex/            # Source-built LuaHBTeX 1.24.0 WASM & pruned TeX Live 2026 LZ4/gzip chunks
 │   └── runtime/             # Web Workers (background-worker, live-worker, raw-loader, tex-packages, JS bibtex)
 ├── scripts/                 # Asset verification, 16 MiB chunk packager, and standalone engine builder
-├── tests/                   # 216 unit/DOM tests + real-WASM incremental, reflow, sequence, bibliography & benchmark suites
+├── tests/                   # 218 unit/DOM tests + real-WASM incremental, reflow, sequence, bibliography & benchmark suites
 └── docs/                    # Self-hosting deployment guide, port audit, and runtime probe documentation
 ```
 
 ### Development Commands
 
 ```sh
-npm test                     # Run all 216 unit, DOM, and display-list renderer tests
+npm test                     # Run all 218 unit, DOM, and display-list renderer tests
 npm run test:runtime         # Smoke-test WASM full compile, capture, and error recovery
 npm run test:integration     # End-to-end WASM integration test
 npm run test:preview         # Verify full-compile auxiliary reuse, cold-pass optimization, and PDF/TOC output

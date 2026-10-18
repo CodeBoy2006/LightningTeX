@@ -3,6 +3,7 @@ import {createEngine,splitPreamble,findLiveEdit,captureSpans,acceptLiveEdit,unit
 import {previewSource,inkBounds} from './core/math-preview.js';
 import {createDisplayListRenderer,CSS_PX_PER_SP} from './render/index.mjs';
 import {pageFlow} from './core/live-layout.js';
+import {maskSource} from './core/outline.js';
 import {parseEngineFont} from './render/type1-font.mjs';
 import {darkenCanvas} from './render/dark-page.mjs';
 import * as pdfjs from 'pdfjs-dist';
@@ -42,9 +43,15 @@ const renderer=createDisplayListRenderer({
 });
 // Files the preamble can read: the persistent engine needs them next to its copy of the preamble.
 function supportFiles(preamble,files){
- const wanted=new Set();
- for(const match of preamble.matchAll(/\\(?:input|include)\s*\{([^{}]+)\}/g)){const name=match[1].trim();wanted.add(name);wanted.add(name+'.tex');}
- return files.filter(file=>typeof file.data==='string'&&(wanted.has(file.path)||/\.(sty|cls|def|cfg|clo|fd|ldf|lua)$/i.test(file.path)));
+ const local=new Map(files.filter(file=>typeof file.data==='string').map(file=>[file.path,file]));
+ const wanted=new Set([...local.keys()].filter(path=>/\.(sty|cls|def|cfg|clo|fd|ldf|lua)$/i.test(path)));
+ const sources=[preamble,...[...wanted].map(path=>local.get(path).data)];
+ // Follow preamble inputs transitively; copying only the first level leaves the live worker without their macros.
+ for(const source of sources)for(const match of maskSource(source).matchAll(/\\(?:input|include)\s*\{([^{}]+)\}/g)){
+   const name=projectPath(match[1].trim());
+   for(const path of [name,name+'.tex'])if(local.has(path)&&!wanted.has(path)){wanted.add(path);sources.push(local.get(path).data);}
+ }
+ return files.filter(file=>wanted.has(file.path));
 }
 // A paragraph context to typeset standalone formulas in: the first one the engine can replay.
 function previewContext(capture){

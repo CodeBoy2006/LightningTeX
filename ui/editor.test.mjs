@@ -417,6 +417,21 @@ test('compile receives the main file as root and the rest as files; only other f
     h.ui.project.write('paper.tex','\\documentclass{article}');h.ui.project.setMain('paper.tex');await h.ui.compile();assert.equal(requests[2].root,'paper.tex');assert.ok(requests[2].files.some(file=>file.path==='main.tex'));}finally{h.cleanup();}
 });
 
+test('Auto sends current child-file edits and coalesces a file switch while previewing',async()=>{
+ const pending=deferred(),requests=[];let compiles=0;
+ const h=setup({source:'\\input{part}',onPreview:async job=>{requests.push(job);if(requests.length===1)await pending.promise;h.ui.setLivePages({canvases:new Map(),revision:job.revision});return true;},onCompile:async()=>{compiles++;}});
+ try{
+  h.auto(false);h.ui.project.write('part.tex','Part');await h.ui.setPdf(bytes(0));h.auto(true);
+  h.ui.openFile('part.tex');h.edit('Part one');await tick(20);
+  assert.equal(requests.length,1);assert.equal(requests[0].source,'\\input{part}');assert.equal(requests[0].files[0].data,'Part one');
+  h.ui.openFile('main.tex');h.edit('\\input{part}\nRoot.');h.ui.openFile('part.tex');h.edit('Part two');
+  pending.resolve();await tick(30);
+  assert.equal(requests.length,2);assert.equal(requests[1].root,'main.tex');assert.equal(requests[1].source,'\\input{part}\nRoot.');
+  assert.equal(requests[1].files[0].data,'Part two');assert.ok(requests[1].files[0].rev>requests[0].files[0].rev);assert.ok(requests[1].filesRev>requests[0].filesRev);
+  assert.equal(h.ui.getState().previewRevision,h.ui.getState().revision);assert.equal(compiles,0);
+ }finally{pending.resolve();h.cleanup();}
+});
+
 test('deleting a file closes its tab and can be undone; renaming keeps the tab',async()=>{
   const h=setup();
   try {h.auto(false);h.ui.project.write('a.tex','A');h.ui.openFile('a.tex');assert.equal(h.q('filename').textContent,'a.tex');

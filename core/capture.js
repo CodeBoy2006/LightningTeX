@@ -52,8 +52,10 @@ export function liveUnitEligibility(capture, unitOrId) {
   const composite=theorem||unit.kind==='env'&&['proof','abstract','itemize','enumerate','description','quote','quotation','verse','center','flushleft','flushright'].includes(unit.name)
     ||unit.kind==='heading'&&['section','subsection','subsubsection','paragraph','subparagraph'].includes(unit.name);
   if (!math&&!composite&&(unit.kind!=='par' || unit.nest!==1)) return fail('Only top-level text and math units are live');
-  if (!math&&!composite&&unit.seqs?.length!==1) return fail('Composite or nested paragraphs require full layout');
   if (!math&&!composite) {
+    // A display splits ordinary prose into multiple top-level fragments; replay and prove the whole unit.
+    if (!unit.seqs?.length || unit.seqs.some(seq=>(capture.paragraphs||[]).find(p=>p.seq===seq)?.nest!==1))
+      return fail('Composite or nested paragraphs require full layout');
     const p=firstParagraph(capture,unit);
     if (!p?.begin || p.nest!==1) return fail('No unambiguous paragraph context');
   }
