@@ -83,7 +83,7 @@ const shell=()=>`<div class="app">
       <div class="side-view" data-view="labels" role="tabpanel" hidden><div class="side-scroll"><div class="labels" data-id="labels"></div></div></div>
       <div class="side-foot">
         <button class="text-btn" data-action="history" data-i18n-title="history.open">${icon('history',14)}<span data-i18n="history.open"></span></button>
-        <div class="app-credit"><span data-i18n="app.author"></span><a class="icon-btn" href="https://github.com/CodeBoy2006/LightningTeX" target="_blank" rel="noopener noreferrer" data-i18n-title="app.repository">${icon('github')}</a></div>
+        <a class="icon-btn" href="https://github.com/CodeBoy2006/LightningTeX" target="_blank" rel="noopener noreferrer" data-i18n-title="app.repository">${icon('github')}</a>
       </div>
       <input data-id="file-input" type="file" multiple hidden><input data-id="zip-input" type="file" accept=".zip,application/zip" hidden>
     </div></aside>

@@ -227,8 +227,7 @@ kbd{padding:0 5px;border:1px solid var(--line-strong);border-bottom-width:2px;bo
 .side-now b{flex:none;font:500 var(--fs-1) var(--font-code);color:var(--text-3)}
 .side-now span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .side-now small{flex:none;font-size:var(--fs-1);color:var(--text-3);font-variant-numeric:tabular-nums}
-.side-foot{flex:none;padding:6px 8px;border-top:1px solid var(--line)}
-.app-credit{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:4px 0 0 8px;color:var(--text-2);font-size:var(--fs-2)}
+.side-foot{flex:none;display:flex;align-items:center;justify-content:space-between;gap:4px;padding:6px 8px;border-top:1px solid var(--line)}
 .tree-empty{display:flex;flex-direction:column;gap:8px;padding:22px 16px;color:var(--text-2)}
 .tree-empty p{margin:0 0 4px;font-size:var(--fs-2);color:var(--text-2)}
 /* Outline: section words on the right, with a bar scaled to the longest section; problems replace the count. */

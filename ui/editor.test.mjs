@@ -51,20 +51,21 @@ async function chooseProject(h,title){
 
 test('templates do not force legacy T1 fonts',()=>{assert.ok(TEMPLATES[0].files['main.tex'].includes('\\documentclass'));for(const template of TEMPLATES)for(const text of Object.values(template.files))assert.ok(!text.includes('fontenc'));});
 
-test('sidebar credits the author and provides a localized, accessible repository link',()=>{
+test('sidebar footer pairs local history with a localized, accessible repository link',async()=>{
   const h=setup({storage:{'lightningtex:settings:v1':JSON.stringify({lang:'en'})}});
   try {
-    const credit=h.root.querySelector('.side-foot .app-credit'),link=credit.querySelector('a');
-    assert.equal(credit.textContent,'By Yongjie Guan');
+    const footer=h.root.querySelector('.side-foot'),link=footer.querySelector(':scope > a');
+    assert.equal(h.a('history').parentElement,footer);
+    assert.equal(footer.textContent.trim(),'Local history');
     assert.equal(link.href,'https://github.com/CodeBoy2006/LightningTeX');
     assert.equal(link.target,'_blank');assert.equal(link.rel,'noopener noreferrer');
     assert.ok(link.querySelector('.icon-github path'));
     assert.equal(link.getAttribute('aria-label'),'GitHub repository (opens in a new tab)');
     h.q('settings').querySelector('[data-setting="lang"] [data-value="zh"]').click();
-    assert.equal(credit.textContent,'作者 Yongjie Guan');
+    assert.equal(footer.textContent.trim(),'本地历史');
     assert.equal(link.getAttribute('aria-label'),'GitHub 仓库（在新标签页打开）');
     assert.equal(link.dataset.tip,link.getAttribute('aria-label'));
-  }finally{h.cleanup();}
+  }finally{await tick();h.cleanup();}
 });
 
 test('repeat compilation replaces PDF and manual requests do not overlap',async()=>{
