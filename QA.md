@@ -6,11 +6,11 @@ This document summarizes the automated test suites, differential layout verifica
 
 ## 1. Automated Test Suite Overview
 
-The 207-test `npm test` suite covers pure logic, mock Workers, jsdom, rendering, and runtime assets. The dedicated WASM suites below run the shipped LuaHBTeX 1.24.0 binary and browser Worker scripts in Node `worker_threads`; browser measurements are identified separately.
+The 208-test `npm test` suite covers pure logic, mock Workers, jsdom, rendering, and runtime assets. The dedicated WASM suites below run the shipped LuaHBTeX 1.24.0 binary and browser Worker scripts in Node `worker_threads`; browser measurements are identified separately.
 
 | Command | Suite Scope | Verified Assertions |
 | :--- | :--- | :--- |
-| `npm test` | **207 Unit, DOM & Renderer Tests** | Source span tracking & boundary merges, macro arity & live policy, cumulative context delta replay, baseline comparison, guarded ink regions & band slicing, `RTDL` binary codec, Type 1 PFB PDF synthesis, Myers line diff, quick fixes, autocompletion, snippets, cross-file `F2` rename, PDF text search, and workspace UI state. |
+| `npm test` | **208 Unit, DOM & Renderer Tests** | Source span tracking & boundary merges, macro arity & live policy, cumulative context delta replay, baseline comparison, guarded ink regions & band slicing, `RTDL` binary codec, Type 1 PFB PDF synthesis, Myers line diff, quick fixes, autocompletion, snippets, cross-file `F2` rename, PDF text search, and workspace UI state. |
 | `npm run test:runtime` | **WASM Runtime Smoke** (`tests/runtime-smoke.mjs`) | Cold WASM initialization, prose & math PDF compilation, recoverable undefined-command error handling, and subsequent compilation on the same worker. |
 | `npm run test:incremental` | **26-Edit Math & Prose Exact-Coordinate Regression** (`tests/incremental-math.mjs`) | 26 consecutive edits across inline math, fractions/summations, numbered `equation`, `align`, `\det`, `proof`/`abstract`, run-in headings, T1/Latin Modern, `microtype`, and newly introduced Type 1 math glyphs (`\alpha`). **1 initial full compile, 0 live restarts, 100% exact glyph identity and `sp` coordinate match** against a fresh full compile. |
 | `npm run test:reflow` | **18-Scenario Provisional Band Reflow** (`tests/live-reflow.mjs`) | Paragraph split/join/deletion, list item insertion, taller display formulas, section headings, multi-file `\input` updates, and `theorem`/`lemma`/`proposition`/`corollary`/`remark` environments with shared counters and nested lists. **1 initial full compile, 0 restarts, 100% glyph/metric/rule agreement** against 18 independent full compiles. |

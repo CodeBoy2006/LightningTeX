@@ -202,7 +202,7 @@ See [**engine/README.md**](engine/README.md) for the complete API reference and 
 
 ## Verification & Benchmarks
 
-LightningTeX is verified by **207 unit/DOM/renderer tests** and a suite of **real-WASM integration and differential benchmarks** (running the actual Emscripten LuaHBTeX binary, Lua scripts, and Worker code in both Node `worker_threads` and desktop Chromium):
+LightningTeX is verified by **208 unit/DOM/renderer tests** and a suite of **real-WASM integration and differential benchmarks** (running the actual Emscripten LuaHBTeX binary, Lua scripts, and Worker code in both Node `worker_threads` and desktop Chromium):
 
 | Benchmark / Verification Suite | Command | Key Verified Result |
 | :--- | :--- | :--- |
@@ -239,14 +239,14 @@ LightningTeX/
 │   ├── luahbtex/            # Source-built LuaHBTeX 1.24.0 WASM & pruned TeX Live 2026 LZ4/gzip chunks
 │   └── runtime/             # Web Workers (background-worker, live-worker, raw-loader, tex-packages, JS bibtex)
 ├── scripts/                 # Asset verification, 16 MiB chunk packager, and standalone engine builder
-├── tests/                   # 207 unit/DOM tests + real-WASM incremental, reflow, sequence, bibliography & benchmark suites
+├── tests/                   # 208 unit/DOM tests + real-WASM incremental, reflow, sequence, bibliography & benchmark suites
 └── docs/                    # Self-hosting deployment guide, port audit, and runtime probe documentation
 ```
 
 ### Development Commands
 
 ```sh
-npm test                     # Run all 207 unit, DOM, and display-list renderer tests
+npm test                     # Run all 208 unit, DOM, and display-list renderer tests
 npm run test:runtime         # Smoke-test WASM full compile, capture, and error recovery
 npm run test:integration     # End-to-end WASM integration test
 npm run test:preview         # Verify full-compile auxiliary reuse, cold-pass optimization, and PDF/TOC output

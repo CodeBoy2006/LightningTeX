@@ -13,7 +13,7 @@ The build replaces the multi-engine Web2C binary with a dedicated **LuaHBTeX 1.2
 | [TeXlyre Web2C build rules](https://github.com/TeXlyre/texlyre-busytex-build/tree/f544a51a99e7d3978bb70608e927a9a23f96d4a7) | `f544a51a99e7d3978bb70608e927a9a23f96d4a7` |
 | [TeX Live 2026 release source](https://mirrors.tuna.tsinghua.edu.cn/CTAN/systems/texlive/Source/texlive-20260301-source.tar.xz) | `32ea827edd3fb80a682ffbdf95d7ba6139ff074516e660c8923260fc82f5e0f0` |
 | [Emscripten 5.0.4 Linux ARM64 SDK](https://storage.googleapis.com/webassembly/emscripten-releases-builds/linux/54d45123d7ad4aa96ce57e74a1f3f9d1c54e6402/wasm-binaries-arm64.tar.xz) | `0c632bf6a185906036edea8b39bc4658193674a27221c0f07d8c9b10ce5b3b9c` |
-| Baseline `texlive-basic.data` (`assets-v1.4.0`) | `ccb35d98d77cbaf988e1481f8538709f72166196785cf6b8785eabe6c8fb2993` |
+| [Baseline `texlive-basic.data` (`assets-v1.4.0`)](https://github.com/TeXlyre/texlyre-busytex/releases/tag/assets-v1.4.0) | `ccb35d98d77cbaf988e1481f8538709f72166196785cf6b8785eabe6c8fb2993` |
 
 ### Host Prerequisites
 
@@ -68,12 +68,16 @@ This produces `build/wasm/luahbtex.{js,wasm,map}`.
 
 ## 3. Prune & Package TeX Live Resources
 
-Extract the baseline `texlive-basic.data` tree on the host:
+From the repository root, download the pinned upstream release (~498 MiB) and extract the four files needed to read its resource tree:
 
 ```sh
+curl -fL https://github.com/TeXlyre/texlyre-busytex/releases/download/assets-v1.4.0/busytex-assets.tar.gz \
+  -o /tmp/busytex-assets-v1.4.0.tar.gz
+echo '1caa434fb5aab5bdd59dc303bca2ac7b9b9af02ef1627bf8652caabfa1b7cd2b  /tmp/busytex-assets-v1.4.0.tar.gz' | shasum -a 256 -c -
 mkdir /tmp/lightningtex-resource-input
-git archive 17b307c public | tar -x -C /tmp/lightningtex-resource-input
-node engine/build/extract-data.cjs /tmp/lightningtex-resource-input/public /path/to/work/data
+tar -xzf /tmp/busytex-assets-v1.4.0.tar.gz -C /tmp/lightningtex-resource-input \
+  busytex/busytex.js busytex/busytex.wasm busytex/texlive-basic.js busytex/texlive-basic.data
+node engine/build/extract-data.cjs /tmp/lightningtex-resource-input/busytex /path/to/work/data
 ```
 
 Inside the Linux build environment, run `prune-data.mjs` to strip non-LuaHBTeX formats, ICU/fontconfig tables, unused CLI tool resources, Metafont sources, logs, and optional AFM files (retaining **5,597 files / 92.35 MiB** and removing **1,587 files / 57.23 MiB**), rebuild `ls-R` databases, and pack the LZ4 + gzip chunks:
