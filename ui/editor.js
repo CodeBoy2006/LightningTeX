@@ -171,8 +171,8 @@ export function mountEditor(options={}){
     timeline:[],timelineId:0,livePages:[],engineInfo:{live:'off',restarts:0},lastFullMs:null};
   const views=new Map(),removers=[];
   let structure={headings:[],labels:[],paths:[]},wordTotal=0,wordSections=[],historyId=globalThis.crypto.randomUUID();
-  let tabs=[],active=null,compileTimer,settleTimer,busyTimer,zoomTimer,saveTimer,metaTimer,barTimer,hoverFrame,hoverPoint,rendererAbort,pdfSequence=0,previewRun=0,store=null,saving=false,restoring=false,storageWarned=false;
-  let pending=emptyPending(),panelAuto=false,lastPulse=0,panelMotion=null,inkTimer;const inks=new Map();
+  let tabs=[],active=null,compileTimer,settleTimer,busyTimer,zoomTimer,saveTimer,metaTimer,barTimer,hoverFrame,hoverPoint,rendererAbort,pdfSequence=0,previewRun=0,store=null,saving=null,restoring=false,storageWarned=false;
+  let pending=null,panelAuto=false,lastPulse=0,panelMotion=null,inkTimer;const inks=new Map();
   // Projects: `store` holds every project (or is a single-project store); `scoped` is the open project's view of it.
   let scoped=null,currentId=null,switching=false;
   const multi=()=>!!store?.listProjects,saver=()=>multi()?scoped:store;
@@ -1288,6 +1288,7 @@ export function mountEditor(options={}){
   function emptyPending(){return {put:new Set(),remove:new Set(),reset:false};}
   function queueSave(change){
     if(!saver()||!settings.persist||restoring||switching||state.destroyed)return;
+    pending??=emptyPending();
     if(change?.type==='load'){pending=emptyPending();pending.reset=true;for(const path of project.paths())pending.put.add(path);}
     else if(change?.type==='remove')for(const path of change.paths){pending.put.delete(path);pending.remove.add(path);}
     else if(change?.type==='rename')for(const [from,to] of change.moved){pending.put.delete(from);pending.remove.add(from);pending.remove.delete(to);pending.put.add(to);}
@@ -1295,23 +1296,40 @@ export function mountEditor(options={}){
     state.save='saving';updateSave();clearTimeout(saveTimer);saveTimer=setTimeout(flush,400);
   }
   async function flush(){
-    clearTimeout(saveTimer);saveTimer=null;
-    const target=saver();if(!target||!settings.persist||state.destroyed)return;
-    if(saving){saveTimer=setTimeout(flush,200);return;}
-    const job=pending;pending=emptyPending();saving=true;
-    try{
-      await target.save({reset:job.reset,remove:[...job.remove],put:[...job.put].map(path=>project.get(path)).filter(Boolean).map(file=>typeof file.text==='string'?{path:file.path,text:file.text}:{path:file.path,data:file.data}),
-        meta:{main:project.main,folders:project.explicitFolders(),tabs,active,historyId,title:documentTitle(mainText())||(project.main?basename(project.main):'')}});
-      if(!saveTimer){state.save='saved';state.dirty=false;}
-    }catch{
-      state.save='failed';if(!storageWarned){storageWarned=true;notify('toast.storage');}
-    }finally{saving=false;updateSave();}
+    while(true){
+      clearTimeout(saveTimer);saveTimer=null;
+      if(saving){if(!await saving)return false;continue;}
+      const target=saver();if(!target||!settings.persist)return true;
+      if(state.destroyed)return false;
+      if(!pending)return true;
+      const job=pending;pending=null;
+      state.save='saving';updateSave();
+      saving=(async()=>{
+        try{
+          await target.save({reset:job.reset,remove:[...job.remove],put:[...job.put].map(path=>project.get(path)).filter(Boolean).map(file=>typeof file.text==='string'?{path:file.path,text:file.text}:{path:file.path,data:file.data}),
+            meta:{main:project.main,folders:project.explicitFolders(),tabs,active,historyId,title:documentTitle(mainText())||(project.main?basename(project.main):'')}});
+          if(settings.persist&&!state.destroyed&&!pending){state.save='saved';state.dirty=false;}
+          return true;
+        }catch{
+          if(settings.persist&&!state.destroyed){
+            // Retry the current tree, including edits and deletions made during the failed write.
+            pending={put:new Set(project.paths()),remove:new Set(),reset:true};
+            clearTimeout(saveTimer);saveTimer=null;
+            state.save='failed';if(!storageWarned){storageWarned=true;notify('toast.storage');}
+          }
+          return false;
+        }
+      })().finally(()=>{saving=null;if(!state.destroyed)updateSave();});
+      if(!await saving)return false;
+    }
   }
   async function persistChanged(){
     if(!store){state.save='off';updateSave();return;}
     if(multi()&&!scoped){currentId=globalThis.crypto.randomUUID();scoped=store.project(currentId);remember(currentId);}
     if(settings.persist){queueSave({type:'load'});return;}
-    clearTimeout(saveTimer);saveTimer=null;pending=emptyPending();state.save='off';updateSave();
+    clearTimeout(saveTimer);saveTimer=null;pending=null;state.save='off';updateSave();
+    await saving;
+    if(settings.persist)return;
     try{await store.clear();}catch{notify('toast.storage');}
   }
   async function upload(list,dir=''){
@@ -1371,14 +1389,14 @@ export function mountEditor(options={}){
         // The project as it is goes into history first, so restoring one file can be undone from there too.
         const revision=state.revision;if(!await takeSnapshot(true)||state.revision!==revision)throw Error('Cannot safely restore a changed project');
         if(now)write(path,0,now.text.length,saved.text);else project.write(path,saved.text);
-        openFile(path,{focus:true});await flush();return true;
+        openFile(path,{focus:true});return flush();
       },
       restore:async snapshot=>{
       if(snapshot.projectId!==historyId||!Array.isArray(snapshot.files)||!snapshot.files.length||snapshot.files.some(file=>typeof file.text!=='string'||normalizePath(file.path)!==file.path)||new Set(snapshot.files.map(file=>file.path)).size!==snapshot.files.length)throw Error('Invalid snapshot');
       const revision=state.revision;if(!await takeSnapshot(true)||state.revision!==revision)throw Error('Cannot safely restore a changed project');
       const binary=project.files().filter(file=>typeof file.text!=='string'),occupied=new Set(binary.map(file=>file.path));
       if(snapshot.files.some(file=>occupied.has(file.path)))throw Error('A binary file occupies a snapshot path');
-      cancel();project.load({main:snapshot.main,folders:[...new Set([...project.explicitFolders(),...(snapshot.folders||[])])],files:[...binary,...snapshot.files]});if(project.main)openFile(project.main,{focus:true});await flush();return true;
+      cancel();project.load({main:snapshot.main,folders:[...new Set([...project.explicitFolders(),...(snapshot.folders||[])])],files:[...binary,...snapshot.files]});if(project.main)openFile(project.main,{focus:true});return flush();
     }});
   }
   function wireInsertion(editor,path){
@@ -1445,9 +1463,11 @@ export function mountEditor(options={}){
   /** Open another stored project: pending edits are saved first, then the workspace loads it as it was left. */
   async function openProject(id,{force=false}={}){
     if(!multi()||id===currentId&&!force)return false;
-    await flush();
+    if(!await flush())return false;
     const target=store.project(id),saved=await target.load().catch(()=>null);
     if(!saved||state.destroyed){notify('projects.missing');return false;}
+    // Reading the next project can overlap another edit in this one.
+    if(!await flush())return false;
     cancel();popover?.hide();toggleSettings(false);
     currentId=id;scoped=target;remember(id);historyId=saved.historyId||globalThis.crypto.randomUUID();
     switching=true;try{project.load(saved);}finally{switching=false;}
@@ -1460,7 +1480,7 @@ export function mountEditor(options={}){
   }
   /** A new project from a template or an archive, opened at once. */
   async function newProject(data){
-    await flush();
+    if(!await flush())return false;
     const main=data.main||data.files.find(file=>/\.tex$/i.test(file.path)&&/\\documentclass/.test(file.text||''))?.path;
     const id=await store.createProject({...data,main,title:documentTitle(data.files.find(file=>file.path===main)?.text||'')}).catch(()=>null);
     if(!id){notify('toast.storage');return false;}
@@ -1468,10 +1488,11 @@ export function mountEditor(options={}){
   }
   async function deleteProject(id,refresh){
     const deleting=id===currentId;
-    if(deleting){clearTimeout(saveTimer);saveTimer=null;pending=emptyPending();scoped=null;}
+    if(deleting&&!await flush())return;
     const record=await store.deleteProject(id).catch(()=>null);
-    if(!record){if(deleting)scoped=store.project(id);notify('toast.storage');return;}
+    if(!record){notify('toast.storage');return;}
     if(deleting){
+      clearTimeout(saveTimer);saveTimer=null;pending=null;scoped=null;
       const next=(await store.listProjects()).find(item=>item.id!==id);
       if(next)await openProject(next.id,{force:true});else await newProject(templateProject(TEMPLATES[0]));
     }
@@ -1510,7 +1531,7 @@ export function mountEditor(options={}){
         const more=make('button','icon-btn project-more');more.type='button';more.innerHTML=icon('more');more.setAttribute('aria-label',t('file.more'));
         more.onclick=()=>openMenu(app,more.getBoundingClientRect(),[
           {label:t('projects.openIt'),icon:'file',disabled:item.id===currentId,run:()=>{dialog.close();void openProject(item.id);}},
-          {label:t('projects.duplicate'),icon:'copyFile',run:async()=>{await flush();await store.duplicateProject(item.id,{title:t('projects.copyOf',{name:item.title||t('project.untitled')})}).catch(()=>notify('toast.storage'));void paint();}},
+          {label:t('projects.duplicate'),icon:'copyFile',run:async()=>{if(!await flush())return;await store.duplicateProject(item.id,{title:t('projects.copyOf',{name:item.title||t('project.untitled')})}).catch(()=>notify('toast.storage'));void paint();}},
           {label:t('project.export'),icon:'archive',run:()=>void exportProject(item.id)},'separator',
           {label:t('file.delete'),icon:'trash',danger:true,run:()=>void deleteProject(item.id,paint)}]);
         card.append(open,more);grid.append(card);
@@ -1730,7 +1751,7 @@ export function mountEditor(options={}){
   listen(root,'dragover',event=>{if(external(event)){event.preventDefault();$('drop-veil').hidden=!!event.target.closest?.('.tree');}});
   listen(root,'dragleave',event=>{if(external(event)&&--dragDepth<=0){dragDepth=0;$('drop-veil').hidden=true;}});
   listen(root,'drop',event=>{dragDepth=0;$('drop-veil').hidden=true;if(!external(event))return;event.preventDefault();void upload(event.dataTransfer.files,'');});
-  listen(window,'beforeunload',event=>{if(state.save==='saving')void flush();else if(state.dirty&&state.save!=='saved'){event.preventDefault();event.returnValue='';}});
+  listen(window,'beforeunload',event=>{if(state.save==='saving')void flush();if(state.save==='saving'||state.save==='failed'||state.dirty&&state.save!=='saved'){event.preventDefault();event.returnValue='';}});
   listen(window,'pagehide',()=>{if(saveTimer)void flush();});
   const themeChanged=()=>applyAppearance();darkQuery?.addEventListener?.('change',themeChanged);removers.push(()=>darkQuery?.removeEventListener?.('change',themeChanged));
   narrowQuery?.addEventListener?.('change',applyLayout);removers.push(()=>narrowQuery?.removeEventListener?.('change',applyLayout));

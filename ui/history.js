@@ -84,7 +84,7 @@ export async function openHistory({host,t,lang,store,projectId,persist,restore,r
     if(!await confirmDialog(host,{title:t('history.fileConfirm',{name:path}),message:t('history.fileBody'),confirm:t('history.restoreFile'),cancel:t('common.cancel')}))return;
     fileButton.disabled=true;
     try{if(await restoreFile(chosen,path)){dialog.close();notify('history.fileRestored',{name:path});}}
-    catch{notify('history.failed');fileButton.disabled=false;}
+    catch{notify('history.failed');}finally{fileButton.disabled=false;}
   };
   if(!persist||!store?.listSnapshots){content.querySelector('.history-content').hidden=true;return dialog;}
   try{

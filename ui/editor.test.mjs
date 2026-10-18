@@ -28,11 +28,25 @@ function setup(options={}) {
   return {ui,root,q,a,pdfItem,event,edit,auto,type,rendered,dom,cleanup(){ui.destroy();dom.window.close();for(const [key,value] of Object.entries(previous)){if(value===undefined)delete globalThis[key];else globalThis[key]=value;}}};
 }
 function memoryStore(saved=null){
-  const files=new Map((saved?.files||[]).map(file=>[file.path,file]));let meta=saved?{main:saved.main,tabs:saved.tabs,active:saved.active,folders:saved.folders}:null;
+  const files=new Map((saved?.files||[]).map(file=>[file.path,file]));let meta=saved?{main:saved.main,tabs:saved.tabs,active:saved.active,folders:saved.folders,historyId:saved.historyId}:null;
   return {files,cleared:0,get meta(){return meta;},
     async load(){return meta?{...meta,files:[...files.values()]}:null;},
     async save({put=[],remove=[],meta:next,reset}){if(reset)files.clear();for(const path of remove)files.delete(path);for(const file of put)files.set(file.path,file);if(next)meta=next;},
     async clear(){files.clear();meta=null;this.cleared++;}};
+}
+function memoryProjects(){
+  const records=new Map(['First','Second'].map(id=>[id,memoryStore({main:'main.tex',historyId:id,files:[{path:'main.tex',text:id+' original'}]})]));
+  return {records,created:[],deleted:[],duplicated:[],project:id=>records.get(id),
+    async listProjects(){return [...records.keys()].map(id=>({id,title:id}));},async lastProject(){return 'First';},async remember(){},
+    async createProject(data){this.created.push(data);return 'Second';},
+    async deleteProject(id){this.deleted.push(id);throw Error('Unexpected deletion');},
+    async duplicateProject(id){this.duplicated.push(id);}};
+}
+const saveNow=h=>h.event(h.root,'keydown',{key:'s',ctrlKey:true});
+async function chooseProject(h,title){
+  h.a('project-menu').click();await tick();
+  [...h.root.querySelectorAll('[role="menu"] button')].find(button=>button.querySelector('.menu-label')?.textContent===title).click();
+  await tick();
 }
 
 test('templates do not force legacy T1 fonts',()=>{assert.ok(TEMPLATES[0].files['main.tex'].includes('\\documentclass'));for(const template of TEMPLATES)for(const text of Object.values(template.files))assert.ok(!text.includes('fontenc'));});
@@ -108,6 +122,82 @@ test('a stored project, its main file and open tabs are restored',async()=>{
   try {assert.equal(h.q('source'),null,'nothing is editable before the stored project loads');await h.ui.compile();assert.equal(requests.length,0);
     await h.ui.ready;assert.equal(h.q('source').value,'One');assert.equal(h.q('filename').textContent,'one.tex');assert.equal(h.ui.getState().root,'paper.tex');assert.equal(h.q('tabs').children.length,2);
     await h.ui.compile();assert.equal(requests[0].root,'paper.tex');assert.deepEqual(requests[0].files.map(file=>file.path).sort(),['ch/one.tex','fig.png']);}finally{h.cleanup();}
+});
+
+test('a failed save retries the current files, including concurrent renames and deletions',async()=>{
+  const store=memoryStore({main:'main.tex',historyId:'saved',files:[{path:'main.tex',text:'old'},{path:'notes.tex',text:'notes'},{path:'gone.tex',text:'gone'},{path:'fig.png',data:new Uint8Array([1,2])}]}),write=store.save;
+  const h=setup({store}),blocked=deferred();
+  try{
+    await h.ui.ready;h.auto(false);saveNow(h);await tick();
+    store.save=()=>blocked.promise;
+    h.edit('new main');saveNow(h);
+    h.ui.project.rename('notes.tex','renamed.tex');h.ui.project.remove('gone.tex');
+    blocked.reject(Error('Storage failed'));await tick();
+    assert.equal(h.q('save-status').textContent,'Save failed');assert.equal(store.files.get('main.tex').text,'old');
+    store.save=write;h.ui.project.write('renamed.tex','new notes');saveNow(h);await tick();
+    assert.equal(h.q('save-status').textContent,'Saved');
+    assert.equal(store.files.get('main.tex').text,'new main');assert.equal(store.files.get('renamed.tex').text,'new notes');
+    assert.deepEqual([...store.files.keys()].sort(),['fig.png','main.tex','renamed.tex']);assert.deepEqual(store.files.get('fig.png').data,new Uint8Array([1,2]));
+  }finally{h.cleanup();}
+});
+
+test('failed saves block switching, archive creation, duplication and deletion of the current project',async()=>{
+  const store=memoryProjects(),first=store.project('First'),write=first.save,h=setup({store});
+  try{
+    await h.ui.ready;h.auto(false);saveNow(h);await tick();
+    first.save=()=>{throw Error('Storage failed');};h.edit('unsaved first');
+    await chooseProject(h,'Second');assert.equal(h.ui.getSource(),'unsaved first');assert.equal(h.q('save-status').textContent,'Save failed');
+    const {zip}=await import('../core/zip.js');await h.ui.upload([upload('new.zip',zip([{path:'main.tex',data:new TextEncoder().encode('archive')}]))]);
+    assert.equal(store.created.length,0);
+    h.event(h.root,'keydown',{key:'o',ctrlKey:true});await tick();
+    for(const label of ['Duplicate','Delete']){
+      h.root.querySelector('.project-card[data-current] .project-more').click();
+      [...h.root.querySelectorAll('[role="menu"] button')].find(button=>button.querySelector('.menu-label')?.textContent===label).click();await tick();
+    }
+    assert.equal(store.duplicated.length,0);assert.equal(store.deleted.length,0);assert.equal(h.ui.getSource(),'unsaved first');
+    h.event(h.root.querySelector('.projects-dialog'),'keydown',{key:'Escape'});
+    first.save=write;await chooseProject(h,'Second');await tick();
+    assert.equal(first.files.get('main.tex').text,'unsaved first');assert.equal(h.ui.getSource(),'Second original');
+  }finally{h.cleanup();}
+});
+
+test('switching waits for an in-flight save and preserves edits made while the next project loads',async()=>{
+  const store=memoryProjects(),first=store.project('First'),second=store.project('Second'),write=first.save,load=second.load;
+  const saving=deferred(),loading=deferred(),started=deferred(),h=setup({store});let writes=0;
+  try{
+    await h.ui.ready;h.auto(false);saveNow(h);await tick();
+    first.save=async job=>{if(++writes===1)await saving.promise;await write(job);};
+    second.load=async()=>{started.resolve();await loading.promise;return load();};
+    h.edit('first edit');saveNow(h);await chooseProject(h,'Second');
+    assert.equal(h.ui.getSource(),'first edit');
+    h.edit('second edit');saving.resolve();await started.promise;
+    assert.equal(first.files.get('main.tex').text,'second edit');
+    h.edit('edit during load');loading.resolve();await tick();await tick();
+    assert.equal(first.files.get('main.tex').text,'edit during load');assert.equal(h.ui.getSource(),'Second original');assert.equal(writes,3);
+  }finally{saving.resolve();loading.resolve();h.cleanup();}
+});
+
+test('leaving warns while a save is pending and stopping persistence waits for that save',async()=>{
+  const store=memoryStore(),write=store.save,blocked=deferred(),h=setup({store});
+  try{
+    await h.ui.ready;h.auto(false);saveNow(h);await tick();
+    store.save=async job=>{await blocked.promise;await write(job);};h.edit('draft');saveNow(h);
+    const event=new h.dom.window.Event('beforeunload',{cancelable:true});h.dom.window.dispatchEvent(event);assert.equal(event.defaultPrevented,true);
+    h.q('persist').checked=false;h.event(h.q('persist'),'change');await tick();assert.equal(store.cleared,0);
+    blocked.resolve();await tick();assert.equal(store.files.size,0);assert.equal(store.cleared,1);assert.equal(h.q('save-status').textContent,'Not saved');
+  }finally{blocked.resolve();h.cleanup();}
+});
+
+test('re-enabling persistence during an in-flight save does not clear the project',async()=>{
+  const store=memoryStore(),write=store.save,blocked=deferred(),h=setup({store});
+  try{
+    await h.ui.ready;h.auto(false);saveNow(h);await tick();
+    store.save=async job=>{await blocked.promise;await write(job);};h.edit('draft');saveNow(h);
+    h.q('persist').checked=false;h.event(h.q('persist'),'change');
+    h.q('persist').checked=true;h.event(h.q('persist'),'change');h.edit('latest draft');
+    blocked.resolve();await tick();await tick();
+    assert.equal(store.cleared,0);assert.equal(store.files.get('main.tex').text,'latest draft');assert.equal(h.q('save-status').textContent,'Saved');
+  }finally{blocked.resolve();h.cleanup();}
 });
 
 test('a draft from the single-file version becomes the first project',()=>{
@@ -574,5 +664,20 @@ test('history shows changes against now per file and can restore one file',async
     assert.ok(dialog.querySelector('.diff-fold'),'long unchanged runs fold');assert.match(dialog.querySelector('.history-list small').textContent,/\+1 −1/);
     dialog.querySelector('.restore-file').click();await tick();h.root.querySelector('[role="alertdialog"] .primary').click();await tick();await tick();
     assert.equal(h.ui.getSource(),'a\nb\nc\nd\ne\nf\ng');assert.equal(h.ui.project.get('notes.tex').text,'keep');
+  }finally{h.cleanup();}
+});
+
+test('history restoration stays open and retryable when saving the restored file fails',async()=>{
+  const store=memoryStore(),write=store.save;store.snapshots=[];
+  store.addSnapshot=async row=>{store.snapshots.push(row);return true;};store.listSnapshots=async id=>store.snapshots.filter(row=>row.projectId===id).reverse();
+  const h=setup({store,source:'original',onCompile:async()=>({pdf:bytes(1)})});
+  try{
+    await h.ui.ready;h.auto(false);await h.ui.compile();h.edit('changed');
+    h.a('history').click();await tick();const dialog=h.root.querySelector('.history-dialog'),restore=dialog.querySelector('.restore-file');
+    store.save=()=>{throw Error('Storage failed');};
+    restore.click();await tick();h.root.querySelector('[role="alertdialog"] .primary').click();await tick();
+    assert.equal(dialog.getAttribute('role'),'dialog');assert.equal(restore.disabled,false);assert.equal(h.q('save-status').textContent,'Save failed');
+    store.save=write;restore.click();await tick();h.root.querySelector('[role="alertdialog"] .primary').click();await tick();
+    assert.equal(dialog.hasAttribute('role'),false);assert.equal(store.files.get('main.tex').text,'original');assert.equal(h.q('save-status').textContent,'Saved');
   }finally{h.cleanup();}
 });
