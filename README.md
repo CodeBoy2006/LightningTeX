@@ -64,6 +64,8 @@ npm run build     # Build production web app into dist/
 npm run preview   # Serve dist/ on http://127.0.0.1:4173 with COOP/COEP headers
 ```
 
+To publish on Vercel, install its CLI, run `vercel login`, then `vercel --prod` from the repository root. The included configuration supplies the required routes and headers; see the [Vercel deployment steps](docs/DEPLOYMENT.md#deploy-to-vercel).
+
 On first launch, LightningTeX streams **~42.4 MiB** of gzip-compressed engine and TeX Live basic assets (~54.4 MiB unpacked; internal TeX files remain stored in 16 KiB LZ4 blocks) with staged progress so you can start editing immediately. Additional packages (`microtype`, `booktabs`, `enumitem`, etc.) are fetched on demand when used in a document and persisted in browser `Cache Storage`.
 
 ---

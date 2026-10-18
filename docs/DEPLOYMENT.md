@@ -39,6 +39,22 @@ X-Content-Type-Options: nosniff
    - Serve `.wasm` with `application/wasm`.
    - Serve `.partNNN` chunks (`luahbtex.wasm.gz.part000`, `texlive-luahbtex.data.gz.part000`…`part002`) as raw `application/octet-stream` **without** automatic server-side gzip decompression. Each chunk is capped at $\le 16\text{ MiB}$, verified against `asset-manifest.json`, and decompressed inside the Worker using `DecompressionStream`.
 
+### Deploy to Vercel
+
+From the repository root:
+
+```sh
+npm install --global vercel
+vercel login
+vercel --prod
+```
+
+Choose your Vercel account and create or link the `lightningtex` project. Later deployments use the same `vercel --prod` command.
+
+The root `vercel.json` runs `npm run build`, publishes `dist/`, routes `/` to `/ui/index.html`, and applies the cross-origin isolation headers to pages and Worker scripts. Vercel does not use `public/_headers`. `.vercelignore` uploads only the build inputs, excluding local logs, test outputs, and demo media; `.vercel/` stores the local project link and stays out of Git. No backend or environment variables are required.
+
+After deployment, open the production URL and check that a document compiles and an edit updates the preview. In the browser console, `crossOriginIsolated` must be `true` for live typesetting.
+
 ---
 
 ## 3. On-Demand TeX Live Package Service & Caching

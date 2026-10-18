@@ -64,6 +64,8 @@ npm run build     # 构建生产版本至 dist/
 npm run preview   # 使用本机静态服务器运行 dist/ (http://127.0.0.1:4173)
 ```
 
+部署到 Vercel：安装其 CLI，执行 `vercel login`，再在仓库根目录运行 `vercel --prod`。项目已包含首页路由和跨源隔离响应头配置，详见 [Vercel 部署步骤](docs/DEPLOYMENT.md#deploy-to-vercel)。
+
 首次访问将分阶段流式加载约 **42.4 MiB** 的压缩引擎与数据（gzip 解压后约 54.4 MiB，内部 TeX 文件按 16 KiB LZ4 分块存储），加载过程中即可开始编辑。仅预装裁剪后的 TeX Live basic；当文档实际使用 `microtype`、`booktabs`、`enumitem` 等额外宏包时，引擎会自动按需下载并持久化至浏览器 `Cache Storage`。
 
 ---
