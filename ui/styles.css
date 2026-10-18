@@ -420,7 +420,8 @@ button.stat:hover{background:var(--hover);color:var(--text)}
 .setting-desc{color:var(--text-3);font-size:var(--fs-2);line-height:1.4}
 .settings-pane .keys{margin-top:6px}
 .settings-empty{margin:28px 0;color:var(--text-3);text-align:center}
-.menu{position:absolute;z-index:50;min-width:196px;max-width:min(360px,calc(100% - 16px));padding:5px;border:1px solid var(--line-strong);border-radius:var(--r-3);outline:none;background:var(--raised);box-shadow:var(--shadow);animation:pop-in var(--t-pop) var(--ease)}
+/* Menus opened inside dialogs share the app host; keep them above the modal and below Undo notices. */
+.menu{position:absolute;z-index:65;min-width:196px;max-width:min(360px,calc(100% - 16px));padding:5px;border:1px solid var(--line-strong);border-radius:var(--r-3);outline:none;background:var(--raised);box-shadow:var(--shadow);animation:pop-in var(--t-pop) var(--ease)}
 .menu.closing{animation:pop-out .1s ease-in forwards}
 .menu button{width:100%;height:28px;display:flex;align-items:center;gap:8px;padding:0 8px;border:0;border-radius:var(--r-2);background:transparent;font-size:var(--fs-3);text-align:left;cursor:pointer}
 .menu button:hover:not(:disabled){background:var(--hover)}

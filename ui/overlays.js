@@ -21,7 +21,7 @@ export function openMenu(host,at,items){
     if(event.key==='Escape'){event.preventDefault();event.stopPropagation();close();}
     else if(event.key==='ArrowDown'){event.preventDefault();list[(index+1)%list.length]?.focus();}
     else if(event.key==='ArrowUp'){event.preventDefault();list[(index-1+list.length)%list.length]?.focus();}
-    else if(event.key==='Tab')close(false);
+    else if(event.key==='Tab')close();
   }
   for(const item of items){
     if(item==='separator'){menu.append(Object.assign(document.createElement('div'),{className:'menu-separator'}));continue;}

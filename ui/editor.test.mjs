@@ -2,6 +2,7 @@
 // Run from project root: node --test ui/editor.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import { JSDOM } from 'jsdom';
 import { mountEditor } from './editor.js';
 import { TEMPLATES } from './templates.js';
@@ -176,6 +177,31 @@ test('failed saves block switching, archive creation, duplication and deletion o
     first.save=write;await chooseProject(h,'Second');await tick();
     assert.equal(first.files.get('main.tex').text,'unsaved first');assert.equal(h.ui.getSource(),'Second original');
   }finally{h.cleanup();}
+});
+
+test('project card menus sit above the dialog and support dismissal, duplication and opening',async()=>{
+  const store=memoryProjects(),h=setup({store});
+  try{
+    const style=document.createElement('style');style.textContent=readFileSync(new URL('./styles.css',import.meta.url),'utf8');document.head.append(style);
+    await h.ui.ready;h.auto(false);
+    h.event(h.root,'keydown',{key:'o',ctrlKey:true});await tick();
+    const dialog=h.root.querySelector('.projects-dialog'),more=dialog.querySelector('.project-more');
+    more.focus();more.click();
+    const menu=h.root.querySelector('[role="menu"]'),layer=node=>Number(h.dom.window.getComputedStyle(node).zIndex);
+    assert.ok(layer(menu)>layer(dialog.parentElement),'the project dialog must not cover its menu');
+    assert.ok(layer(menu)<layer(h.root.querySelector('.toasts')),'Undo notices stay above menus');
+    assert.equal(document.activeElement.textContent,'Duplicate');
+    assert.equal(menu.querySelector('button').disabled,true,'the current project cannot be opened again');
+    h.event(document.activeElement,'keydown',{key:'Escape'});
+    assert.equal(h.root.querySelector('[role="menu"]'),null);assert.equal(dialog.getAttribute('role'),'dialog');assert.equal(document.activeElement,more);
+    more.click();h.event(document.activeElement,'keydown',{key:'Tab'});
+    assert.equal(h.root.querySelector('[role="menu"]'),null);assert.equal(document.activeElement,more,'Tab resumes from the menu trigger');
+    more.click();h.event(dialog,'pointerdown');assert.equal(h.root.querySelector('[role="menu"]'),null);
+    more.click();document.activeElement.click();await tick();
+    assert.deepEqual(store.duplicated,['First']);
+    dialog.querySelector('.project-card:not([data-current]) .project-more').click();document.activeElement.click();await tick();
+    assert.equal(h.ui.getSource(),'Second original');assert.equal(dialog.hasAttribute('role'),false);
+  }finally{await tick();h.cleanup();}
 });
 
 test('switching waits for an in-flight save and preserves edits made while the next project loads',async()=>{
