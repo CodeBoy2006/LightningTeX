@@ -2,6 +2,8 @@
 
 **Genuine LuaHBLaTeX in the Browser — Millisecond Incremental Live Preview, Zero Backend.**
 
+[**Try LightningTeX online →**](https://lightningtex.vercel.app)
+
 [**English**](README.md) · [**简体中文**](README.zh-CN.md) · [**Standalone Engine SDK**](engine/README.md) · [**Renderer Docs**](render/README.md) · [**Source Build Recipe**](engine/build/README.md) · [**Deployment**](docs/DEPLOYMENT.md) · [**QA & Benchmarks**](QA.md)
 
 <p align="center">

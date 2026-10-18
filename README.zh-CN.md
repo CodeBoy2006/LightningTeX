@@ -2,6 +2,8 @@
 
 **浏览器内的真 LuaHBLaTeX 增量排版引擎与现代写作工作区 —— 毫秒级局部实时预览，零后端依赖。**
 
+[**在线体验 LightningTeX →**](https://lightningtex.vercel.app)
+
 [**English**](README.md) · [**简体中文**](README.zh-CN.md) · [**独立引擎 SDK**](engine/README.md) · [**渲染器文档**](render/README.md) · [**源码构建说明**](engine/build/README.md) · [**自托管部署**](docs/DEPLOYMENT.md) · [**验收与基准数据**](QA.md)
 
 <p align="center">
