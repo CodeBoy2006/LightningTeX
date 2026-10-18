@@ -59,6 +59,8 @@ Then open **http://127.0.0.1:4173** in a desktop browser (use `PORT=8080 node se
 
 ### 2. Run from Source
 
+Building and testing require **Node.js 22.22.2+ (22.x), 24.15.0+ (24.x), or 26+**. This does not change the Node.js requirement for the zero-dependency prebuilt server above.
+
 ```sh
 npm ci
 npm run dev       # Start Vite dev server
@@ -191,7 +193,7 @@ See [**engine/README.md**](engine/README.md) for the complete API reference and 
 
 ## Verification & Benchmarks
 
-LightningTeX is verified by **208 unit/DOM/renderer tests** and a suite of **real-WASM integration and differential benchmarks** (running the actual Emscripten LuaHBTeX binary, Lua scripts, and Worker code in both Node `worker_threads` and desktop Chromium):
+LightningTeX is verified by **216 unit/DOM/renderer tests** and a suite of **real-WASM integration and differential benchmarks** (running the actual Emscripten LuaHBTeX binary, Lua scripts, and Worker code in both Node `worker_threads` and desktop Chromium):
 
 | Benchmark / Verification Suite | Command | Key Verified Result |
 | :--- | :--- | :--- |
@@ -228,14 +230,14 @@ LightningTeX/
 │   ├── luahbtex/            # Source-built LuaHBTeX 1.24.0 WASM & pruned TeX Live 2026 LZ4/gzip chunks
 │   └── runtime/             # Web Workers (background-worker, live-worker, raw-loader, tex-packages, JS bibtex)
 ├── scripts/                 # Asset verification, 16 MiB chunk packager, and standalone engine builder
-├── tests/                   # 208 unit/DOM tests + real-WASM incremental, reflow, sequence, bibliography & benchmark suites
+├── tests/                   # 216 unit/DOM tests + real-WASM incremental, reflow, sequence, bibliography & benchmark suites
 └── docs/                    # Self-hosting deployment guide, port audit, and runtime probe documentation
 ```
 
 ### Development Commands
 
 ```sh
-npm test                     # Run all 208 unit, DOM, and display-list renderer tests
+npm test                     # Run all 216 unit, DOM, and display-list renderer tests
 npm run test:runtime         # Smoke-test WASM full compile, capture, and error recovery
 npm run test:integration     # End-to-end WASM integration test
 npm run test:preview         # Verify full-compile auxiliary reuse, cold-pass optimization, and PDF/TOC output
@@ -261,3 +263,5 @@ LightningTeX builds upon the following open-source projects:
 - **[Inter](https://github.com/rsms/inter)** (`5.2.5`, SIL OFL 1.1) — Bundled Latin variable UI font.
 
 This project is distributed under the **GNU Affero General Public License v3.0 or later ([AGPL-3.0-or-later](LICENSE))**. Bundled TeX engines, macro packages, and fonts retain their individual licenses; see [**THIRD-PARTY-NOTICES.md**](THIRD-PARTY-NOTICES.md) for complete provenance and hashes. PDF documents and source files created by users with LightningTeX are not subject to the AGPL.
+
+Both build outputs include license copies and a matching `source.zip`. See [**SOURCES.md**](SOURCES.md) for source access, upstream inputs, and rebuild instructions.

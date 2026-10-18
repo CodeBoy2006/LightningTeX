@@ -59,6 +59,8 @@ node server.mjs
 
 ### 2. 从源码运行与构建
 
+构建与测试要求 **Node.js 22.22.2+（22.x）、24.15.0+（24.x）或 26+**；上面的零依赖预构建服务器仍保留原运行要求。
+
 ```sh
 npm ci
 npm run dev       # 启动 Vite 开发服务器
@@ -186,7 +188,7 @@ const displayList = decodeDisplayList(liveResult.binary);
 
 ## 验证与性能基准
 
-本项目包含 **208 项单元 / DOM / 渲染器测试** 以及多项基于真实 WebAssembly 与浏览器环境的端到端回归基准（在 Node `worker_threads` 及桌面 Chromium 中直接运行真实的 LuaHBTeX WASM、原项目 Lua 脚本与 Worker 代码）：
+本项目包含 **216 项单元 / DOM / 渲染器测试** 以及多项基于真实 WebAssembly 与浏览器环境的端到端回归基准（在 Node `worker_threads` 及桌面 Chromium 中直接运行真实的 LuaHBTeX WASM、原项目 Lua 脚本与 Worker 代码）：
 
 | 验证套件 / 基准测试 | 运行命令 | 核心实测结果 |
 | :--- | :--- | :--- |
@@ -223,14 +225,14 @@ LightningTeX/
 │   ├── luahbtex/            # 源码裁剪构建的 LuaHBTeX 1.24.0 WASM 与 TeX Live 2026 LZ4/gzip 分块资源
 │   └── runtime/             # Web Worker 运行时（background-worker、live-worker、raw-loader、tex-packages、JS bibtex）
 ├── scripts/                 # 资源哈希校验、16 MiB 分块打包器与独立引擎构建脚本
-├── tests/                   # 208 项单元/DOM 测试 + 真实 WASM 增量、重排、连续输入、参考文献与性能基准套件
+├── tests/                   # 216 项单元/DOM 测试 + 真实 WASM 增量、重排、连续输入、参考文献与性能基准套件
 └── docs/                    # 自托管部署指南、架构移植审计与运行时探针文档
 ```
 
 ### 常用开发与验证命令
 
 ```sh
-npm test                     # 运行全部 208 项单元、DOM 与显示列表渲染器测试
+npm test                     # 运行全部 216 项单元、DOM 与显示列表渲染器测试
 npm run test:runtime         # 真实 WASM 冒烟测试（全文编译、捕获、错误恢复）
 npm run test:integration     # 端到端 WASM 集成测试
 npm run test:preview         # 验证辅助文件单遍复用、冷启动首遍优化与目录/书签输出
@@ -256,3 +258,5 @@ LightningTeX 的构建基于以下优秀的开源项目：
 - **[Inter](https://github.com/rsms/inter)**（`5.2.5`，SIL OFL 1.1）—— 随应用本地打包的拉丁可变界面字体。
 
 本项目按 **GNU Affero General Public License v3.0 or later ([AGPL-3.0-or-later](LICENSE))** 许可证分发；随附的 TeX 引擎、宏包与字体保留各自原始许可证，完整来源、固定版本与哈希记录见 [**THIRD-PARTY-NOTICES.md**](THIRD-PARTY-NOTICES.md)。用户使用本应用生成的 PDF 文档与源码不会因使用本应用而受到 AGPL 约束。
+
+两种构建产物均附带许可证副本和对应的 `source.zip`。源码获取、上游输入与重建步骤见 [**SOURCES.md**](SOURCES.md)。

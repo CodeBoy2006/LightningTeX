@@ -6,7 +6,7 @@ A standalone, zero-dependency browser ES module providing **LuaHBLaTeX 1.24.0 (T
 
 ## Build & Deployment
 
-From the repository root, build the standalone distribution:
+From the repository root, using Node.js **22.22.2+ (22.x), 24.15.0+ (24.x), or 26+**, build the standalone distribution:
 
 ```sh
 npm ci
@@ -14,6 +14,8 @@ npm run build:engine
 ```
 
 This generates a self-contained, relocatable `dist-engine/` directory (and can be packed into a tarball via `npm pack ./dist-engine`). Both the LightningTeX web application and external integrations consume this exact module entry.
+
+Keep the included `LICENSE`, `THIRD-PARTY-NOTICES.md`, `SOURCES.md`, `licenses/`, and `source.zip` with the package. `SOURCES.md` explains how to obtain the matching local source and pinned upstream engine sources.
 
 ### Static Hosting Requirements
 

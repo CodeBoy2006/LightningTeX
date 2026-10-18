@@ -25,5 +25,5 @@ const info={engine:'LuaHBTeX 1.24.0',texlive:'2026',emscripten:'5.0.4',optimizat
   linkedArchives:[...new Set([...map.matchAll(/([\w.+-]+\.a)\(/g)].map(match=>match[1]))].sort(),embeddedSupport:support,
   resources:{keptFiles:resources.keptFiles,keptBytes:resources.keptBytes,removedFiles:resources.removed.length,removedBytes:resources.removed.reduce((sum,file)=>sum+file.bytes,0)}};
 await fs.writeFile(path.join(output,'build-info.json'),JSON.stringify(info,null,2)+'\n');
-await fs.writeFile(path.join(output,'versions.txt'),`LuaHBTeX 1.24.0 / TeX Live 2026; source-built, no other engine applets.\nEmscripten 5.0.4; -Oz; LZ4 chunks 16384 bytes.\nIncremental Lua/TeX service embedded at /rtex.\nFull provenance and hashes: build-info.json\nBuild recipe: engine/build/README.md in the companion source.\n`);
+await fs.writeFile(path.join(output,'versions.txt'),`LuaHBTeX 1.24.0 / TeX Live 2026; source-built, no other engine applets.\nEmscripten 5.0.4; -Oz; LZ4 chunks 16384 bytes.\nIncremental Lua/TeX service embedded at /rtex.\nFull provenance and hashes: build-info.json\nBuild recipe: engine/build/README.md in the companion source.\nDistributed source: ../source.zip; upstream inputs and rebuild instructions: ../SOURCES.md.\nDevelopment repository: https://github.com/CodeBoy2006/LightningTeX\n`);
 console.log(JSON.stringify(info.resources));

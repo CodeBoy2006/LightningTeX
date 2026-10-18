@@ -64,7 +64,7 @@ export function createPdfFind(host,{t,layers,reveal}){
     if(hit?.marks[0])reveal(hit.marks[0]);
   }
   function jump(delta){if(!hits.length)return;current=(current+delta+hits.length)%hits.length;paint();}
-  function close(){el.hidden=true;clear();host.dispatchEvent(new Event('pdf-find-close',{bubbles:true}));}
+  function close(){el.hidden=true;clear();host.dispatchEvent(new host.ownerDocument.defaultView.Event('pdf-find-close',{bubbles:true}));}
   query.addEventListener('input',()=>{current=0;search();});
   el.addEventListener('keydown',event=>{
     if(event.isComposing)return;

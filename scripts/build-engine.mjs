@@ -1,6 +1,7 @@
 import {build} from 'vite';
 import fs from 'node:fs/promises';
 import {manifest} from './prepare-build-assets.mjs';
+import {packageNotices} from './package-notices.mjs';
 
 const root=new URL('../',import.meta.url),output=new URL('dist-engine/',root);
 await build({configFile:false,publicDir:false,build:{target:'es2022',outDir:output.pathname,emptyOutDir:true,minify:false,
@@ -12,7 +13,7 @@ for(const file of ['raw-loader.js','background-worker.js','bibtex.js','live-work
 for(const file of ['luahbtex.js','texlive-luahbtex.js','asset-manifest.json','build-info.json','LICENSE','RTEX-LICENSE','versions.txt',...Object.values(manifest.assets).flatMap(asset=>asset.parts.map(part=>part.file))])await copy('public/luahbtex/'+file,'luahbtex/'+file);
 await copy('engine/README.md','README.md');
 await copy('engine/build/README.md','BUILDING.md');
-await copy('LICENSE');await copy('THIRD-PARTY-NOTICES.md');await copy('public/_headers','_headers');
+await packageNotices(output.pathname);await copy('public/_headers','_headers');
 const {version,license}=JSON.parse(await fs.readFile(new URL('package.json',root),'utf8'));
 await fs.writeFile(new URL('package.json',output),JSON.stringify({name:'@lightningtex/engine',version,type:'module',license,exports:'./index.js'},null,2)+'\n');
 console.log('Standalone engine: '+output.pathname);

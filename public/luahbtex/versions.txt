@@ -3,3 +3,5 @@ Emscripten 5.0.4; -Oz; LZ4 chunks 16384 bytes.
 Incremental Lua/TeX service embedded at /rtex.
 Full provenance and hashes: build-info.json
 Build recipe: engine/build/README.md in the companion source.
+Distributed source: ../source.zip; upstream inputs and rebuild instructions: ../SOURCES.md.
+Development repository: https://github.com/CodeBoy2006/LightningTeX

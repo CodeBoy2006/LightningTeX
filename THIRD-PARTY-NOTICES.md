@@ -1,5 +1,7 @@
 # Third-Party Notices & Provenance
 
+Both distributions include the license texts below and `source.zip`. See [SOURCES.md](SOURCES.md) for matching LightningTeX source, pinned upstream source inputs, and rebuild instructions. Paths beginning with `engine/`, `core/`, `render/`, `public/`, or `tests/` refer to files in the source checkout or that archive.
+
 ## 1. `realtime-tex`
 
 - **License**: MIT (`engine/tex/LICENSE` and `public/luahbtex/RTEX-LICENSE`)
@@ -13,8 +15,8 @@
 - **Engine License**: GNU Affero General Public License v3.0 or later (`public/luahbtex/LICENSE`)
 - **Build Rules**: Derived from <https://github.com/TeXlyre/texlyre-busytex-build> (commit `f544a51a99e7d3978bb70608e927a9a23f96d4a7`)
 - **TeX Live Source**: TeX Live 2026 release source (`texlive-20260301-source.tar.xz`, LuaHBTeX 1.24.0, SHA-256 `32ea827edd3fb80a682ffbdf95d7ba6139ff074516e660c8923260fc82f5e0f0`), compiled with Emscripten 5.0.4.
-- **Companion Build Sources**: Located in [`engine/build/`](engine/build/README.md) (`luahbtex.c`, `kpse-remote.js`, `luahbtex.mk`, `extract-data.cjs`, `prune-data.mjs`, `record-build.mjs`). `public/luahbtex/build-info.json` records the source and SDK archive hashes, input data hash, WASM/data/link-map output hashes, and embedded support-file hashes. Compressed-part hashes are in `public/luahbtex/asset-manifest.json`.
-- **TeX Live Resource Tree**: Pruned from the `texlyre-busytex` `assets-v1.4.0` baseline snapshot (`texlive-basic.data` decoded SHA-256 `ccb35d98d77cbaf988e1481f8538709f72166196785cf6b8785eabe6c8fb2993`) and repacked with 16 KiB LZ4 chunks. Individual TeX Live macro packages and fonts retain their respective upstream licenses (LPPL, GPL, SIL OFL, and font-specific licenses).
+- **Companion Build Sources**: Located in `engine/build/` inside the [matching source archive](SOURCES.md) (`luahbtex.c`, `kpse-remote.js`, `luahbtex.mk`, `extract-data.cjs`, `prune-data.mjs`, `record-build.mjs`). `public/luahbtex/build-info.json` records the source and SDK archive hashes, input data hash, WASM/data/link-map output hashes, and embedded support-file hashes. Compressed-part hashes are in `public/luahbtex/asset-manifest.json`.
+- **TeX Live Resource Tree**: A runtime subset, not a complete TeX Live distribution. Pruned from the `texlyre-busytex` `assets-v1.4.0` baseline snapshot (`texlive-basic.data` decoded SHA-256 `ccb35d98d77cbaf988e1481f8538709f72166196785cf6b8785eabe6c8fb2993`) and repacked with 16 KiB LZ4 chunks. [TeX resource notices](licenses/TEX-LIVE.md) identify bundled components, retained notices, omitted sources, and complete upstream works. Individual packages and fonts retain their own licenses.
 
 ---
 
@@ -35,16 +37,17 @@ Exact versions are pinned in `package-lock.json`. PDF.js, OpenType.js, and Inter
 
 - **Inter Variable (Latin subset)**: `public/fonts/inter-latin-wght-normal.woff2`, taken unmodified from `@fontsource-variable/inter` `5.2.5` by Rasmus Andersson and the Inter project authors.
 - **License**: SIL Open Font License 1.1 (`licenses/Inter-OFL-1.1.txt`).
+- **Copyright notice**: Copyright 2020 The Inter Project Authors. The included license is the [Google Fonts upstream Inter OFL notice](https://github.com/google/fonts/blob/b0928647ba26c8d55548aa19feb2f7aeba622d4a/ofl/inter/OFL.txt), correcting the generic `Google Inc.` attribution in Fontsource's generated package license.
 
 ---
 
 ## 5. Offline Test Fixtures
 
-- `tests/fixtures/tex-packages.json.gz` and `tests/fixtures/plain.bst` contain unmodified `microtype`, `booktabs`, and `plain.bst` files from TeX Live 2026 for offline Node regression suites. See [`tests/fixtures/README.md`](tests/fixtures/README.md) for details.
+- `tests/fixtures/tex-packages.json.gz` and `tests/fixtures/plain.bst` contain unmodified `microtype`, `booktabs`, and `plain.bst` files from TeX Live 2026 for offline Node regression suites. See `tests/fixtures/README.md` in the source archive for details.
 
 ---
 
 ## 6. GitHub Icon
 
 - **Source**: GitHub's [Octicons `mark-github-16`](https://github.com/primer/octicons/blob/main/icons/mark-github-16.svg), used in `ui/icons.js` for the repository link.
-- **License**: MIT, copyright 2026 GitHub Inc. The license is included in [`public/licenses/OCTICONS.txt`](public/licenses/OCTICONS.txt) and copied into the web build.
+- **License**: MIT, copyright 2026 GitHub Inc. The license is included in [`licenses/OCTICONS.txt`](licenses/OCTICONS.txt) and copied into the distributions.

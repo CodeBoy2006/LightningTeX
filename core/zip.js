@@ -44,20 +44,24 @@ export async function unzip(bytes,{maxFiles=2000,maxBytes=64*1024*1024}={}){
   const count=view.getUint16(end+10,true),decoder=new TextDecoder(),out=[];let at=view.getUint32(end+16,true),total=0;
   for(let n=0;n<count;n++){
     if(at+46>bytes.length||view.getUint32(at,true)!==0x02014b50)throw Error('Corrupt ZIP directory');
-    const flags=view.getUint16(at+8,true),method=view.getUint16(at+10,true),packed=view.getUint32(at+20,true),size=view.getUint32(at+24,true);
+    const flags=view.getUint16(at+8,true),method=view.getUint16(at+10,true),crc=view.getUint32(at+16,true),packed=view.getUint32(at+20,true),size=view.getUint32(at+24,true);
     const nameLength=view.getUint16(at+28,true),local=view.getUint32(at+42,true),path=decoder.decode(bytes.subarray(at+46,at+46+nameLength));
     at+=46+nameLength+view.getUint16(at+30,true)+view.getUint16(at+32,true);
+    if(at>end)throw Error('Corrupt ZIP directory');
     if(path.endsWith('/'))continue;
     if(flags&1)throw Error('Encrypted archives are not supported');
     if(packed===0xffffffff||size===0xffffffff||local===0xffffffff)throw Error('ZIP64 archives are not supported');
     total+=size;
     if(out.length>=maxFiles||total>maxBytes)throw Error('Archive is too large');
-    if(local+30>bytes.length)throw Error('Corrupt ZIP entry');
+    if(local+30>bytes.length||view.getUint32(local,true)!==0x04034b50)throw Error('Corrupt ZIP entry');
     const start=local+30+view.getUint16(local+26,true)+view.getUint16(local+28,true),raw=bytes.subarray(start,start+packed);
     if(raw.length!==packed)throw Error('Corrupt ZIP entry');
-    if(method===0)out.push({path,data:raw.slice()});
-    else if(method===8)out.push({path,data:await inflate(raw,size)});
+    let data;
+    if(method===0){if(packed!==size)throw Error('Archive entry size mismatch');data=raw.slice();}
+    else if(method===8)data=await inflate(raw,size);
     else throw Error('Unsupported ZIP compression method '+method);
+    if(crc32(data)!==crc)throw Error('Archive entry checksum mismatch');
+    out.push({path,data});
   }
   return out;
 }

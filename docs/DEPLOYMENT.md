@@ -39,6 +39,8 @@ X-Content-Type-Options: nosniff
    - Serve `.wasm` with `application/wasm`.
    - Serve `.partNNN` chunks (`luahbtex.wasm.gz.part000`, `texlive-luahbtex.data.gz.part000`…`part002`) as raw `application/octet-stream` **without** automatic server-side gzip decompression. Each chunk is capped at $\le 16\text{ MiB}$, verified against `asset-manifest.json`, and decompressed inside the Worker using `DecompressionStream`.
 
+4. **Licenses & Source**: Deploy the complete build, including `LICENSE`, `THIRD-PARTY-NOTICES.md`, `SOURCES.md`, `licenses/`, and `source.zip`. The source archive is generated from the build checkout; keep it available at `/source.zip` beside the application. See [source and redistribution instructions](../SOURCES.md).
+
 ### Deploy to Vercel
 
 From the repository root:

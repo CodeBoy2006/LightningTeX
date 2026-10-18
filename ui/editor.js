@@ -1361,10 +1361,13 @@ export function mountEditor(options={}){
   }
   async function readArchive(file){
       if(file.size>64*1024*1024)throw new Error('ZIP exceeds 64 MiB');
-      let entries=(await unzip(new Uint8Array(await file.arrayBuffer()))).filter(entry=>!/(^|\/)(__MACOSX\/|\.DS_Store$|Thumbs\.db$)/.test(entry.path));
+      let entries=(await unzip(new Uint8Array(await file.arrayBuffer()))).map(entry=>({...entry,path:normalizePath(entry.path)}))
+        .filter(entry=>!/(^|\/)(__MACOSX\/|\.DS_Store$|Thumbs\.db$)/.test(entry.path));
       // Archives usually wrap everything in one folder; open it.
       const top=entries[0]?.path.split('/')[0];
       if(entries.length&&entries.every(entry=>entry.path.startsWith(top+'/')))entries=entries.map(entry=>({...entry,path:entry.path.slice(top.length+1)}));
+      const paths=new Set();
+      for(const {path} of entries){if(paths.has(path))throw new Error('Duplicate ZIP path: '+path);paths.add(path);}
       return {files:entries.map(entry=>{const text=decodeText(entry.data);return text==null?entry:{path:entry.path,text};})};
   }
   async function importArchive(file){

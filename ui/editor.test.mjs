@@ -179,6 +179,34 @@ test('failed saves block switching, archive creation, duplication and deletion o
   }finally{h.cleanup();}
 });
 
+test('ZIP import rejects unsafe and duplicate normalized paths before creating a project',async()=>{
+  const {zip}=await import('../core/zip.js'),store=memoryProjects(),h=setup({store});
+  try{
+    await h.ui.ready;h.auto(false);
+    for(const paths of [['main.tex','main.tex'],['paper/main.tex','./paper/main.tex'],['paper/main.tex','paper\\main.tex'],['../main.tex'],['/main.tex']]){
+      const archive=zip(paths.map((path,i)=>({path,data:new TextEncoder().encode('content '+i)})));
+      await h.ui.upload([upload('project.zip',archive)]);
+      assert.equal(store.created.length,0);assert.equal(h.ui.getSource(),'First original');
+      assert.match(h.root.querySelector('.toast').textContent,/Duplicate ZIP path|Unsafe project path/);
+    }
+  }finally{await tick();h.cleanup();}
+});
+
+test('ZIP import keeps normalized text and binary files while unwrapping a project folder',async()=>{
+  const {zip}=await import('../core/zip.js'),store=memoryProjects(),h=setup({store});
+  try{
+    await h.ui.ready;h.auto(false);
+    await h.ui.upload([upload('project.zip',zip([
+      {path:'./paper/main.tex',data:new TextEncoder().encode('\\documentclass{article}')},
+      {path:'paper\\figures\\one.png',data:new Uint8Array([0,1,2])},
+      {path:'__MACOSX/._main.tex',data:new Uint8Array()},
+    ]))]);
+    assert.equal(store.created.length,1);
+    assert.deepEqual(store.created[0].files,[{path:'main.tex',text:'\\documentclass{article}'},{path:'figures/one.png',data:new Uint8Array([0,1,2])}]);
+    assert.equal(store.created[0].main,'main.tex');
+  }finally{await tick();h.cleanup();}
+});
+
 test('project card menus sit above the dialog and support dismissal, duplication and opening',async()=>{
   const store=memoryProjects(),h=setup({store});
   try{
@@ -685,7 +713,8 @@ test('PDF search marks matches in the text layer and counts them by page',async(
     assert.equal(h.root.querySelector('mark.pdf-hit.current').textContent,'hello');
     query.dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
     assert.equal(h.root.querySelectorAll('mark.pdf-hit').length,0,'closing restores the text');assert.equal(h.root.querySelector('[data-text-page="2"]').textContent,'say hello again');
-  }finally{h.cleanup();}
+    assert.equal(h.dom.window.document.activeElement,h.q('preview-viewport'),'closing returns focus to the preview');
+  }finally{await tick();h.cleanup();}
 });
 test('a two-page spread too narrow for two pages falls back to one and says so',async()=>{
   const h=setup({renderPdf:async({container})=>{for(const page of [1,2,3]){const canvas=document.createElement('canvas');canvas.dataset.page=String(page);canvas.dataset.base='600';container.append(canvas);}return {pages:3};}});

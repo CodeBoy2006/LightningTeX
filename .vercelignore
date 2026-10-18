@@ -10,3 +10,15 @@
 !ui
 !public
 !scripts
+!.vercelignore
+!tests
+!LICENSE
+!THIRD-PARTY-NOTICES.md
+!SOURCES.md
+!licenses
+!README.md
+!README.zh-CN.md
+!QA.md
+!docs
+!server.mjs
+docs/media/
