@@ -4,6 +4,10 @@
 
 [**English**](README.md) · [**简体中文**](README.zh-CN.md) · [**独立引擎 SDK**](engine/README.md) · [**渲染器文档**](render/README.md) · [**源码构建说明**](engine/build/README.md) · [**自托管部署**](docs/DEPLOYMENT.md) · [**验收与基准数据**](QA.md)
 
+<p align="center">
+  <img src="docs/media/hero.webp" width="100%" alt="LightningTeX 分栏视图：在 LaTeX 源码中输入一句话再删除。每次按键都由 LuaHBLaTeX 在约 5 ms 内重新排版该段落，页面原位更新，状态胶囊显示每次实测耗时。">
+</p>
+
 ---
 
 ## 为什么构建 LightningTeX？
@@ -23,6 +27,16 @@
   - **慢路径（`Full`）**：临时 `Reflow` 后停顿约 500 ms，后台 LuaHBTeX Worker 执行全量编译，更新分页、页码、目录书签与参考文献；前言、交叉引用或不支持的结构变更则直接路由至 `Full`。几何不变的 `Live` 更新保持预览即时刷新，不安排停顿全量编译；导出 PDF 时按需编译最新源码。
 - **严密基线核验、保守回退与透明可观测**：在对任何单元执行首次增量更新前，系统都会先将捕获到的**原文**送入常驻引擎编译，逐行核对盒模型尺寸、粘连（glue）、字体签名、字形索引与相对坐标（`compareUnitBaseline`）。括号或公式定界符未闭合时静默保留上一帧有效预览，不会触发报错闪烁；光标处公式浮窗则自动补全未闭合分组进行实时预览。顶栏 **实时状态胶囊与检查器（Live Inspector）** 实时可视化最近 24 次更新的耗时柱状图、路由原因、常驻引擎健康度与 PDF 同步状态。
 - **100% 纯前端运行，零后端与绝对隐私**：从 TeX 编译、JavaScript BibTeX `.bst` 样式解释、字体轮廓解析到多项目版本快照，全部在本地浏览器内完成。文档内容绝不上传任何服务器；导出 PDF 时始终确保生成包含最新修改的完整 PDF。
+
+<table>
+<tr>
+<td width="33%" valign="top"><img src="docs/media/precision.webp" alt="对独立公式中的积分号极限放大：Computer Modern 字形轮廓及其贝塞尔节点与控制柄叠在 scaled point 网格上，标注 65 536 sp = 1 pt。"><br><sub><b>整数 scaled point。</b>每个字形都按整数 <code>sp</code> 坐标、用自身的贝塞尔轮廓绘制。</sub></td>
+<td width="33%" valign="top"><img src="docs/media/reflow.webp" alt="逐层输入连分数：未完成的前缀不改动页面；每完成一层，该条带展开、下方页面整体下移，虚线标出条带边界。"><br><sub><b>条带重排。</b>公式变高时只展开它所在的条带并下移其后的页面，精确分页在后台静默收敛。</sub></td>
+<td width="33%" valign="top"><img src="docs/media/guard.webp" alt="在未闭合的 \( 之后输入行内公式：页面保持上一帧有效画面，光标浮窗实时排版自动补全后的公式；输入 \) 后公式落到页面上。"><br><sub><b>绝不显示残缺画面。</b>未闭合的 <code>\(</code> 让页面保持不动，光标浮窗实时排版补全后的公式。</sub></td>
+</tr>
+</table>
+
+<sub>以上动图全部根据真实录制的引擎输出（显示列表、字形轮廓与实测耗时）逐帧渲染，没有任何手工模拟画面。</sub>
 
 ---
 

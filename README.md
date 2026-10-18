@@ -4,6 +4,10 @@
 
 [**English**](README.md) · [**简体中文**](README.zh-CN.md) · [**Standalone Engine SDK**](engine/README.md) · [**Renderer Docs**](render/README.md) · [**Source Build Recipe**](engine/build/README.md) · [**Deployment**](docs/DEPLOYMENT.md) · [**QA & Benchmarks**](QA.md)
 
+<p align="center">
+  <img src="docs/media/hero.webp" width="100%" alt="LightningTeX split view: a sentence is typed into the LaTeX source and deleted again. LuaHBLaTeX re-typesets the paragraph on every keystroke in about 5 ms, the page updates in place and the status capsule shows each measured latency.">
+</p>
+
 ---
 
 ## Why LightningTeX?
@@ -23,6 +27,16 @@ Modern LaTeX tools have long forced writers into a compromise:
   - **Slow Path (`Full`)**: After a provisional `Reflow`, ~500 ms of inactivity triggers background compilation to update pagination, page numbers, TOC/bookmarks, and bibliography. Preamble, cross-reference, or unsupported changes route directly to `Full`. Fixed-geometry `Live` updates keep the preview current without scheduling an idle full compile; PDF export compiles the latest source when needed.
 - **Fail-Closed Correctness & Transparent Observability**: Before any unit is edited live, LightningTeX compiles its *original* captured source in the live worker and proves that every row box, glue setting, font descriptor, glyph index, and relative `sp` coordinate matches the full-compile baseline. Incomplete math delimiters or unbalanced braces never trigger noisy broken builds—the previous valid preview is calmly held while the caret math popover auto-repairs open groups. The top-bar **Live Inspector** shows the exact routing path, latency timeline, and PDF sync state for every keystroke.
 - **100% Client-Side & Zero Backend**: All TeX compilation, BibTeX `.bst` interpretation, font outline parsing, and project persistence happen locally inside the browser. Your document content never leaves your machine.
+
+<table>
+<tr>
+<td width="33%" valign="top"><img src="docs/media/precision.webp" alt="Extreme zoom on the integral sign of a display equation: the Computer Modern outline with its Bézier on-curve points and control handles over a scaled-point lattice, labelled 65 536 sp = 1 pt."><br><sub><b>Integer scaled points.</b> Glyphs are drawn from their own Bézier outlines at integer <code>sp</code> positions.</sub></td>
+<td width="33%" valign="top"><img src="docs/media/reflow.webp" alt="A continued fraction is typed level by level. Incomplete prefixes leave the page untouched; each completed level opens its band and the page below slides down, marked by dashed band edges."><br><sub><b>Band reflow.</b> A taller formula opens its band and slides the page below it, while exact pagination settles in the background.</sub></td>
+<td width="33%" valign="top"><img src="docs/media/guard.webp" alt="Typing an inline formula after an unclosed \(: the page holds its last valid frame while the caret popover typesets the repaired formula; closing \) lands it on the page."><br><sub><b>Never a broken frame.</b> An unclosed <code>\(</code> holds the page while the caret popover sets the repaired formula.</sub></td>
+</tr>
+</table>
+
+<sub>Every animation here is rendered frame by frame from recorded engine output (display lists, glyph outlines and measured latencies). Nothing is mocked up.</sub>
 
 ---
 
