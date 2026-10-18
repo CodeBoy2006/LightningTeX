@@ -70,73 +70,44 @@ npm run preview   # 使用本机静态服务器运行 dist/ (http://127.0.0.1:41
 
 ## 核心技术架构
 
+LightningTeX 将写作工作区与两个浏览器内的 LuaHBTeX Worker 分离：一个负责即时响应局部编辑，另一个负责生成完整 PDF 与文档布局。
+
 ```mermaid
 flowchart TB
-  subgraph UI["主线程：零依赖写作工作区与字形渲染器"]
-    Editor["代码编辑器与多文件工程\n(UTF-16 范围跟踪、源码准入策略、快速修复)"]
-    Coordinator["增量协调器与快照状态机\n(原文基线核验、版本代际守卫、多文件原子提交)"]
-    Canvas["显示列表与页面条带渲染器\n(OpenType.js + PDF.js Type 1 轮廓转换 + PDF 底图合成)"]
-    Inspector["实时检查器与双向精准同步\n(24 帧耗时时间线、字形级源码定位)"]
+  subgraph UI["主线程"]
+    Editor["编辑器与项目文件"]
+    Coordinator["更新协调器"]
+    Preview["页面预览与源码同步"]
   end
 
-  subgraph Live["独立 Web Worker：常驻增量引擎 (LiveEngine)"]
-    Mailbox["SharedArrayBuffer 请求信箱\n(Atomics.wait /dev/rtex-req)"]
-    Serve["LuaHBTeX 1.24.0 + /rtex/rtex-serve.lua\n(常驻 TeX 外层循环、上下文回放、RTDL 二进制编码)"]
-  end
+  Live["常驻 Worker<br/>LuaHBTeX 增量排版"]
+  Full["后台 Worker<br/>LuaHBTeX 全量编译"]
 
-  subgraph Bg["独立 Web Worker：全量编译引擎 (BackgroundEngine)"]
-    FullTeX["LuaHBTeX 1.24.0 + /rtex/rtex-capture.lua\n(Shipout 页面捕获、辅助文件字节复用、线性内存快照重置)"]
-    JSBib["浏览器内 JS BibTeX 引擎\n(bibtex.web .bst 栈式解释器与 .bbl 缓存)"]
-    PkgCache["TeX Live 2026 按需包加载器\n(__wrap_kpse_find_file + Cache Storage)"]
-  end
-
-  Editor -->|"~60 ms 输入合并\nfindLiveEdit & liveSourcePolicy"| Coordinator
-  Coordinator -->|"Atomics.store + notify\nJSON / C 协议帧"| Mailbox
-  Mailbox --> Serve
-  Serve -->|"/dev/rtex-resp → postMessage\n二进制 RTDL + 按字体去重字节流"| Coordinator
-  Coordinator -->|"replaceUnitRows & pageFlow"| Canvas
-  Canvas <--> Inspector
-
-  Editor -->|"Reflow 后停顿 ~500 ms\n或前言 / 结构变更"| FullTeX
-  FullTeX <--> JSBib
-  FullTeX <--> PkgCache
-  FullTeX -->|"可转移 PDF + 捕获 JSON\n+ Aux + 404 负缓存表"| Coordinator
+  Editor --> Coordinator
+  Coordinator -->|"符合条件的局部编辑"| Live
+  Live -->|"更新后的显示列表"| Coordinator
+  Coordinator -->|"结构变更或分页校准"| Full
+  Full -->|"PDF 与捕获的文档上下文"| Coordinator
+  Coordinator -->|"通过校验的更新"| Preview
 ```
 
-### 1. 双 Worker 常驻架构与零 Asyncify 同步通信
+### 双路径编译
 
-将增量 TeX 搬进浏览器面临一个底层运行时矛盾：**当 WebAssembly 在 C/Lua 内部同步阻塞等待下一条排版请求时，同一个 Web Worker 的事件循环被冻结，无法接收 `postMessage`**；而如果每次按键都重启进程，又会彻底丧失毫秒级响应。
+常驻 Worker 在连续编辑间保留 TeX 运行时、前言与字体，通过共享内存请求通道，在 TeX 同步处理循环中接收新任务。后台 Worker 负责全文编译，包括交叉引用与参考文献处理。两个 Worker 复用已编译的 WebAssembly 模块，但各自保持独立的内存与文件系统。
 
-- **基于 `SharedArrayBuffer` 的虚拟字符设备**：LightningTeX 没有采用 Emscripten Asyncify，而是在 [`public/runtime/live-worker.js`](public/runtime/live-worker.js) 中注册两个虚拟字符设备：`/dev/rtex-req` 从 1 MiB 的 `SharedArrayBuffer` 信箱读取请求，`/dev/rtex-resp` 则通过 `postMessage` 转移响应帧缓冲区。Lua 服务端（[`rtex-serve.lua`](engine/tex/rtex-serve.lua)）在 `\loop\rtexstep\ifnum\rtexcontinue>0 \repeat` 循环中读取请求时，通过 `Atomics.wait` 原地挂起，完整保留已加载的前言宏、字体表与寄存器状态；主线程写入请求后通过 `Atomics.notify` 唤醒排版。
-- **共享 `WebAssembly.Module` 与隔离内存**：`BackgroundEngine` 完成首次 `luahbtex.wasm` 编译后，将已编译的 `WebAssembly.Module` 共享给 `LiveEngine`，省去 WASM 的重复下载、解压与编译。每个 Worker 仍分别加载 TeX 数据镜像，并保持独立的线性内存与虚拟文件系统。
-- **状态污染检测与看门狗恢复**：每次在独立 `\vbox` 中排完单元后，`rtex-serve.lua` 会校验并还原 TeX 计数器与宏指纹。全局状态泄漏、内部错误或 6 秒实时超时会使该 Worker 被丢弃。正文编辑回退至 `Full`，再由全量编译准备新的常驻实例；公式浮窗则屏蔽触发崩溃的公式并直接预热替代实例。
+### 捕获、回放与核验
 
-### 2. 布局捕获、增量上下文回放与原文基线核验
+全量编译捕获受支持文档单元的布局与排版上下文。局部编辑时回放这些上下文，保留计数器、字体与段落几何信息。某个单元首次接受增量编辑前，系统会先重排其原始源码，并与全量编译基线核对。不支持的编辑或未通过核验的更新回退至全量编译；多文件更新仅在整批有效且版本仍为最新时一并提交。
 
-- **全量捕获插桩（[`rtex-capture.lua`](engine/tex/rtex-capture.lua)）**：全量编译时通过 LuaTeX `pre_shipout_filter` 与段落回调捕获文档中的全部单元（普通段落 `par`、数学环境 `equation`/`align`/`gather`/`multline`/`displaymath`、定理族 `theorem`/`lemma`/`proposition`/`corollary`/`remark`、`proof`、`abstract`、列表 `itemize`/`enumerate`/`description`、引文 `quote`/`quotation` 以及章节标题 `\section`…`\subparagraph`），记录差分编码的计数器、`\the<counter>` 格式、NFSS 字体状态、段落几何参数（`\parindent`、`\leftskip`、`\rightskip`、`\parfillskip`、`parshape`、`everypar`）及每页显示列表。
-- **累积增量上下文重建（[`core/capture.js`](core/capture.js)）**：单独重排第 $k$ 个单元时，`unitContext(capture, unit)` 按文档顺序累积回放 $1 \dots k$ 的状态差分，精确还原该单元起始处的计数器、字体、颜色栈与段落参数；相同上下文在连续请求中自动缓存复用。
-- **首次编辑强制基线核验（`compareUnitBaseline`）**：首次对某个已捕获单元进行局部编辑前，宿主会先将该单元捕获时的**原始源码**发送给常驻引擎排版，并逐行比对行数、盒尺寸（`w`/`h`/`d`）、粘连伸缩（`gs`/`gsign`/`gorder`）、字体键值、字形索引及相对 `sp` 坐标。只有基线 100% 吻合才放行局部更新。
-- **多文件源位置跟踪与原子批次提交（[`core/document.js`](core/document.js)）**：独立跟踪主文件、`\input`（含嵌套引用及返回父文件后才闭合的末尾段落）与 `\include` 子文件的 UTF-16 源码区间。快速切换文件产生的多处修改会逐一核验并作为单一批次原子提交预览，任何一项失败或版本过期都不会留下半批残缺画面。
+### 基于 TeX 输出的预览
 
-### 3. 字形级显示列表渲染、Type 1 轮廓复用与临时页面重排
+渲染器按 TeX 给出的坐标绘制字形轮廓，将局部更新与 PDF.js 页面渲染合成，而不依赖浏览器文字排版。几何尺寸不变时只重绘受影响区域（`Live`）；高度变化时伸缩页面条带并移动下方内容（`Reflow`），待输入停顿后由后台编译恢复精确分页。输入尚未完整时保留上一帧有效预览。
 
-- **精确字形索引 Canvas 渲染器（[`render/canvas-renderer.mjs`](render/canvas-renderer.mjs)）**：解析 `RTDL` v1 二进制显示列表，直接按引擎输出的字形索引（glyph index）在字体坐标空间绘制二次/三次贝塞尔曲线轮廓，严格遵循 `CSS_PX_PER_SP = 96 / (72.27 * 65536)` 比例，支持独立水平字宽伸缩（`microtype` font expansion / extend）与倾斜矩阵变换（`y` 轴向上转 Canvas `y` 轴向下），绝不调用浏览器 `fillText` 或系统字体匹配。
-- **零额外依赖的 Type 1 PFB 轮廓转换（[`render/type1-font.mjs`](render/type1-font.mjs)）**：针对 Computer Modern / Latin Modern 数学字体与 T1 编码等 PostScript Type 1（`.pfb`）字体，LightningTeX 在内存中动态构造一份仅包含 256 个字符编码与静态 `ReEncodeFont` 向量的极简一页 PDF，交由已加载的 `PDF.js` Worker 一次性提取转换后的 OpenType 轮廓及 `originalCharCode -> glyphIndex` 精确映射并缓存——即便某个数学符号在初始 PDF 中从未出现，也能在局部输入时即时渲染。
-- **边界守卫局部擦除与条带切片重排（[`core/live-layout.js`](core/live-layout.js)）**：
-  - **固定几何（`Live`）**：根据字形曲线控制点与标尺计算保守墨迹边界（`inkBounds`），确认与相邻行、插图及页眉页脚零相交（`unitInkRegion`）后，仅在已缓存的 PDF 底图上清除并重绘该局部区域。
-  - **可变几何（`Reflow`）**：当换行导致行数增减、分式/矩阵撑高公式、或段落拆分/合并/删除时，`pageFlow` 将缓存的 PDF 页面切分为水平条带（bands），动态伸缩受影响条带并整体平移下方 PDF 底图（保留下方正文、插图与页脚），同时标记 `分页待校准`；停顿约 500 ms 后由后台全量编译恢复精确分页。
-  - **保色深色纸面（[`render/dark-page.mjs`](render/dark-page.mjs)）**：深色主题开启「深色页面」后，仅将低饱和度像素按亮度反转至 `#1c1e22` 深色纸面，彩色插图保持原色；全量 PDF 页面与局部实时重绘条带走完全一致的像素处理。
+### 编译与资源复用
 
-### 4. 源码级 WASM 裁剪、单遍辅助文件复用与内置 JS BibTeX
+裁剪后的 WebAssembly 构建与按需加载的 TeX 宏包减少初始运行时负担。浏览器缓存减少资源重复下载，辅助文件复用避免不必要的编译轮次。JavaScript BibTeX 解释器在浏览器内处理参考文献样式，使文档编译全程在客户端完成。
 
-- **压缩启动资源总量缩减 44.2%（[`engine/build/`](engine/build/README.md)）**：基于 TeX Live 2026 源码与 Emscripten 5.0.4（`-Oz`）构建专用入口，仅链接 LuaHBTeX、HarfBuzz/Graphite、Kpathsea 及必需的 PDF/字体库，彻底剔除 pdfTeX、XeTeX、BibTeX、MakeIndex、DVI 工具及 ICU/fontconfig 等冗余组件；将 `/rtex` 增量服务直接内嵌至 WASM 镜像，裁除 1,587 个非必需资源文件，并将编译器与打包器的 LZ4 分块统一提升至 16 KiB：
-  - **原始 WASM 体积**：`31.0 MiB` → **`4.68 MiB`**（gzip 后仅 `1.83 MiB`）
-  - **压缩引擎与数据总传输量**：`76.0 MiB` → **`42.4 MiB`**（解压后约 `54.4 MiB`）
-- **单遍辅助文件复用与冷启动首遍加速（[`public/runtime/background-worker.js`](public/runtime/background-worker.js)）**：
-  - 全量编译在内存中保留同一主文件与前言下上次成功的 `.aux`（含嵌套 `\include` 子文件 aux）、`.toc`、`.out`、`.lof`、`.lot` 与 `.bbl`。若首遍输出内容未变、无重跑警告且没有未识别的辅助输出文件，**仅执行一遍（1 pass）即告完成**，使含目录/书签/子文件的常规全量编译耗时减半（约 1.4 s 降至 0.6–0.7 s）。
-  - 首次冷编译无辅助文件可复用、第一遍注定需要重跑时，首遍自动通过 `\RemoveFromHook` 与 `remove_from_callback` 跳过会被丢弃的 `rtex-capture` 页面遍历与 JSON 导出（保留全部 TeX 排版与宏包钩子），在下一遍自动恢复完整捕获，已记录的基准中冷编译节省约 110–210 ms。
-- **纯 JavaScript BibTeX `.bst` 解释器（[`public/runtime/bibtex.js`](public/runtime/bibtex.js)）**：按照 `bibtex.web` 规范用 JavaScript 完整实现了 `.bst` 栈式语言解释器（支持姓名格式化、大小写转换、排序、交叉引用与 79 列折行）。检测到 `\bibliography` 或 `\bibdata`（含 `biblatex` 的 `backend=bibtex`）时在两遍编译之间生成 `.bbl`；缺失的 `.bst` 样式自动从 TeX Live 服务获取并缓存，BibTeX 警告精准关联至 `.bib` 文件行号。
-- **按需宏包缓存与 404 负缓存共享**：缺失宏包与字体通过 `__wrap_kpse_find_file` 按需下载。全量任务将其下载的文件持久化到浏览器 `Cache Storage`，供两个 Worker 启动时恢复；仅由常驻 Worker 下载的文件保留在内存中。随包字体的可选衍生格式缺失记录与全量编译遇到的 404 结果会在当前会话内同步给常驻引擎，避免重复发起这些网络探测。
+实现细节见[引擎 SDK](engine/README.md)、[渲染器文档](render/README.md)与[源码构建说明](engine/build/README.md)；性能实测见[验收与基准数据](QA.md)。
 
 ---
 

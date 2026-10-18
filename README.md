@@ -70,73 +70,44 @@ On first launch, LightningTeX streams **~42.4 MiB** of gzip-compressed engine an
 
 ## Technical Architecture
 
+LightningTeX separates the writing workspace from two browser-based LuaHBTeX workers: one keeps local edits responsive, while the other produces the complete PDF and document layout.
+
 ```mermaid
 flowchart TB
-  subgraph UI["Main Thread: Dependency-Free Workspace & Renderer"]
-    Editor["Code Editor & Multi-File Project\n(UTF-16 Spans, Source Policy, Quick Fixes)"]
-    Coordinator["Live Coordinator & Snapshot State\n(Baseline Proof, Generation Guards, Batch Commit)"]
-    Canvas["Display-List & Page Band Renderer\n(OpenType.js + PDF.js Type 1 PFB + PDF Backdrop)"]
-    Inspector["Live Inspector & Bidirectional Sync\n(24-Bar Timeline, Glyph-Aligned Hit Testing)"]
+  subgraph UI["Main Thread"]
+    Editor["Editor & Project Files"]
+    Coordinator["Update Coordinator"]
+    Preview["Page Preview & Source Sync"]
   end
 
-  subgraph Live["Dedicated Web Worker: Persistent LiveEngine"]
-    Mailbox["SharedArrayBuffer Request Mailbox\n(Atomics.wait /dev/rtex-req)"]
-    Serve["LuaHBTeX 1.24.0 + /rtex/rtex-serve.lua\n(Persistent Outer Loop, Context Replay, Binary RTDL)"]
-  end
+  Live["Live Worker<br/>Incremental LuaHBTeX Typesetting"]
+  Full["Background Worker<br/>Full LuaHBTeX Compilation"]
 
-  subgraph Bg["Dedicated Web Worker: Full BackgroundEngine"]
-    FullTeX["LuaHBTeX 1.24.0 + /rtex/rtex-capture.lua\n(Shipout Capture, Aux Byte Reuse, Heap Snapshot Reset)"]
-    JSBib["In-Browser JS BibTeX Engine\n(bibtex.web .bst Stack Machine & .bbl Cache)"]
-    PkgCache["On-Demand TeX Live 2026 Loader\n(__wrap_kpse_find_file + Cache Storage)"]
-  end
-
-  Editor -->|"~60 ms input coalescing\nfindLiveEdit & liveSourcePolicy"| Coordinator
-  Coordinator -->|"Atomics.store + notify\nJSON / C Frame"| Mailbox
-  Mailbox --> Serve
-  Serve -->|"/dev/rtex-resp → postMessage\nBinary RTDL + Deduplicated Fonts"| Coordinator
-  Coordinator -->|"replaceUnitRows & pageFlow"| Canvas
-  Canvas <--> Inspector
-
-  Editor -->|"~500 ms idle settlement after Reflow\nor structural / preamble change"| FullTeX
-  FullTeX <--> JSBib
-  FullTeX <--> PkgCache
-  FullTeX -->|"Transferable PDF + Capture JSON\n+ Aux + Negative Lookup Table"| Coordinator
+  Editor --> Coordinator
+  Coordinator -->|"Eligible local edits"| Live
+  Live -->|"Updated display lists"| Coordinator
+  Coordinator -->|"Structural changes or pagination settlement"| Full
+  Full -->|"PDF & captured document context"| Coordinator
+  Coordinator -->|"Validated updates"| Preview
 ```
 
-### 1. Dual-Worker LuaHBTeX Runtime & Zero-Asyncify IPC
+### Two Complementary Compilation Paths
 
-A browser WASM port of incremental TeX faces a fundamental runtime constraint: **a Web Worker synchronously blocked inside a C/Lua read loop cannot process `postMessage` callbacks**, while spawning a fresh TeX process per edit destroys millisecond latency.
+The live worker keeps the TeX runtime, preamble, and fonts loaded between edits. A shared-memory request channel lets it receive work while TeX remains inside its synchronous processing loop. The background worker handles full-document compilation, including cross-references and bibliography. Both workers reuse the compiled WebAssembly module but keep their memory and filesystems isolated.
 
-- **`SharedArrayBuffer` Device Bridge**: Rather than compiling LuaTeX with Emscripten Asyncify, [`public/runtime/live-worker.js`](public/runtime/live-worker.js) registers two virtual character devices: `/dev/rtex-req` reads requests from a 1 MiB `SharedArrayBuffer`, while `/dev/rtex-resp` returns frames through transferable `postMessage` buffers. Inside LuaHBTeX, [`rtex-serve.lua`](engine/tex/rtex-serve.lua) executes `\loop\rtexstep\ifnum\rtexcontinue>0 \repeat`. When waiting for the next edit, the synchronous POSIX `read()` blocks inside `Atomics.wait` with the entire TeX state, preamble macros, and loaded fonts kept warm in memory.
-- **Shared `WebAssembly.Module`, Isolated Heap**: `BackgroundEngine` compiles `luahbtex.wasm` once and passes the compiled `WebAssembly.Module` to `LiveEngine`, avoiding another WASM download, decompression, and compilation. Each worker loads its own TeX data image and keeps its linear memory and virtual filesystem isolated.
-- **State Hygiene & Watchdog Recovery**: After typesetting each unit inside an isolated `\vbox`, `rtex-serve.lua` verifies and restores TeX registers, counters, and macro fingerprints. State leaks, internal faults, or a 6-second live timeout discard the worker. Document edits fall back to `Full`, which prepares the next live instance; the math popover quarantines crashing formulas and warms a replacement directly.
+### Capture, Replay & Verification
 
-### 2. Document Capture, Context Replay & Baseline Proof
+Full compilation captures the layout and typesetting context of each supported document unit. Local edits replay that context to preserve counters, fonts, and paragraph geometry. Before a unit's first live edit, its original source is re-typeset and checked against the full-compile baseline. Unsupported edits or failed checks fall back to full compilation; multi-file updates are applied together only when the whole batch is valid and current.
 
-- **Full-Pass Instrumentation (`rtex-capture.lua`)**: During full compilation, LuaTeX hooks record every document unit (`par`, `equation`, `align`, `gather`, `multline`, `displaymath`, `theorem`/`lemma`/`proposition`/`corollary`/`remark`, `proof`, `abstract`, `itemize`/`enumerate`/`description`, `quote`/`quotation`, and `\section`…`\subparagraph`), exporting delta-encoded counters, `\the<counter>` formats, NFSS font descriptors, paragraph parameters (`\parindent`, `\leftskip`, `\rightskip`, `\parfillskip`, `parshape`, `everypar`), and per-page display lists.
-- **Cumulative Context Reconstruction ([`core/capture.js`](core/capture.js))**: To typeset unit $k$ in isolation, `unitContext(capture, unit)` replays all document-order deltas from unit $1 \dots k$, reconstructing the exact counter values, NFSS font state, color stack, and paragraph geometry active at the start of unit $k$.
-- **Mandatory Baseline Proof (`compareUnitBaseline`)**: Before accepting the *first* live edit on any captured unit, the host compiles the unit's *original* captured source in `LiveEngine` and verifies that the resulting display list matches the full-pass capture row-for-row: box dimensions (`w`, `h`, `d`), glue settings (`gs`, `gsign`, `gorder`), font keys, glyph indices, and relative `sp` coordinates.
-- **Multi-File Span Tracking & Atomic Batching ([`core/document.js`](core/document.js))**: Tracks UTF-16 source spans across the root `.tex` file, `\input` (including nested files and final paragraphs closed after TeX returns to the parent file), and `\include` files. Rapid edits across multiple files are validated and rendered as an atomic batch—any failure or stale revision cleanly aborts without partial UI updates.
+### Preview from TeX Output
 
-### 3. Exact Glyph-Index Rendering, Type 1 PFB Pipeline & Provisional Reflow
+The renderer draws glyph outlines at the positions supplied by TeX, combining local updates with PDF.js page rendering rather than using browser text layout. Fixed-geometry edits repaint only the affected region (`Live`). Changes in height resize page bands and shift the content below (`Reflow`), with exact pagination restored by a background compile after typing pauses. Incomplete input keeps the last valid preview visible.
 
-- **Direct Outline Renderer ([`render/canvas-renderer.mjs`](render/canvas-renderer.mjs))**: Decodes binary `RTDL` v1 display lists and paints quadratic/cubic Bézier curves directly from font outlines in font units (`CSS_PX_PER_SP = 96 / (72.27 * 65536)`), applying horizontal font expansion (`microtype`), extend, and slant transforms (`y`-up to `y`-down) identical to upstream `rtex-verify`. Browser `fillText`, Unicode glyph substitution, and OS text shaping are never used.
-- **Type 1 PFB Conversion with No Additional Dependency ([`render/type1-font.mjs`](render/type1-font.mjs))**: Classic Computer Modern / Latin Modern math extensions and T1 text fonts use PostScript Type 1 `.pfb` outlines and 256-entry encoding vectors. LightningTeX synthesizes a tiny in-memory 1-page PDF using all 256 character codes, passes it once through the already-loaded `PDF.js` worker to extract converted OpenType outlines and exact `originalCharCode -> glyphIndex` mappings, and caches the parsed font—supporting math glyphs even if they never appeared in the initial PDF.
-- **Guarded Ink Patching vs. Provisional Band Reflow ([`core/live-layout.js`](core/live-layout.js))**:
-  - **Fixed Geometry (`Live`)**: Computes conservative control-point `inkBounds`, verifies zero intersection with neighboring lines, images, or page headers/footers (`unitInkRegion`), clears only the guarded box over the cached PDF.js page raster, and draws the updated TeX rows.
-  - **Variable Geometry (`Reflow`)**: When line counts or formula heights change—or when paragraphs are split, deleted, or merged—`pageFlow` slices the cached PDF page canvas into horizontal bands, expanding or contracting the edited band and shifting lower PDF slices vertically while marking the preview as `pagination pending`. After ~500 ms of idle time, the background worker restores exact global pagination.
-  - **Hue-Preserving Dark Pages ([`render/dark-page.mjs`](render/dark-page.mjs))**: In dark mode, low-saturation pixels are inverted by luminance onto `#1c1e22` dark paper while colored figures preserve their original hues—applied consistently across full PDF renders and live repainted bands.
+### Reuse Across Compilations
 
-### 4. Source-Trimmed WASM, Single-Pass Aux Reuse & JS BibTeX
+A trimmed WebAssembly build and on-demand TeX packages keep the initial runtime focused. Browser caching reduces repeated resource downloads, while auxiliary-file reuse avoids unnecessary compilation passes. A JavaScript BibTeX interpreter processes bibliography styles within the browser, keeping document compilation entirely client-side.
 
-- **44.2% Smaller Compressed Startup Assets ([`engine/build/`](engine/build/README.md))**: Compiled directly from TeX Live 2026 source (`LuaHBTeX 1.24.0`) with Emscripten 5.0.4 (`-Oz`), linking only LuaHBTeX, HarfBuzz/Graphite, Kpathsea, and PDF/font libraries while stripping pdfTeX, XeTeX, BibTeX, MakeIndex, DVI applets, ICU, and fontconfig. The `/rtex` Lua/TeX service is embedded directly into the WASM image, and the TeX Live data package is pruned by 1,587 files and packed with paired 16 KiB LZ4 chunks:
-  - **Raw WASM binary**: `31.0 MiB` → **`4.68 MiB`** (`1.83 MiB` gzip)
-  - **Total compressed startup transfer**: `76.0 MiB` → **`42.4 MiB`** (`54.4 MiB` unpacked)
-- **Single-Pass Auxiliary Reuse & Cold First-Pass Fast Hook ([`public/runtime/background-worker.js`](public/runtime/background-worker.js))**:
-  - Full compilations retain `.aux` (including nested `\include` aux files), `.toc`, `.out`, `.lof`, `.lot`, and `.bbl` for the active root and preamble. When these outputs remain unchanged after pass 1, no rerun warning is emitted, and no unrecognized auxiliary output exists, the second pass is skipped—cutting warm full-compile times roughly in half (~1.4 s → ~0.6–0.7 s).
-  - On cold first compiles where a second pass is mandatory, pass 1 dynamically unhooks `rtex-capture`'s shipout page traversal and JSON export (`\RemoveFromHook` / `remove_from_callback`), saving ~110–210 ms in the recorded benchmarks while preserving normal TeX pagination and package hooks.
-- **In-Browser `.bst` BibTeX Interpreter ([`public/runtime/bibtex.js`](public/runtime/bibtex.js))**: Implements a full `.bst` stack machine in pure JavaScript following `bibtex.web` (supporting `format.name$`, `change.case$`, `text.prefix$`, `purify$`, `width$`, cross-references, sorting, and 79-column wrapping). Generates `.bbl` between passes (including `biblatex` with `backend=bibtex`), fetches missing `.bst` styles from the TeX Live service, and maps BibTeX warnings directly to `.bib` entry line numbers.
-- **On-Demand TeX Live 2026 Package Service & Negative Lookup Sharing**: Missing packages and fonts are fetched via `__wrap_kpse_find_file`. Full jobs persist their downloads in browser `Cache Storage` for both workers to restore; live-only downloads stay in memory. Bundled font companion misses (`.ofm`, `.ovf`, `.vf`) and 404 results from full compiles are shared with the live worker in-session to avoid repeating those network probes.
+For implementation details, see the [engine SDK](engine/README.md), [renderer](render/README.md), and [source build recipe](engine/build/README.md). Performance measurements are collected in [QA & Benchmarks](QA.md).
 
 ---
 
