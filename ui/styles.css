@@ -110,7 +110,7 @@ kbd{padding:0 5px;border:1px solid var(--line-strong);border-bottom-width:2px;bo
 .stepper output{min-width:26px;text-align:center;font-variant-numeric:tabular-nums}
 
 /* App bar: what belongs to the whole project. */
-.appbar{position:relative;z-index:8;flex:none;height:44px;display:flex;align-items:center;gap:10px;padding:0 8px;border-bottom:1px solid var(--line);background:var(--panel)}
+.appbar{position:relative;z-index:8;flex:none;height:44px;display:flex;align-items:center;gap:10px;padding:0 8px;border-bottom:1px solid var(--line);background:var(--panel);user-select:none}
 .appbar-side{flex:1 1 0;min-width:0;display:flex;align-items:center;gap:6px}
 .appbar-side.end{justify-content:flex-end}
 .brand{flex:none;display:flex;align-items:center;gap:8px;padding:0 2px 0 4px;font-size:var(--fs-3);font-weight:500;letter-spacing:-.01em;white-space:nowrap;user-select:none}
@@ -182,14 +182,14 @@ kbd{padding:0 5px;border:1px solid var(--line-strong);border-bottom-width:2px;bo
 .edges[data-edge-top=true]::before,.edges[data-edge-bottom=true]::after{opacity:1}
 
 /* Sidebar: files, outline and labels share one column; a segmented control picks the view. */
-.side-switch{flex:none;display:flex;margin:10px 10px 6px;padding:2px;border-radius:7px;background:var(--active)}
+.side-switch{flex:none;display:flex;margin:10px 10px 6px;padding:2px;border-radius:7px;background:var(--active);user-select:none}
 .side-switch button{position:relative;z-index:1;flex:1;min-width:0;height:22px;padding:0 6px;border:0;border-radius:5px;background:transparent;color:var(--text-2);font-size:var(--fs-2);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:color var(--t-pop)}
 .side-switch button:hover{color:var(--text)}
 .side-switch button[aria-selected=true]{color:var(--text)}
 .side-switch .seg-thumb{top:2px;bottom:2px;border-radius:5px;background:var(--raised);box-shadow:0 0 0 1px var(--line),var(--shadow-1)}
 .side-switch{position:relative}
 .side-view{flex:1;min-height:0;display:flex;flex-direction:column}
-.side-head{flex:none;display:flex;align-items:center;gap:1px;padding:2px 6px 4px 14px}
+.side-head{flex:none;display:flex;align-items:center;gap:1px;padding:2px 6px 4px 14px;user-select:none}
 .side-title{flex:1;font-size:var(--fs-1);font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3)}
 .side-head .icon-btn{width:26px;height:26px}
 .side-scroll{flex:1;min-height:0;display:flex;flex-direction:column}
@@ -220,18 +220,18 @@ kbd{padding:0 5px;border:1px solid var(--line-strong);border-bottom-width:2px;bo
 .app .row-rename{flex:1;min-width:0;height:22px;padding:0 5px}
 .row[data-type=tex] .row-icon{color:var(--s-cmd)}.row[data-type=image] .row-icon{color:var(--s-math)}.row[data-type=bib] .row-icon{color:var(--s-kw)}
 .row[style]:not([style*="--depth: 0"]):not([style*="--depth:0"]) .row-twist::before{content:"";position:absolute;top:0;bottom:0;left:calc(6px + var(--depth)*14px - 7px);width:1px;background:var(--line-subtle)}
-.side-now{flex:none;padding:6px 6px 4px;border-top:1px solid var(--line)}
+.side-now{flex:none;padding:6px 6px 4px;border-top:1px solid var(--line);user-select:none}
 .side-now-title{display:block;padding:2px 8px 4px;font-size:var(--fs-1);font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3)}
 .side-now button{position:relative;display:flex;align-items:center;gap:6px;width:100%;height:26px;padding:0 8px;border:0;border-radius:var(--r-2);background:transparent;color:var(--text-2);font-size:var(--fs-2);text-align:left;cursor:pointer}
 .side-now button:hover{background:var(--hover)}
 .side-now b{flex:none;font:500 var(--fs-1) var(--font-code);color:var(--text-3)}
 .side-now span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .side-now small{flex:none;font-size:var(--fs-1);color:var(--text-3);font-variant-numeric:tabular-nums}
-.side-foot{flex:none;display:flex;align-items:center;justify-content:space-between;gap:4px;padding:6px 8px;border-top:1px solid var(--line)}
+.side-foot{flex:none;display:flex;align-items:center;justify-content:space-between;gap:4px;padding:6px 8px;border-top:1px solid var(--line);user-select:none}
 .tree-empty{display:flex;flex-direction:column;gap:8px;padding:22px 16px;color:var(--text-2)}
 .tree-empty p{margin:0 0 4px;font-size:var(--fs-2);color:var(--text-2)}
 /* Outline: section words on the right, with a bar scaled to the longest section; problems replace the count. */
-.outline,.labels{flex:1;min-height:0;overflow:auto;padding:2px 6px 12px}
+.outline,.labels{flex:1;min-height:0;overflow:auto;padding:2px 6px 12px;user-select:none}
 .outline-empty{padding:4px 8px;color:var(--text-2);font-size:var(--fs-2)}
 .outline-file{display:block;margin:8px 8px 2px;overflow:hidden;color:var(--text-3);font:var(--fs-1)/1.4 var(--font-code);text-overflow:ellipsis;white-space:nowrap}
 .outline-file:first-child{margin-top:2px}
@@ -359,7 +359,7 @@ kbd{padding:0 5px;border:1px solid var(--line-strong);border-bottom-width:2px;bo
 .load-steps small{margin-left:auto;font-size:var(--fs-1);white-space:nowrap}
 .sheet .load-write{font-size:var(--fs-2);color:#6d7076;text-align:center}
 /* Zoom and page controls float over the canvas and rest out of sight. */
-.zoombar{position:absolute;left:50%;bottom:14px;z-index:6;display:flex;align-items:center;gap:1px;padding:3px;border:1px solid var(--line-strong);border-radius:var(--r-3);background:var(--raised);box-shadow:var(--shadow);transform:translateX(-50%);opacity:0;visibility:hidden;transition:opacity var(--t-panel),visibility 0s var(--t-panel)}
+.zoombar{position:absolute;left:50%;bottom:14px;z-index:6;display:flex;align-items:center;gap:1px;padding:3px;border:1px solid var(--line-strong);border-radius:var(--r-3);background:var(--raised);box-shadow:var(--shadow);transform:translateX(-50%);opacity:0;visibility:hidden;user-select:none;transition:opacity var(--t-panel),visibility 0s var(--t-panel)}
 .preview-pane:hover .zoombar,.zoombar:focus-within,.zoombar[data-show],.preview-pane:focus-within .zoombar{opacity:1;visibility:visible;transition:opacity var(--t-pop)}
 .zoom-label{min-width:46px;height:28px;padding:0 4px;border:0;border-radius:var(--r-2);background:transparent;color:var(--text-2);font-size:var(--fs-2);font-variant-numeric:tabular-nums;cursor:pointer;transition:background var(--t-press)}
 .zoom-label:hover{background:var(--hover);color:var(--text)}
@@ -682,7 +682,7 @@ button.pdf-sync[data-state=lag]:hover{background:color-mix(in srgb,var(--warn) 1
 .preview-body .preview{flex:1;min-width:0}
 .thumbs{flex:none;width:76px;display:flex;flex-direction:column;align-items:center;gap:12px;padding:14px 0 24px;overflow-y:auto;border-right:1px solid var(--line);background:color-mix(in srgb,var(--canvas) 72%,var(--panel));scrollbar-width:none}
 .thumbs::-webkit-scrollbar{display:none}
-.thumb{position:relative;flex:none;display:flex;flex-direction:column;align-items:center;gap:4px;padding:0;border:0;background:transparent;color:var(--text-3);font-size:var(--fs-1);font-variant-numeric:tabular-nums;cursor:pointer}
+.thumb{position:relative;flex:none;display:flex;flex-direction:column;align-items:center;gap:4px;padding:0;border:0;background:transparent;color:var(--text-3);font-size:var(--fs-1);font-variant-numeric:tabular-nums;cursor:pointer;user-select:none}
 .thumb canvas{display:block;width:52px;min-height:20px;border-radius:2px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.08);transition:box-shadow var(--t-pop)}
 .thumb:hover canvas{box-shadow:0 0 0 1px var(--line-strong),0 2px 6px rgba(0,0,0,.12)}
 .thumb[aria-current=true]{color:var(--text);font-weight:500}
