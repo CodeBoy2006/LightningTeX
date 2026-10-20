@@ -185,6 +185,27 @@ export function mountEditor(options={}){
   const action=name=>root.querySelector(`[data-action="${name}"]`);
   const listen=(element,type,handler,config)=>{element.addEventListener(type,handler,config);removers.push(()=>element.removeEventListener(type,handler,config));};
   const viewport=$('preview-viewport'),marker=Object.assign(document.createElement('div'),{className:'sync-marker'});
+  let middlePan=null;
+  listen(viewport,'pointerdown',event=>{
+    if(event.button!==1)return;
+    event.preventDefault();
+    middlePan={id:event.pointerId,x:event.clientX,y:event.clientY,left:viewport.scrollLeft,top:viewport.scrollTop};
+    viewport.setPointerCapture?.(event.pointerId);
+    viewport.classList.add('panning');
+  });
+  listen(viewport,'pointermove',event=>{
+    if(!middlePan||event.pointerId!==middlePan.id)return;
+    viewport.scrollLeft=middlePan.left-(event.clientX-middlePan.x);
+    viewport.scrollTop=middlePan.top-(event.clientY-middlePan.y);
+  });
+  const stopMiddlePan=event=>{
+    if(!middlePan||event.pointerId!==middlePan.id)return;
+    middlePan=null;
+    viewport.classList.remove('panning');
+    if(viewport.hasPointerCapture?.(event.pointerId))viewport.releasePointerCapture?.(event.pointerId);
+  };
+  listen(viewport,'pointerup',stopMiddlePan);
+  listen(viewport,'pointercancel',stopMiddlePan);
   const thumbs=createThumbnails($('thumbs'),{t,pages:()=>[...viewport.querySelectorAll('canvas[data-page]')],goTo:number=>goToPage(number)});
   const toaster=createToast($('toast')),toast=(text,undo,group)=>toaster.show(text,undo,group),tips=createTooltips(app);
   const notify=(key,values)=>toast(t(key,values));

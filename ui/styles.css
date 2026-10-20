@@ -334,6 +334,8 @@ kbd{padding:0 5px;border:1px solid var(--line-strong);border-bottom-width:2px;bo
 .preview{position:relative;flex:1;min-height:0;overflow:auto;outline:none}
 .app .preview:focus-visible{box-shadow:inset 0 0 0 1.5px var(--accent-text)}
 .preview-content{position:relative;width:max-content;min-width:100%;min-height:100%;display:flex;flex-direction:column;align-items:center;gap:16px;padding:24px 24px 64px}
+.preview.panning{cursor:grabbing;user-select:none}
+.preview.panning *{cursor:grabbing;user-select:none}
 .preview-content canvas{flex:none;display:block;height:auto;background:#fff;box-shadow:var(--paper-shadow)}
 .preview-content iframe{width:100%;height:80vh;border:0;background:#fff}
 [data-theme=dark][data-dark-pages=true] .sheet{filter:invert(.91) hue-rotate(180deg)}
