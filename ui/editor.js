@@ -195,6 +195,7 @@ export function mountEditor(options={}){
   });
   listen(viewport,'pointermove',event=>{
     if(!middlePan||event.pointerId!==middlePan.id)return;
+    if(!(event.buttons&4)){stopMiddlePan(event);return;}
     viewport.scrollLeft=middlePan.left-(event.clientX-middlePan.x);
     viewport.scrollTop=middlePan.top-(event.clientY-middlePan.y);
   });
@@ -206,6 +207,7 @@ export function mountEditor(options={}){
   };
   listen(viewport,'pointerup',stopMiddlePan);
   listen(viewport,'pointercancel',stopMiddlePan);
+  listen(viewport,'lostpointercapture',stopMiddlePan);
   const thumbs=createThumbnails($('thumbs'),{t,pages:()=>[...viewport.querySelectorAll('canvas[data-page]')],goTo:number=>goToPage(number)});
   const toaster=createToast($('toast')),toast=(text,undo,group)=>toaster.show(text,undo,group),tips=createTooltips(app);
   const notify=(key,values)=>toast(t(key,values));
