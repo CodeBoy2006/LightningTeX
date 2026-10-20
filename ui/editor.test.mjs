@@ -515,6 +515,29 @@ test('gutter marks retain the worst severity per file and clear every open edito
   }finally{h.cleanup();}
 });
 
+for(const [type,buttons] of [['pointermove',1],['pointermove',0],['lostpointercapture',4],['pointercancel',0],['pointerup',0]])test(`middle-button panning stops on ${type} with buttons=${buttons}`,()=>{
+  const h=setup({store:null}),frame=globalThis.requestAnimationFrame;
+  globalThis.requestAnimationFrame=()=>0;
+  try {
+    h.auto(false);
+    const viewport=h.q('preview-viewport');let captured=null;
+    viewport.setPointerCapture=id=>{captured=id;};
+    viewport.hasPointerCapture=id=>captured===id;
+    viewport.releasePointerCapture=()=>{captured=null;};
+    const pointer=(name,extra={})=>viewport.dispatchEvent(new h.dom.window.PointerEvent(name,{bubbles:true,cancelable:true,pointerId:1,clientX:100,clientY:100,button:-1,buttons:4,...extra}));
+    viewport.scrollLeft=100;viewport.scrollTop=200;
+    pointer('pointerdown',{button:0,buttons:1});assert.equal(viewport.classList.contains('panning'),false);
+    pointer('pointerdown',{button:1});assert.equal(viewport.classList.contains('panning'),true);assert.equal(captured,1);
+    pointer('pointermove',{pointerId:2,clientX:20});pointer('pointercancel',{pointerId:2,buttons:0});
+    assert.deepEqual([viewport.scrollLeft,viewport.scrollTop],[100,200]);assert.equal(viewport.classList.contains('panning'),true);
+    pointer('pointermove',{clientX:80,clientY:70});assert.deepEqual([viewport.scrollLeft,viewport.scrollTop],[120,230]);
+    if(type==='lostpointercapture')captured=null;
+    pointer(type,{buttons,clientX:50,clientY:40});
+    assert.equal(viewport.classList.contains('panning'),false);assert.equal(captured,null);
+    pointer('pointermove',{buttons:0,clientX:30,clientY:20});assert.deepEqual([viewport.scrollLeft,viewport.scrollTop],[120,230],'moving after cleanup must not pan');
+  }finally{h.cleanup();if(frame===undefined)delete globalThis.requestAnimationFrame;else globalThis.requestAnimationFrame=frame;}
+});
+
 test('settings apply at once, persist, and reject corrupt stored values',()=>{
   const h=setup({storage:{'lightningtex:settings:v1':JSON.stringify({theme:'<b>',fontSize:900,lang:'zh',wrap:'yes',zoom:1.5})}});
   try {const app=h.root.firstElementChild,settings=()=>JSON.parse(localStorage.getItem('lightningtex:settings:v1'));
